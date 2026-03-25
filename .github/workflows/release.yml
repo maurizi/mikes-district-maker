@@ -19,9 +19,9 @@ jobs:
       NODE_ENV: production
       DB_ROLLBAR_ACCESS_TOKEN: ${{ secrets.DB_ROLLBAR_ACCESS_TOKEN }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - uses: aws-actions/configure-aws-credentials@v1
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -36,7 +36,7 @@ jobs:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
 
       - run: |
-          docker-compose -f docker-compose.yml -f docker-compose.ci.yml run --rm terraform -c "
+          docker compose -f docker-compose.yml -f docker-compose.ci.yml run --rm terraform -c "
             unset AWS_PROFILE
             ./scripts/infra plan
             ./scripts/infra apply"

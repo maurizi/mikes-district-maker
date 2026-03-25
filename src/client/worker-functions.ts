@@ -9,7 +9,7 @@ import { WorkerFunctions } from "./worker";
 const worker = Comlink.wrap<WorkerFunctions>(new Worker(new URL("./worker.ts", import.meta.url)));
 
 // eslint-disable-next-line
-function replacer(key: string, value: any): any {
+function replacer(this: unknown, key: string | number, value: unknown): unknown {
   if (value instanceof Set) {
     // eslint-disable-next-line
     return [...value].sort();
@@ -30,7 +30,7 @@ export const getTotalSelectedDemographics = memoize(
     return worker.getTotalSelectedDemographics(staticMetadata, regionURI, selectedGeounits);
   },
   {
-    normalizer: args => stringify([args[1], args[2]], { replacer }),
+    normalizer: args => stringify([args[1], args[2]], { replacer }) || "",
     primitive: true
   }
 );
@@ -49,7 +49,7 @@ export const getSavedDistrictSelectedDemographics = memoize(
     );
   },
   {
-    normalizer: args => stringify([args[0], args[2]], { replacer }),
+    normalizer: args => stringify([args[0], args[2]], { replacer }) || "",
     primitive: true
   }
 );

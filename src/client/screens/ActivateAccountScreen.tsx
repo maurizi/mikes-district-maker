@@ -1,10 +1,8 @@
-/** @jsx jsx */
 import { useEffect, useState } from "react";
-import { useHistory, useParams } from "react-router-dom";
-import { Link } from "react-router-dom";
-import { Box, Flex, Spinner, Card, Themed, jsx, Text } from "theme-ui";
-import { ReactComponent as Logo } from "../media/logos/logo.svg";
-import { ReactComponent as SuccessIllustration } from "../media/successfully-registered-illustration.svg";
+import { useParams, Link } from "react-router-dom";
+import { Box, Flex, Spinner, Card, Text } from "theme-ui";
+import Logo from "../media/logos/logo.svg?react";
+import SuccessIllustration from "../media/successfully-registered-illustration.svg?react";
 
 import { activateAccount } from "../api";
 import { isUserLoggedIn } from "../jwt";
@@ -18,9 +16,8 @@ interface Params {
 }
 
 const ActivateAccountScreen = () => {
-  const { token, organizationSlug } = useParams<Params>();
+  const { token, organizationSlug } = useParams();
   const isLoggedIn = isUserLoggedIn();
-  const history = useHistory();
   const [activationResource, setActivationResource] = useState<Resource<void>>({
     isPending: false
   });
@@ -40,7 +37,7 @@ const ActivateAccountScreen = () => {
             .then(() => setActivationResource({ resource: void 0 }))
             .catch(errorMessage => setActivationResource({ errorMessage }));
     }
-  }, [token, organizationSlug, history]);
+  }, [token, organizationSlug]);
   return (
     <CenteredContent>
       {"resource" in activationResource ? (
@@ -69,21 +66,19 @@ const ActivateAccountScreen = () => {
               Thank you for activating your account!
             </Text>
 
-            <Themed.a
-              as={Link}
+            <Link
               to={
-                !isLoggedIn && organizationSlug
-                  ? { pathname: "/login", state: { from: `/o/${organizationSlug}` } }
-                  : !isLoggedIn
+                !isLoggedIn
                   ? "/login"
                   : organizationSlug
                   ? `/o/${organizationSlug}`
                   : "/"
               }
+              state={!isLoggedIn && organizationSlug ? { from: `/o/${organizationSlug}` } : undefined}
               sx={{ variant: "linkButton" }}
             >
               {!isLoggedIn ? "Log in" : "Start mapping!"}
-            </Themed.a>
+            </Link>
           </Card>
         </Box>
       ) : "errorMessage" in activationResource ? (

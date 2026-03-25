@@ -1,7 +1,7 @@
-import { Loop, LoopReducer } from "redux-loop";
+import { Loop } from "redux-loop";
 import { getType } from "typesafe-actions";
 
-import { Action } from "../actions";
+import { Action, LoopAction } from "../actions";
 import { ElectionYear } from "../types";
 
 import {
@@ -24,10 +24,10 @@ export const initialProjectOptionsState: ProjectOptionsState = {
   populationKey: "population"
 };
 
-const projectOptionsReducer: LoopReducer<ProjectOptionsState, Action> = (
+const projectOptionsReducer = (
   state: ProjectOptionsState = initialProjectOptionsState,
-  action: Action
-): ProjectOptionsState | Loop<ProjectOptionsState, Action> => {
+  action: LoopAction
+): ProjectOptionsState | Loop<ProjectOptionsState> => {
   switch (action.type) {
     case getType(resetProjectState):
       return {

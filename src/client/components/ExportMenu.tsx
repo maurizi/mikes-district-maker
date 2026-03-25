@@ -1,5 +1,4 @@
-/** @jsx jsx */
-import { jsx, Box } from "theme-ui";
+import { Box } from "theme-ui";
 import { Button as MenuButton, Wrapper, Menu, MenuItem } from "react-aria-menubutton";
 import Icon from "../components/Icon";
 import { IProject } from "../../shared/entities";

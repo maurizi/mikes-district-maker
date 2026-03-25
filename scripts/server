@@ -17,8 +17,8 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     if [ "${1:-}" = "--help" ]; then
         usage
     elif [[ "${1}" == "--debug" ]]; then
-        docker-compose -f docker-compose.yml -f docker-compose.debug.yml up server client
+        docker compose -f docker-compose.yml -f docker-compose.debug.yml up server client
     else
-        docker-compose up server client
+        docker compose up server client
     fi
 fi

@@ -1,5 +1,4 @@
-/** @jsx jsx */
-import { Box, Flex, jsx, Themed, ThemeUIStyleObject, Heading } from "theme-ui";
+import { Box, Flex, ThemeUIStyleObject, Heading } from "theme-ui";
 import { DistrictProperties } from "../../../../shared/entities";
 import { DistrictsGeoJSON, EvaluateMetricWithValue } from "../../../types";
 import { CONTIGUITY_FILL_COLOR, EVALUATE_GRAY_FILL_COLOR } from "../../map/index";
@@ -70,20 +69,20 @@ const ContiguityMetricDetail = ({
       <Heading as="h2" sx={{ variant: "text.h5", mt: 4 }}>
         {metric.value} of {metric.total} districts are contiguous
       </Heading>
-      <Themed.table sx={style.table}>
+      <table sx={style.table}>
         <thead>
-          <Themed.tr>
-            <Themed.th sx={{ ...style.th, ...style.colFirst }}>Number</Themed.th>
-            <Themed.th sx={{ ...style.th, ...style.colLast }}>Contiguity</Themed.th>
-          </Themed.tr>
+          <tr>
+            <th sx={{ ...style.th, ...style.colFirst }}>Number</th>
+            <th sx={{ ...style.th, ...style.colLast }}>Contiguity</th>
+          </tr>
         </thead>
         <tbody>
           {geojson?.features.map(
             (feature, id) =>
               id > 0 && (
-                <Themed.tr key={id}>
-                  <Themed.td sx={{ ...style.td, ...style.colFirst }}>{id}</Themed.td>
-                  <Themed.td sx={{ ...style.td, ...style.colLast }}>
+                <tr key={id}>
+                  <td sx={{ ...style.td, ...style.colFirst }}>{id}</td>
+                  <td sx={{ ...style.td, ...style.colLast }}>
                     {feature.properties.contiguity ? (
                       <Flex sx={{ alignItems: "center" }}>
                         <Box
@@ -104,12 +103,12 @@ const ContiguityMetricDetail = ({
                     ) : (
                       <Box sx={style.blankValue}>–</Box>
                     )}
-                  </Themed.td>
-                </Themed.tr>
+                  </td>
+                </tr>
               )
           )}
         </tbody>
-      </Themed.table>
+      </table>
     </Box>
   );
 };

@@ -2,7 +2,7 @@ import { Logger } from "@nestjs/common";
 import area from "@turf/area";
 import length from "@turf/length";
 import polygonToLine from "@turf/polygon-to-line";
-import S3 from "aws-sdk/clients/s3";
+import { S3Client } from "@aws-sdk/client-s3";
 import { Feature, MultiPolygon as GeoJSONMultiPolygon } from "geojson";
 import _, { mapValues } from "lodash";
 import { expose } from "threads/worker";
@@ -51,7 +51,7 @@ type GroupedPolygons = {
 
 type FeatureProperties = Pick<DistrictProperties, "demographics" | "voting">;
 
-const s3 = new S3();
+const s3 = new S3Client({});
 const logger = new Logger(`worker-${workerData.index}`);
 
 const cachedTopology: { [key: string]: [Topology, readonly GeoUnitPolygonHierarchy[]] } = {};

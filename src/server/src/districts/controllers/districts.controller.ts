@@ -64,15 +64,15 @@ export class DistrictsController {
     }
 
     const regionCode = FIPS[stateFips];
-    const regionConfig = await this.regionConfigService.findOne(
-      regionConfigId
+    const regionConfig = await this.regionConfigService.findOne({
+      where: regionConfigId
         ? { id: regionConfigId, archived: false }
         : {
             regionCode,
             hidden: false,
             archived: false
           }
-    );
+    });
     const geoCollection = regionConfig && (await this.topologyService.get(regionConfig));
     if (!geoCollection) {
       throw new InternalServerErrorException();

@@ -1,5 +1,5 @@
 import throttle from "lodash/throttle";
-import MapboxGL from "mapbox-gl";
+import maplibregl from "maplibre-gl";
 import {
   DistrictsDefinition,
   FeatureId,
@@ -37,7 +37,7 @@ import {
  */
 const PaintBrushSelectionTool: ISelectionTool = {
   enable: function (
-    map: MapboxGL.Map,
+    map: maplibregl.Map,
     geoLevelId: string,
     staticMetadata: IStaticMetadata,
     districtsDefinition: DistrictsDefinition,
@@ -83,7 +83,7 @@ const PaintBrushSelectionTool: ISelectionTool = {
     // Return the xy coordinates of the mouse position
     function mousePos(e: MouseEvent) {
       const rect = canvas.getBoundingClientRect();
-      return new MapboxGL.Point(
+      return new maplibregl.Point(
         e.clientX - rect.left - canvas.clientLeft,
         e.clientY - rect.top - canvas.clientTop
       );
@@ -102,7 +102,7 @@ const PaintBrushSelectionTool: ISelectionTool = {
           brushCircle.style.left = current.x + "px";
         }
         const brushRadius = paintBrushSize * 15;
-        const bbox: [MapboxGL.PointLike, MapboxGL.PointLike] = [
+        const bbox: [maplibregl.PointLike, maplibregl.PointLike] = [
           [current.x - brushRadius, current.y + brushRadius],
           [current.x + brushRadius, current.y - brushRadius]
         ];
@@ -179,16 +179,16 @@ const PaintBrushSelectionTool: ISelectionTool = {
       }
       /* eslint-enable */
     }
-    function getFeaturesAtPoint(point: MapboxGL.Point) {
+    function getFeaturesAtPoint(point: maplibregl.Point) {
       return map.queryRenderedFeatures(point, { layers: [levelToSelectionLayerId(geoLevelId)] });
     }
     function getFeaturesAroundPoint(
       // eslint-disable-next-line
-      bbox: [MapboxGL.PointLike, MapboxGL.PointLike],
-      point: MapboxGL.Point,
+      bbox: [maplibregl.PointLike, maplibregl.PointLike],
+      point: maplibregl.Point,
       brushRadius: number
-    ): readonly MapboxGL.MapboxGeoJSONFeature[] {
-      const features: readonly MapboxGL.MapboxGeoJSONFeature[] = map.queryRenderedFeatures(bbox, {
+    ): readonly maplibregl.MapGeoJSONFeature[] {
+      const features: readonly maplibregl.MapGeoJSONFeature[] = map.queryRenderedFeatures(bbox, {
         layers: [levelToSelectionLayerId(geoLevelId)]
       });
       const centerPoint = map.unproject(point);
@@ -212,7 +212,7 @@ const PaintBrushSelectionTool: ISelectionTool = {
       });
     }
   },
-  disable: function (map: MapboxGL.Map) {
+  disable: function (map: maplibregl.Map) {
     map.boxZoom.enable();
     map.dragPan.enable();
     // eslint-disable-next-line

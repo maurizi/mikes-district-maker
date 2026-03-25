@@ -1,6 +1,5 @@
-/** @jsx jsx */
-import { Box, Flex, Heading, jsx, Text, ThemeUIStyleObject } from "theme-ui";
-import { useHistory } from "react-router-dom";
+import { Box, Flex, Heading, Text, ThemeUIStyleObject } from "theme-ui";
+import { useNavigate } from "react-router-dom";
 
 import { ProjectNest } from "../../shared/entities";
 import ProjectDistrictsMap from "./map/ProjectDistrictsMap";
@@ -24,9 +23,9 @@ const style: Record<string, ThemeUIStyleObject> = {
 };
 
 const FeaturedProjectCard = ({ project }: { readonly project: ProjectNest }) => {
-  const history = useHistory();
+  const navigate = useNavigate();
   function goToProject(project: ProjectNest) {
-    history.push(`/projects/${project.id}`);
+    navigate(`/projects/${project.id}`);
   }
 
   return (

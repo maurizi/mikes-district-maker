@@ -1,3 +1,4 @@
+import { Action as ReduxAction } from "redux";
 import { ActionType } from "typesafe-actions";
 
 import * as authActions from "./actions/auth";
@@ -39,3 +40,7 @@ export type Action =
   | RegionConfigAction
   | RootAction
   | UserAction;
+
+// redux-loop's LoopReducer expects actions to include its internal sentinel type.
+// Our reducers handle this via their default/fallthrough case.
+export type LoopAction = Action | ReduxAction<"@@REDUX_LOOP/ENFORCE_DEFAULT_HANDLING">;

@@ -1,10 +1,9 @@
-/** @jsx jsx */
 import { darken } from "@theme-ui/color";
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import AriaModal from "react-aria-modal";
 import { connect } from "react-redux";
 import { InputField } from "../components/Field";
-import { Box, Button, Flex, Heading, jsx, ThemeUIStyleObject, Label, Select } from "theme-ui";
+import { Box, Button, Flex, Heading, ThemeUIStyleObject, Label, Select } from "theme-ui";
 
 import { IProject, ProjectId } from "../../shared/entities";
 import { createReferenceLayer } from "../api";

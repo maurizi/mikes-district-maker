@@ -1,6 +1,5 @@
-/** @jsx jsx */
 import { IOrganization, IUser, CreateProjectData } from "../../shared/entities";
-import { Box, Heading, jsx, ThemeUIStyleObject } from "theme-ui";
+import { Box, Heading, ThemeUIStyleObject } from "theme-ui";
 import TemplateCard from "./TemplateCard";
 
 interface Props {

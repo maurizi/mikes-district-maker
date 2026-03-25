@@ -237,7 +237,7 @@ export async function fetchProjectData(id: ProjectId): Promise<DynamicProjectDat
   }));
 }
 
-export async function fetchRegionConfigs(): Promise<IRegionConfig> {
+export async function fetchRegionConfigs(): Promise<readonly IRegionConfig[]> {
   return new Promise((resolve, reject) => {
     apiAxios
       .get("/api/region-configs?sort=name,ASC")

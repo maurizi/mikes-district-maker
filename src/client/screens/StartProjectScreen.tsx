@@ -1,7 +1,6 @@
-/** @jsx jsx */
 import { useEffect, useState } from "react";
-import { Redirect, useLocation } from "react-router-dom";
-import { Flex, jsx, Themed, ThemeUIStyleObject } from "theme-ui";
+import { Navigate, useLocation } from "react-router-dom";
+import { Flex, ThemeUIStyleObject } from "theme-ui";
 
 import { IProject, RegionConfigId, ChamberId } from "../../shared/entities";
 import { regionConfigsFetch } from "../actions/regionConfig";
@@ -82,15 +81,15 @@ export default () => {
   }, []);
 
   return "resource" in createProjectResource ? (
-    <Redirect to={`/projects/${createProjectResource.resource.id}`} />
+    <Navigate to={`/projects/${createProjectResource.resource.id}`} replace />
   ) : "errors" in createProjectResource ? (
     <Flex sx={style.page}>
       Error creating a project for this link.
       <p>
         Please contact&nbsp;
-        <Themed.a href="mailto:support@districtbuilder.org">
+        <a href="mailto:support@districtbuilder.org">
           support@districtbuilder.org
-        </Themed.a>{" "}
+        </a>{" "}
         for help.
       </p>
     </Flex>

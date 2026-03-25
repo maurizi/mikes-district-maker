@@ -1,4 +1,3 @@
-/** @jsx jsx */
 import { ThemeUIStyleObject } from "theme-ui";
 
 export interface ButtonStyleProps {

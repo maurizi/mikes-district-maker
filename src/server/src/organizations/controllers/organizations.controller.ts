@@ -35,10 +35,10 @@ export class OrganizationsController {
   }
 
   async getOrg(organizationSlug: OrganizationSlug): Promise<Organization> {
-    const org = await this.service.findOne(
-      { slug: organizationSlug },
-      { join: { alias: "organization", leftJoinAndSelect: { admin: "organization.admin" } } }
-    );
+    const org = await this.service.findOne({
+      where: { slug: organizationSlug },
+      join: { alias: "organization", leftJoinAndSelect: { admin: "organization.admin" } }
+    });
     if (!org) {
       throw new NotFoundException(`Organization ${organizationSlug} not found`);
     }
@@ -46,7 +46,7 @@ export class OrganizationsController {
   }
 
   async getUser(userId: UserId): Promise<User> {
-    const user = await this.usersService.findOne(userId);
+    const user = await this.usersService.findOne({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException(
         `User ${userId} not found`,

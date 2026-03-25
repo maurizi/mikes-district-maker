@@ -1,5 +1,4 @@
-/** @jsx jsx */
-import { Flex, jsx } from "theme-ui";
+import { Flex} from "theme-ui";
 import { PviBucket } from "../../../types";
 import { Bar } from "@visx/shape";
 import { Group } from "@visx/group";

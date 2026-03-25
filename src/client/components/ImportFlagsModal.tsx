@@ -1,8 +1,7 @@
-/** @jsx jsx */
 import AriaModal from "react-aria-modal";
 import { connect } from "react-redux";
 
-import { Box, Heading, jsx, ThemeUIStyleObject, Button } from "theme-ui";
+import { Box, Heading, ThemeUIStyleObject, Button } from "theme-ui";
 
 import { setImportFlagsModal } from "../actions/projectModals";
 import { State } from "../reducers";

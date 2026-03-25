@@ -1,5 +1,4 @@
-/** @jsx jsx */
-import { Box, jsx, Themed, ThemeUIStyleObject, Divider } from "theme-ui";
+import { Box, ThemeUIStyleObject, Divider } from "theme-ui";
 
 import { demographicsColors } from "../constants/colors";
 import { getDemographicLabel } from "../../shared/functions";
@@ -36,14 +35,14 @@ const Row = ({
   readonly color: string;
   readonly abbreviate?: boolean;
 }) => (
-  <Themed.tr
+  <tr
     sx={{
       color: "muted",
       border: "none"
     }}
   >
-    <Themed.td sx={style.label}>{abbreviate ? id : getDemographicLabel(id)}</Themed.td>
-    <Themed.td sx={{ minWidth: "50px", py: 0 }}>
+    <td sx={style.label}>{abbreviate ? id : getDemographicLabel(id)}</td>
+    <td sx={{ minWidth: "50px", py: 0 }}>
       <Box
         style={{
           width: percent ? `${Math.min(percent, 100)}%` : 0
@@ -54,12 +53,12 @@ const Row = ({
           borderRadius: "1px"
         }}
       />
-    </Themed.td>
-    <Themed.td sx={style.number}>
+    </td>
+    <td sx={style.number}>
       {percent ? percent.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "0"}
       {"%"}
-    </Themed.td>
-  </Themed.tr>
+    </td>
+  </tr>
 );
 
 const DemographicsTooltip = ({
@@ -90,9 +89,9 @@ const DemographicsTooltip = ({
   );
   return (
     <Box sx={{ width: "100%", minHeight: "100%" }}>
-      <Themed.table sx={{ margin: "0", width: "100%" }}>
+      <table sx={{ margin: "0", width: "100%" }}>
         <tbody>{rows}</tbody>
-      </Themed.table>
+      </table>
       {isMajorityMinority && (
         <Box>
           <Divider sx={{ my: 1, borderColor: "gray.6" }} />

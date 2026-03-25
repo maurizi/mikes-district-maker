@@ -1,7 +1,6 @@
-/** @jsx jsx */
 import { connect } from "react-redux";
-import { Box, jsx, ThemeUIStyleObject } from "theme-ui";
-import MapboxGL from "mapbox-gl";
+import { Box, ThemeUIStyleObject } from "theme-ui";
+import maplibregl from "maplibre-gl";
 import Icon from "../Icon";
 
 import { State } from "../../reducers";
@@ -55,7 +54,7 @@ const MapMessage = ({
   readonly geoLevelIndex: number;
   readonly geoLevelVisibility: readonly boolean[];
   readonly staticMetadata?: IStaticMetadata;
-  readonly map?: MapboxGL.Map;
+  readonly map?: maplibregl.Map;
   readonly maxZoom: number;
 }) => {
   const invertedGeoLevelIndex = staticMetadata

@@ -1,4 +1,4 @@
-import { ConnectionOptions } from "typeorm";
+import { DataSource, DataSourceOptions } from "typeorm";
 import { Chamber } from "../../../server/src/chambers/entities/chamber.entity";
 import { Organization } from "../../../server/src/organizations/entities/organization.entity";
 import { ProjectTemplate } from "../../../server/src/project-templates/entities/project-template.entity";
@@ -7,7 +7,7 @@ import { RegionConfig } from "../../../server/src/region-configs/entities/region
 import { User } from "../../../server/src/users/entities/user.entity";
 import { Project } from "../../../server/src/projects/entities/project.entity";
 
-export const connectionOptions: ConnectionOptions = {
+export const dataSourceOptions: DataSourceOptions = {
   type: "postgres",
   host: process.env.POSTGRES_HOST,
   port: parseInt(process.env.POSTGRES_PORT || "5432", 10),
@@ -18,3 +18,9 @@ export const connectionOptions: ConnectionOptions = {
   logging: true,
   synchronize: false
 };
+
+export async function createDataSource(): Promise<DataSource> {
+  const ds = new DataSource(dataSourceOptions);
+  await ds.initialize();
+  return ds;
+}

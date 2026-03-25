@@ -1,6 +1,6 @@
 import throttle from "lodash/throttle";
 import { isEqual } from "lodash";
-import MapboxGL from "mapbox-gl";
+import maplibregl from "maplibre-gl";
 
 import {
   DistrictsDefinition,
@@ -44,7 +44,7 @@ import {
  */
 const RectangleSelectionTool: ISelectionTool = {
   enable: function (
-    map: MapboxGL.Map,
+    map: maplibregl.Map,
     geoLevelId: string,
     staticMetadata: IStaticMetadata,
     districtsDefinition: DistrictsDefinition,
@@ -61,13 +61,13 @@ const RectangleSelectionTool: ISelectionTool = {
 
     // Variable to hold the starting xy coordinates
     // when `mousedown` occured.
-    let start: MapboxGL.Point; // eslint-disable-line
+    let start: maplibregl.Point; // eslint-disable-line
 
     let currentCounty: number | undefined = undefined; // eslint-disable-line
 
     // Variable to hold the current xy coordinates
     // when `mousemove` or `mouseup` occurs.
-    let current: MapboxGL.Point; // eslint-disable-line
+    let current: maplibregl.Point; // eslint-disable-line
 
     // Variable for the draw box element.
     let box: HTMLElement | null; // eslint-disable-line
@@ -89,7 +89,7 @@ const RectangleSelectionTool: ISelectionTool = {
     // Return the xy coordinates of the mouse position
     function mousePos(e: MouseEvent) {
       const rect = canvas.getBoundingClientRect();
-      return new MapboxGL.Point(
+      return new maplibregl.Point(
         e.clientX - rect.left - canvas.clientLeft,
         e.clientY - rect.top - canvas.clientTop
       );
@@ -236,8 +236,8 @@ const RectangleSelectionTool: ISelectionTool = {
 
     function getFeaturesInBoundingBox(
       // eslint-disable-next-line
-      bbox: [MapboxGL.PointLike, MapboxGL.PointLike]
-    ): readonly MapboxGL.MapboxGeoJSONFeature[] {
+      bbox: [maplibregl.PointLike, maplibregl.PointLike]
+    ): readonly maplibregl.MapGeoJSONFeature[] {
       return map.queryRenderedFeatures(bbox, {
         layers: [levelToSelectionLayerId(geoLevelId)]
       });
@@ -246,7 +246,7 @@ const RectangleSelectionTool: ISelectionTool = {
     /*
      * Get all selected features for all geolevels.
      */
-    function getAllSelectedFeatures(): readonly MapboxGL.MapboxGeoJSONFeature[] {
+    function getAllSelectedFeatures(): readonly maplibregl.MapGeoJSONFeature[] {
       return map
         .queryRenderedFeatures(undefined, {
           layers: staticMetadata.geoLevelHierarchy.map(geoLevel =>
@@ -260,7 +260,7 @@ const RectangleSelectionTool: ISelectionTool = {
      * Select highlighted features and clean up.
      */
     // eslint-disable-next-line
-    function finish(bbox?: [MapboxGL.PointLike, MapboxGL.PointLike]) {
+    function finish(bbox?: [maplibregl.PointLike, maplibregl.PointLike]) {
       // Remove these events now that finish has been called.
       document.removeEventListener("mousemove", onMouseMove);
       document.removeEventListener("mouseup", onMouseUp);
@@ -294,7 +294,7 @@ const RectangleSelectionTool: ISelectionTool = {
       store.dispatch(clearHighlightedGeounits());
     }
   },
-  disable: function (map: MapboxGL.Map) {
+  disable: function (map: maplibregl.Map) {
     map.boxZoom.enable();
     map.dragPan.enable();
     // eslint-disable-next-line

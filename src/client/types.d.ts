@@ -1,5 +1,4 @@
 import { Feature, FeatureCollection, MultiPolygon } from "geojson";
-import * as H from "history";
 import {
   IProject,
   IStaticMetadata,
@@ -55,7 +54,7 @@ export type ProjectData = DynamicProjectData & StaticProjectData;
 export type SavingState = "unsaved" | "saving" | "saved" | "failed";
 
 export interface AuthLocationState {
-  readonly from: H.Location;
+  readonly from: { pathname: string; search?: string };
 }
 
 export type MetricKey =

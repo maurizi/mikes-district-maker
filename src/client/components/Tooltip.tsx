@@ -1,5 +1,4 @@
-/** @jsx jsx */
-import { jsx } from "theme-ui";
+
 
 import Tippy, { TippyProps } from "@tippyjs/react";
 import "tippy.js/dist/tippy.css";

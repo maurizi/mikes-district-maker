@@ -1,5 +1,4 @@
-/** @jsx jsx */
-import { Box, Button, Input, Flex, jsx, Label, Radio, ThemeUIStyleObject } from "theme-ui";
+import { Box, Button, Input, Flex, Label, Radio, ThemeUIStyleObject } from "theme-ui";
 import { Button as MenuButton, Wrapper, Menu, MenuItem } from "react-aria-menubutton";
 import { useClipboard } from "use-clipboard-copy";
 

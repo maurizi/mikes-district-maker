@@ -1,5 +1,4 @@
-/** @jsx jsx */
-import { jsx, ThemeUIStyleObject, Container, Box } from "theme-ui";
+import { ThemeUIStyleObject, Container, Box } from "theme-ui";
 
 import { IProject, IStaticMetadata, RegionLookupProperties } from "../../../shared/entities";
 import { DistrictsGeoJSON, EvaluateMetricWithValue, ElectionYear, PviBucket } from "../../types";

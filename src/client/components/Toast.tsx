@@ -1,13 +1,10 @@
-/** @jsx jsx */
-import { jsx } from "theme-ui";
 import { ToastContainer, cssTransition } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "./Toast.css";
 
 const Fade = cssTransition({
   enter: "fadeIn",
-  exit: "fadeOut",
-  duration: 500
+  exit: "fadeOut"
 });
 
 const Toast = () => {

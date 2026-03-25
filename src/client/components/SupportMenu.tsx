@@ -1,5 +1,4 @@
-/** @jsx jsx */
-import { jsx, Themed } from "theme-ui";
+
 import { Button as MenuButton, Wrapper, Menu, MenuItem } from "react-aria-menubutton";
 import Icon from "../components/Icon";
 import { style, invertStyles } from "./MenuButton.styles";
@@ -47,35 +46,35 @@ const SupportMenu = ({ project, ...props }: SupportProps & StateProps) => {
         <ul sx={style.menuList}>
           <li key={UserMenuKeys.Guide}>
             <MenuItem value={UserMenuKeys.Guide}>
-              <Themed.a href={guideLink} target="_blank" sx={style.menuListItem}>
+              <a href={guideLink} target="_blank" sx={style.menuListItem}>
                 <Icon name="book-spells" sx={style.menuListIcon} />
                 Getting Started Guide
-              </Themed.a>
+              </a>
             </MenuItem>
           </li>
           <li key={UserMenuKeys.Blog}>
             <MenuItem value={UserMenuKeys.Blog}>
-              <Themed.a href={blogLink} target="_blank" sx={style.menuListItem}>
+              <a href={blogLink} target="_blank" sx={style.menuListItem}>
                 <Icon name="book-spells" sx={style.menuListIcon} />
                 Blog
-              </Themed.a>
+              </a>
             </MenuItem>
           </li>
           <li key={UserMenuKeys.Contact}>
             <MenuItem value={UserMenuKeys.Contact}>
-              <Themed.a href={contactLink} target="_blank" sx={style.menuListItem}>
+              <a href={contactLink} target="_blank" sx={style.menuListItem}>
                 <Icon name="envelope" sx={style.menuListIcon} />
                 Contact us
-              </Themed.a>
+              </a>
             </MenuItem>
           </li>
           {project && (
             <li key={UserMenuKeys.KeyboardShortcuts}>
               <MenuItem value={UserMenuKeys.KeyboardShortcuts}>
-                <Themed.a target="_blank" sx={style.menuListItem} onClick={showKeyboardShortcuts}>
+                <a target="_blank" sx={style.menuListItem} onClick={showKeyboardShortcuts}>
                   <Icon name="keyboard" sx={style.menuListIcon} />
                   Show keyboard shortcuts
-                </Themed.a>
+                </a>
               </MenuItem>
             </li>
           )}

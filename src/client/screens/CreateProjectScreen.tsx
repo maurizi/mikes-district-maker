@@ -1,7 +1,6 @@
-/** @jsx jsx */
 import React, { useEffect, useState } from "react";
 import { connect } from "react-redux";
-import { Link, Redirect, useHistory } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import {
   Box,
   Button,
@@ -13,7 +12,6 @@ import {
   jsx,
   Label,
   Radio,
-  Themed,
   ThemeUIStyleObject
 } from "theme-ui";
 
@@ -34,7 +32,7 @@ import { InputField, SelectField } from "../components/Field";
 import FormError from "../components/FormError";
 import MultiMemberForm from "../components/MultiMemberForm";
 import OrganizationTemplateForm from "../components/OrganizationTemplateForm";
-import { ReactComponent as Logo } from "../media/logos/mark-white.svg";
+import Logo from "../media/logos/mark-white.svg?react";
 import { State } from "../reducers";
 import { OrganizationState } from "../reducers/organization";
 import { UserState } from "../reducers/user";
@@ -171,7 +169,7 @@ const style: Record<string, ThemeUIStyleObject> = {
 };
 
 const CreateProjectScreen = ({ regionConfigs, user, organization }: StateProps) => {
-  const history = useHistory();
+  const navigate = useNavigate();
   const [createProjectResource, setCreateProjectResource] = useState<
     WriteResource<ProjectForm, IProject>
   >({
@@ -221,7 +219,7 @@ const CreateProjectScreen = ({ regionConfigs, user, organization }: StateProps) 
   };
 
   function setupProjectFromTemplate(data: CreateProjectData) {
-    return createProject(data).then((project: IProject) => history.push(`/projects/${project.id}`));
+    return createProject(data).then((project: IProject) => navigate(`/projects/${project.id}`));
   }
 
   useEffect(() => {
@@ -240,7 +238,7 @@ const CreateProjectScreen = ({ regionConfigs, user, organization }: StateProps) 
   });
 
   return "resource" in createProjectResource ? (
-    <Redirect to={`/projects/${createProjectResource.resource.id}`} />
+    <Navigate to={`/projects/${createProjectResource.resource.id}`} replace />
   ) : (
     <Flex
       sx={{
@@ -345,12 +343,12 @@ const CreateProjectScreen = ({ regionConfigs, user, organization }: StateProps) 
                     description={
                       <Box as="span" sx={style.cardHint}>
                         What state do you want to map? If you don’t see it in the list,{" "}
-                        <Themed.a
+                        <a
                           href="https://districtbuilder.us1.list-manage.com/subscribe?u=61da999c9897859f1c1fff262&id=70fdf1ae35"
                           target="_blank"
                         >
                           sign up for our mailing list
-                        </Themed.a>{" "}
+                        </a>{" "}
                         to know when new states are available!
                       </Box>
                     }

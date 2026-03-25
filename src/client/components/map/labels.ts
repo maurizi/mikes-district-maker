@@ -1,7 +1,7 @@
-import { MapboxGeoJSONFeature } from "mapbox-gl";
+import { MapGeoJSONFeature } from "maplibre-gl";
 import { geoLevelLabelSingular } from "../../functions";
 
-export function getLabel(geoLevelId?: string, feature?: MapboxGeoJSONFeature) {
+export function getLabel(geoLevelId?: string, feature?: MapGeoJSONFeature) {
   if (feature && feature.properties && typeof feature.properties.name === "string") {
     if (geoLevelId === "county" && !feature.properties.name.endsWith("County")) {
       return `${feature.properties.name} County`;

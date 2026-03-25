@@ -4,12 +4,13 @@ import { TerminusModule } from "@nestjs/terminus";
 import { TypeOrmModule } from "@nestjs/typeorm";
 
 import { MailerModule } from "@nestjs-modules/mailer";
-import { HandlebarsAdapter } from "@nestjs-modules/mailer/dist/adapters/handlebars.adapter";
-import { SES } from "aws-sdk";
+import { HandlebarsAdapter } from "@nestjs-modules/mailer/adapters/handlebars.adapter";
+import { SES } from "@aws-sdk/client-ses";
 import * as SESTransport from "nodemailer/lib/ses-transport";
 import * as StreamTransport from "nodemailer/lib/stream-transport";
 
 import { DEBUG } from "../../shared/constants";
+import { dataSourceOptions } from "./data-source";
 import { AuthModule } from "./auth/auth.module";
 import { HealthCheckModule } from "./healthcheck/healthcheck.module";
 import { OrganizationsModule } from "./organizations/organizations.module";
@@ -32,10 +33,8 @@ if (DEBUG) {
   };
 } else {
   mailTransportOptions = {
-    SES: new SES({
-      apiVersion: "2010-12-01"
-    })
-  };
+    SES: { ses: new SES({}), aws: { SES } }
+  } as unknown as SESTransport.Options;
 }
 
 @Module({
@@ -53,7 +52,7 @@ if (DEBUG) {
         }
       }
     }),
-    TypeOrmModule.forRoot(),
+    TypeOrmModule.forRoot(dataSourceOptions),
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, "static"),
       // https://github.com/nestjs/serve-static/blob/master/lib/interfaces/serve-static-options.interface.ts

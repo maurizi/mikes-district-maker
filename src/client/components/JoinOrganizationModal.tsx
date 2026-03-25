@@ -1,8 +1,7 @@
-/** @jsx jsx */
 import AriaModal from "react-aria-modal";
 import { connect } from "react-redux";
 
-import { Box, jsx, ThemeUIStyleObject } from "theme-ui";
+import { Box, ThemeUIStyleObject } from "theme-ui";
 
 import { IOrganization, IUser } from "../../shared/entities";
 import { showCopyMapModal } from "../actions/projectModals";

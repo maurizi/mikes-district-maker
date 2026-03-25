@@ -1,9 +1,8 @@
-/** @jsx jsx */
 import { useState } from "react";
 import { connect } from "react-redux";
-import { Link, Redirect, useLocation } from "react-router-dom";
-import { Alert, Box, Card, Close, Flex, Heading, jsx, Themed } from "theme-ui";
-import { ReactComponent as Logo } from "../media/logos/logo.svg";
+import { Link, Navigate, useLocation } from "react-router-dom";
+import { Alert, Box, Card, Close, Flex, Heading} from "theme-ui";
+import Logo from "../media/logos/logo.svg?react";
 
 import { IUser } from "../../shared/entities";
 import { isUserLoggedIn } from "../jwt";
@@ -22,15 +21,16 @@ interface StateProps {
 
 const LoginScreen = ({ passwordResetNoticeShown, user }: StateProps) => {
   const isLoggedIn = "resource" in user && isUserLoggedIn();
-  const location = useLocation<AuthLocationState>();
-  const to = location.state?.from || { pathname: "/" };
+  const location = useLocation();
+  const locationState = location.state as AuthLocationState | undefined;
+  const to = locationState?.from || { pathname: "/" };
   const toParams = new URLSearchParams(to.search);
   const [showStartProjectAlert, setShowStartProjectAlert] = useState(
     to.pathname === "/start-project" && toParams.has("name")
   );
 
   return isLoggedIn ? (
-    <Redirect to={to} />
+    <Navigate to={to} replace />
   ) : (
     <CenteredContent>
       <Heading as="h1" sx={{ textAlign: "center" }}>
@@ -46,13 +46,13 @@ const LoginScreen = ({ passwordResetNoticeShown, user }: StateProps) => {
               <Flex>
                 <Box>
                   Log in or{" "}
-                  <Themed.a
-                    as={Link}
+                  <Link
                     sx={{ variant: "links.alert" }}
-                    to={{ pathname: "/register", state: location.state }}
+                    to={{ pathname: "/register" }}
+                    state={location.state}
                   >
                     sign&nbsp;up
-                  </Themed.a>{" "}
+                  </Link>{" "}
                   for a new account to create your &ldquo;{toParams.get("name")}&rdquo; map.
                 </Box>
                 <Close
@@ -77,15 +77,15 @@ const LoginScreen = ({ passwordResetNoticeShown, user }: StateProps) => {
       </Card>
       <Box sx={{ fontSize: 1, mt: 3, textAlign: "center" }}>
         Need an account?{" "}
-        <Themed.a as={Link} to={{ pathname: "/register", state: location.state }}>
+        <Link to={{ pathname: "/register" }} state={location.state}>
           Sign up for free
-        </Themed.a>
+        </Link>
       </Box>
       <Box sx={{ fontSize: 1, textAlign: "center" }}>
         Forgot password?{" "}
-        <Themed.a as={Link} to={{ pathname: "/forgot-password", state: location.state }}>
+        <Link to={{ pathname: "/forgot-password" }} state={location.state}>
           Password reset
-        </Themed.a>
+        </Link>
       </Box>
     </CenteredContent>
   );

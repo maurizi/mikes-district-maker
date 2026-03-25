@@ -18,26 +18,26 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
         usage
     elif [[ "${1}" == "server" ]]; then
         if [[ -n "${CI}" ]]; then
-            docker-compose \
+            docker compose \
                 -f docker-compose.yml \
                 -f docker-compose.ci.yml \
                 run --rm "${1}" \
                 "${@:2}"
         else
-            docker-compose up -d database
-            docker-compose \
+            docker compose up -d database
+            docker compose \
                 run --rm --no-deps "${1}" \
                 "${@:2}"
         fi
     else
         if [[ -n "${CI}" ]]; then
-            docker-compose \
+            docker compose \
                 -f docker-compose.yml \
                 -f docker-compose.ci.yml \
                 run --rm --no-deps "${1}" \
                 bash -c "yarn ${*:2}"
         else
-            docker-compose \
+            docker compose \
                 run --rm --no-deps "${1}" \
                 bash -c "yarn ${*:2}"
         fi

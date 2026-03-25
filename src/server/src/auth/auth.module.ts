@@ -18,7 +18,7 @@ import { OrganizationsModule } from "../organizations/organizations.module";
     OrganizationsModule,
     JwtModule.register({
       signOptions: {
-        expiresIn: process.env.JWT_EXPIRATION_IN_MS
+        expiresIn: Number(process.env.JWT_EXPIRATION_IN_MS)
       },
       secret: process.env.JWT_SECRET
     })

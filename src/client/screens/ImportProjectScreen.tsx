@@ -1,9 +1,8 @@
-/** @jsx jsx */
 import { darken } from "@theme-ui/color";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { FileDrop } from "react-file-drop";
 import { connect } from "react-redux";
-import { Link, Redirect } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import {
   Box,
   Button,
@@ -39,7 +38,7 @@ import { createProject, importCsv, fetchTotalPopulation } from "../api";
 import Field, { InputField } from "../components/Field";
 import Icon from "../components/Icon";
 import ImportFlagsModal from "../components/ImportFlagsModal";
-import { ReactComponent as Logo } from "../media/logos/mark-white.svg";
+import Logo from "../media/logos/mark-white.svg?react";
 import { State } from "../reducers";
 import { WriteResource, Resource } from "../resource";
 import store from "../store";
@@ -456,9 +455,9 @@ const ImportProjectScreen = ({ organization, regionConfigs, user }: StateProps) 
   useEffect(() => {
     // Set error if number of districts less than max district ID
     const selectedDistrict = formData.numberOfDistricts
-      ? formData.numberOfDistricts < maxDistrictId
+      ? Number(formData.numberOfDistricts) < Number(maxDistrictId)
       : formData.chamber?.numberOfDistricts
-      ? formData.chamber.numberOfDistricts < maxDistrictId
+      ? Number(formData.chamber.numberOfDistricts) < Number(maxDistrictId)
       : null;
     if (maxDistrictId !== undefined && selectedDistrict) {
       setCreateProjectResource({
@@ -496,7 +495,7 @@ const ImportProjectScreen = ({ organization, regionConfigs, user }: StateProps) 
   }, [regionConfig]);
 
   return "resource" in createProjectResource ? (
-    <Redirect to={`/projects/${createProjectResource.resource.id}`} />
+    <Navigate to={`/projects/${createProjectResource.resource.id}`} replace />
   ) : "resource" in regionConfigs && "resource" in user ? (
     <Flex
       sx={{

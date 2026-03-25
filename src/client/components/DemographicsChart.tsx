@@ -1,5 +1,4 @@
-/** @jsx jsx */
-import { Box, Flex, jsx } from "theme-ui";
+import { Box, Flex} from "theme-ui";
 
 import { demographicsColors } from "../constants/colors";
 import { DEMOGRAPHIC_FIELDS_ORDER } from "../../shared/constants";

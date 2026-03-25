@@ -7,14 +7,13 @@ import CreateRandomProjects from "../commands/create-random-projects";
 import { RegionConfig } from "../../../server/src/region-configs/entities/region-config.entity";
 import { Project } from "../../../server/src/projects/entities/project.entity";
 import { User } from "../../../server/src/users/entities/user.entity";
-import { createConnection } from "typeorm";
-import { connectionOptions } from "../lib/dbUtils";
+import { dataSourceOptions, createDataSource } from "../lib/dbUtils";
 
-jest.mock("typeorm", () => {
-  const original = jest.requireActual("typeorm");
+jest.mock("../lib/dbUtils", () => {
+  const original = jest.requireActual("../lib/dbUtils");
   return {
     ...original,
-    createConnection: jest.fn()
+    createDataSource: jest.fn()
   };
 });
 jest.mock("../../../server/src/worker");
@@ -60,13 +59,13 @@ describe("Create random projects", () => {
       });
     });
 
-    const mockedCreateConnection = createConnection as jest.MockedFunction<typeof createConnection>;
+    const mockedCreateDataSource = createDataSource as jest.MockedFunction<typeof createDataSource>;
     connection = await testDb.adapters.createTypeormConnection({
-      type: connectionOptions.type,
-      entities: connectionOptions.entities
+      type: dataSourceOptions.type,
+      entities: dataSourceOptions.entities
     });
 
-    mockedCreateConnection.mockImplementation(() => Promise.resolve(connection));
+    mockedCreateDataSource.mockImplementation(() => Promise.resolve(connection));
     // Create database tables
     await connection.synchronize();
     dbBackup = testDb.backup();

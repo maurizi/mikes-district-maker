@@ -1,8 +1,5 @@
-import { Command, flags } from "@oclif/command";
-import { IArg } from "@oclif/parser/lib/args";
-import S3 from "aws-sdk/clients/s3";
-import cli from "cli-ux";
-import { mapSync } from "event-stream";
+import { Args, Command, Flags, ux } from "@oclif/core";
+import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import {
   createReadStream,
   createWriteStream,
@@ -13,7 +10,7 @@ import {
 } from "fs";
 import { Feature, FeatureCollection, MultiPolygon, Polygon } from "geojson";
 import { parse } from "JSONStream";
-import JsonStreamStringify from "json-stream-stringify";
+import { JsonStreamStringify } from "json-stream-stringify";
 import groupBy from "lodash/groupBy";
 import mapValues from "lodash/mapValues";
 import { join } from "path";
@@ -75,12 +72,12 @@ it when necessary (file sizes ~1GB+).
 `;
 
   static flags = {
-    big: flags.boolean({
+    big: Flags.boolean({
       char: "b",
       description: "Use this for big GeoJSON files (~1GB+) that need to be streamed"
     }),
 
-    levels: flags.string({
+    levels: Flags.string({
       char: "l",
       description: `Comma-separated geolevel hierarchy: smallest to largest
       To use a different name for the layer ID from the GeoJSON property, separate values by ':'
@@ -89,19 +86,19 @@ it when necessary (file sizes ~1GB+).
       default: "block,blockgroup,county"
     }),
 
-    levelMinZoom: flags.string({
+    levelMinZoom: Flags.string({
       char: "n",
       description: "Comma-separated minimum zoom level per geolevel, must match # of levels",
       default: "8,0,0"
     }),
 
-    levelMaxZoom: flags.string({
+    levelMaxZoom: Flags.string({
       char: "x",
       description: "Comma-separated maximum zoom level per geolevel, must match # of levels",
       default: "g,g,g"
     }),
 
-    demographics: flags.string({
+    demographics: Flags.string({
       char: "d",
       description: `Comma-separated group of census demographics to select and aggregate
       To use a different name for the property from the GeoJSON property, separate values by ':'
@@ -117,7 +114,7 @@ it when necessary (file sizes ~1GB+).
       multiple: true
     }),
 
-    voting: flags.string({
+    voting: Flags.string({
       char: "v",
       description: `Comma-separated election data to select and aggregate
       To use a different name for the layer property from the GeoJSON property, separate values by ':'
@@ -126,41 +123,43 @@ it when necessary (file sizes ~1GB+).
       default: ""
     }),
 
-    simplification: flags.string({
+    simplification: Flags.string({
       char: "s",
       description: "Topojson simplification amount (minWeight)",
       default: "0.0000000025"
     }),
 
-    quantization: flags.string({
+    quantization: Flags.string({
       char: "q",
       description: "Topojson quantization transform, 0 to skip",
       default: "1e5"
     }),
 
-    outputDir: flags.string({
+    outputDir: Flags.string({
       char: "o",
       description: "Directory to output files",
       default: "./"
     }),
 
-    inputS3Dir: flags.string({
+    inputS3Dir: Flags.string({
       char: "u",
       description: "S3 directory for the previous run if we will be updating in-place",
       default: ""
     }),
 
-    filterPrefix: flags.string({
+    filterPrefix: Flags.string({
       char: "f",
       description: "Filter to only base geounits containing the specified prefix",
       default: ""
     })
   };
 
-  static args: [IArg] = [{ name: "file", required: true }];
+  static args = {
+    file: Args.string({ required: true })
+  };
 
   async run(): Promise<void> {
-    const { args, flags } = this.parse(ProcessGeojson);
+    const { args, flags } = await this.parse(ProcessGeojson);
 
     if (!existsSync(args.file)) {
       this.error(`file ${args.file} does not exist, exiting`);
@@ -187,11 +186,11 @@ it when necessary (file sizes ~1GB+).
       );
     }
 
-    cli.action.start(`Reading base GeoJSON: ${args.file}`);
+    ux.action.start(`Reading base GeoJSON: ${args.file}`);
     const baseGeoJson = await (flags.big
       ? this.readBigGeoJson(args.file)
       : this.readSmallGeoJson(args.file));
-    cli.action.stop();
+    ux.action.stop();
 
     const numFeatures = baseGeoJson.features.length;
     this.log(`GeoJSON contains ${numFeatures.toString()} features`);
@@ -243,9 +242,9 @@ it when necessary (file sizes ~1GB+).
     if (!flags.inputS3Dir) {
       this.log("No inputS3Dir provided, no sorting needed");
     } else {
-      cli.action.start("Pulling down previous TopoJSON for sorting");
+      ux.action.start("Pulling down previous TopoJSON for sorting");
       const prevTopoJson = await this.readTopoJsonFromS3(flags.inputS3Dir);
-      cli.action.stop();
+      ux.action.stop();
 
       this.log("Sorting TopoJSON based on previous version");
       const errorMessage = this.sortTopoJsonByPrev(topoJsonHierarchy, prevTopoJson, geoLevelIds);
@@ -488,29 +487,26 @@ it when necessary (file sizes ~1GB+).
     return new Promise(resolve =>
       createReadStream(path, { encoding: "utf8" })
         .pipe(parse("features"))
-        .pipe(
-          mapSync((features: any) => {
-            resolve({ type: "FeatureCollection", features });
-          })
-        )
+        .on("data", (features: any) => {
+          resolve({ type: "FeatureCollection", features });
+        })
     );
   }
 
   // Reads a TopoJSON file from S3, given the S3 run directory
   async readTopoJsonFromS3(inputS3Dir: string): Promise<Topology<Objects<{}>>> {
-    const s3 = new S3();
+    const s3Client = new S3Client({});
     const uriComponents = inputS3Dir.split("/");
     const bucket = uriComponents[2];
     const keyPrefix = uriComponents.slice(3).join("/");
 
-    const response: any = await s3
-      .getObject({
-        Bucket: bucket,
-        Key: `${keyPrefix}topo.json`
-      })
-      .promise();
+    const response = await s3Client.send(new GetObjectCommand({
+      Bucket: bucket,
+      Key: `${keyPrefix}topo.json`
+    }));
 
-    return JSON.parse(response.Body?.toString("utf8"));
+    const bodyString = await response.Body!.transformToString();
+    return JSON.parse(bodyString);
   }
 
   // Write TopoJSON file to disk

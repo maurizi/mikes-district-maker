@@ -1,9 +1,8 @@
-/** @jsx jsx */
 import React, { useState } from "react";
 import { useParams } from "react-router-dom";
-import { Link, Redirect } from "react-router-dom";
-import { Box, Button, Card, Flex, Heading, jsx, Themed } from "theme-ui";
-import { ReactComponent as Logo } from "../media/logos/logo.svg";
+import { Link, Navigate } from "react-router-dom";
+import { Box, Button, Card, Flex, Heading} from "theme-ui";
+import Logo from "../media/logos/logo.svg?react";
 
 import { showPasswordResetNotice } from "../actions/auth";
 import { resetPassword } from "../api";
@@ -25,7 +24,7 @@ interface ResetPasswordScreenParams {
 }
 
 const ResetPasswordScreen = () => {
-  const { token } = useParams<ResetPasswordScreenParams>();
+  const { token } = useParams();
   const [passwordResource, setPasswordResource] = useState<WriteResource<ResetPasswordForm, void>>({
     data: {
       password: ""
@@ -34,7 +33,7 @@ const ResetPasswordScreen = () => {
   const { data } = passwordResource;
 
   return "resource" in passwordResource ? (
-    <Redirect to="/login" />
+    <Navigate to="/login" replace />
   ) : (
     <CenteredContent>
       <Heading as="h1" sx={{ textAlign: "center" }}>
@@ -47,7 +46,7 @@ const ResetPasswordScreen = () => {
           onSubmit={(e: React.FormEvent) => {
             e.preventDefault();
             setPasswordResource({ data, isPending: true });
-            resetPassword(token, data.password)
+            resetPassword(token!, data.password)
               .then(() => {
                 setPasswordResource({ data, resource: void 0 });
                 store.dispatch(showPasswordResetNotice(true));
@@ -86,15 +85,15 @@ const ResetPasswordScreen = () => {
       </Card>
       <Box sx={{ fontSize: 1, textAlign: "center" }}>
         Know your password?{" "}
-        <Themed.a as={Link} to="/login" sx={{ color: "primary" }}>
+        <Link to="/login" sx={{ color: "primary" }}>
           Log in
-        </Themed.a>
+        </Link>
       </Box>
       <Box sx={{ fontSize: 1, textAlign: "center" }}>
         Need an account?{" "}
-        <Themed.a as={Link} to="/register" sx={{ color: "primary" }}>
+        <Link to="/register" sx={{ color: "primary" }}>
           Sign up for free
-        </Themed.a>
+        </Link>
       </Box>
     </CenteredContent>
   );

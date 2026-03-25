@@ -1,5 +1,4 @@
-/** @jsx jsx */
-import { Box, Card, Heading, jsx } from "theme-ui";
+import { Box, Card, Heading} from "theme-ui";
 
 import CenteredContent from "../components/CenteredContent";
 

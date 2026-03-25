@@ -1,9 +1,8 @@
-/** @jsx jsx */
 import React, { useState } from "react";
 import AriaModal from "react-aria-modal";
 import { connect } from "react-redux";
-import { Redirect } from "react-router-dom";
-import { Box, Button, Flex, Heading, jsx, ThemeUIStyleObject } from "theme-ui";
+import { Navigate } from "react-router-dom";
+import { Box, Button, Flex, Heading, ThemeUIStyleObject } from "theme-ui";
 
 import { isUserLoggedIn } from "../jwt";
 import { IProject, IUser } from "../../shared/entities";
@@ -54,7 +53,7 @@ const CopyMapModal = ({
   const isLoggedIn = "resource" in user && isUserLoggedIn();
 
   return createProjectResource && "resource" in createProjectResource ? (
-    <Redirect to={`/projects/${createProjectResource.resource.id}`} />
+    <Navigate to={`/projects/${createProjectResource.resource.id}`} replace />
   ) : showModal ? (
     <AriaModal
       titleId="copy-map-modal-header"

@@ -1,6 +1,5 @@
-/** @jsx jsx */
-import { Box, jsx, Spinner, ThemeUIStyleObject } from "theme-ui";
-import MapboxGL from "mapbox-gl";
+import { Box, Spinner, ThemeUIStyleObject } from "theme-ui";
+import maplibregl from "maplibre-gl";
 import React, { useEffect, useRef, useState } from "react";
 
 import { IStaticMetadata, ProjectNest } from "../../../shared/entities";
@@ -37,7 +36,7 @@ const ProjectDistrictsMap = ({
   project.regionConfig &&
     !bounds &&
     fetchMemoizedStateBbox(project.regionConfig).then((bboxData: IStaticMetadata["bbox"]) => {
-      // Conversion from readonly -> mutable to match Mapbox interface
+      // Conversion from readonly -> mutable to match MapLibre interface
       setBounds([...bboxData]);
     });
 
@@ -60,7 +59,7 @@ const ProjectDistrictsMap = ({
         feature.properties.color = id === 0 ? "#EDEDED" : getDistrictColor(id);
       });
 
-    const map = new MapboxGL.Map({
+    const map = new maplibregl.Map({
       container: mapRef.current,
       style: {
         version: 8,

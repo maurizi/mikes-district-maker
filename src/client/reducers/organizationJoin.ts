@@ -1,7 +1,7 @@
-import { Cmd, Loop, loop, LoopReducer } from "redux-loop";
+import { Cmd, Loop, loop } from "redux-loop";
 import { getType } from "typesafe-actions";
 
-import { Action } from "../actions";
+import { Action, LoopAction } from "../actions";
 import {
   joinOrganization,
   joinOrganizationSuccess,
@@ -23,10 +23,10 @@ export const initialState = {
   isPending: false
 };
 
-const organizationJoinReducer: LoopReducer<OrganizationJoinState, Action> = (
+const organizationJoinReducer = (
   state: OrganizationJoinState = initialState,
-  action: Action
-): OrganizationJoinState | Loop<OrganizationJoinState, Action> => {
+  action: LoopAction
+): OrganizationJoinState | Loop<OrganizationJoinState> => {
   switch (action.type) {
     case getType(joinOrganization): {
       return loop(

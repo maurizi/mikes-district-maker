@@ -28,7 +28,7 @@ import {
   Override,
   ParsedBody,
   ParsedRequest
-} from "@nestjsx/crud";
+} from "@dataui/crud";
 import stringify from "csv-stringify/lib/sync";
 import { Response } from "express";
 import FormData from "form-data";
@@ -257,7 +257,7 @@ export class ProjectsController implements CrudController<Project> {
     const userId =
       typeof req.parsed.authPersist.userId === "string" ? req.parsed.authPersist.userId : undefined;
     const project = await this.getProjectWithDistricts(id, userId);
-    const user = await this.usersService.findOne(userId);
+    const user = await this.usersService.findOne({ where: { id: userId } });
     if (!user) {
       throw new InternalServerErrorException(`User not found for authenticated user id ${userId}`);
     }
@@ -324,22 +324,35 @@ export class ProjectsController implements CrudController<Project> {
     // Not using 'getProject' because we need to select the 'districts' column
     // Unauthenticated access is allowed for individual projects if they are
     // visible or published, and not archived.
-    const project = await this.service.findOne({
-      where: new Brackets(qb =>
-        qb.where({ id, archived: false }).andWhere(
-          new Brackets(qb => {
-            const isVisibleFilter = qb
-              .where("visibility = :published", { published: ProjectVisibility.Published })
-              .orWhere("visibility = :visible", { visible: ProjectVisibility.Visible });
-            return userId
-              ? isVisibleFilter.orWhere("user_id = :userId", { userId })
-              : isVisibleFilter;
-          })
+    const qb = this.service.repository
+      .createQueryBuilder("project")
+      .leftJoinAndSelect("project.regionConfig", "regionConfig")
+      .leftJoinAndSelect("project.projectTemplate", "projectTemplate")
+      .leftJoinAndSelect("project.user", "user")
+      .leftJoinAndSelect("project.chamber", "chamber")
+      .where("project.id = :id", { id })
+      .andWhere("project.archived = false");
+
+    if (userId) {
+      qb.andWhere(
+        new Brackets(inner =>
+          inner
+            .where("project.visibility = :published", { published: ProjectVisibility.Published })
+            .orWhere("project.visibility = :visible", { visible: ProjectVisibility.Visible })
+            .orWhere("project.user_id = :userId", { userId })
         )
-      ),
-      loadEagerRelations: false,
-      relations: ["regionConfig", "projectTemplate", "user", "chamber"]
-    });
+      );
+    } else {
+      qb.andWhere(
+        new Brackets(inner =>
+          inner
+            .where("project.visibility = :published", { published: ProjectVisibility.Published })
+            .orWhere("project.visibility = :visible", { visible: ProjectVisibility.Visible })
+        )
+      );
+    }
+
+    const project = await qb.getOne();
     if (!project) {
       throw new NotFoundException(`Project ${id} not found`);
     }
@@ -492,8 +505,8 @@ export class ProjectsController implements CrudController<Project> {
       throw new NotFoundException("Project is not connected to an organization");
     }
     const userId = req.parsed.authPersist.userId || null;
-    const org = await this.organizationService.findOne({ id: orgId }, { relations: ["admin"] });
-    const user = await this.usersService.findOne({ id: userId });
+    const org = await this.organizationService.findOne({ where: { id: orgId }, relations: ["admin"] });
+    const user = await this.usersService.findOne({ where: { id: userId } });
     if (!user || !org) {
       throw new NotFoundException(`Unable to find user: ${userId}`);
     }
@@ -590,7 +603,7 @@ export class ProjectsController implements CrudController<Project> {
         "Content-Length": `${form.getLengthSync()}`
       },
       // API docs say to expect 302, but in practice I've seen 303, checking for either to be safe
-      validateStatus: status => status === 302 || status === 303,
+      validateStatus: (status: number) => status === 302 || status === 303,
       maxRedirects: 0
     });
     const callbackLocation = s3Response.headers["location"];
@@ -619,7 +632,7 @@ export class ProjectsController implements CrudController<Project> {
     return new Promise((resolve, reject) => {
       axios
         .get(indexUrl)
-        .then(apiResponse => {
+        .then((apiResponse: any) => {
           apiResponse.data.status
             ? resolve(void 0)
             : numTries >= PLANSCORE_POLL_MAX_TRIES
@@ -629,7 +642,7 @@ export class ProjectsController implements CrudController<Project> {
                 PLANSCORE_POLL_MS
               );
         })
-        .catch(e => reject(e));
+        .catch((e: any) => reject(e));
     });
   }
 
@@ -740,27 +753,27 @@ export class ProjectsController implements CrudController<Project> {
     }
 
     const template = dto.projectTemplate
-      ? await this.templateService.findOne(
-          { id: dto.projectTemplate.id, isActive: true, regionConfig: { archived: false } },
-          { relations: ["regionConfig", "referenceLayers", "chamber"] }
-        )
+      ? await this.templateService.findOne({
+          where: { id: dto.projectTemplate.id, isActive: true, regionConfig: { archived: false } },
+          relations: ["regionConfig", "referenceLayers", "chamber"]
+        })
       : undefined;
     if (dto.projectTemplate && !template) {
       throw new NotFoundException(`Project template for id '${dto.projectTemplate?.id}' not found`);
     }
 
     const userId = req.parsed.authPersist.userId as string;
-    const user = await this.usersService.findOne(userId);
+    const user = await this.usersService.findOne({ where: { id: userId } });
     if (!user) {
       throw new InternalServerErrorException(`User not found for authenticated user id ${userId}`);
     }
 
     const chamber = dto.chamber?.id
-      ? await this.chambersService.findOne(dto.chamber?.id)
+      ? await this.chambersService.findOne({ where: { id: dto.chamber?.id } })
       : undefined;
 
     const regionConfig = dto.regionConfig
-      ? await this.regionConfigService.findOne({ id: dto.regionConfig.id })
+      ? await this.regionConfigService.findOne({ where: { id: dto.regionConfig.id } })
       : template
       ? template.regionConfig
       : undefined;
@@ -824,7 +837,7 @@ export class ProjectsController implements CrudController<Project> {
           numberOfDistricts: formdata.numberOfDistricts,
           districtsDefinition: data.districtsDefinition,
           user,
-          chamber: template?.chamber || chamber,
+          chamber: template?.chamber || chamber || undefined,
           regionConfig
         }))
       });

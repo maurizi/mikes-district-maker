@@ -1,7 +1,7 @@
-import { Loop, LoopReducer } from "redux-loop";
+import { Loop } from "redux-loop";
 import { getType } from "typesafe-actions";
 
-import { Action } from "../actions";
+import { Action, LoopAction } from "../actions";
 
 import {
   showAdvancedEditingModal,
@@ -28,10 +28,10 @@ export const initialProjectModalsState: ProjectModalsState = {
   showSubmitMapModal: false
 };
 
-const districtDrawingReducer: LoopReducer<ProjectModalsState, Action> = (
+const districtDrawingReducer = (
   state: ProjectModalsState = initialProjectModalsState,
-  action: Action
-): ProjectModalsState | Loop<ProjectModalsState, Action> => {
+  action: LoopAction
+): ProjectModalsState | Loop<ProjectModalsState> => {
   switch (action.type) {
     case getType(resetProjectState):
       return {

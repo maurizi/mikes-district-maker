@@ -1,5 +1,4 @@
-/** @jsx jsx */
-import { jsx, Box, Checkbox, Label, Radio, Heading, ThemeUIStyleObject } from "theme-ui";
+import { Box, Checkbox, Label, Radio, Heading, ThemeUIStyleObject } from "theme-ui";
 import { Button as MenuButton, Wrapper, Menu } from "react-aria-menubutton";
 import { style as menuStyle } from "./MenuButton.styles";
 import store from "../store";

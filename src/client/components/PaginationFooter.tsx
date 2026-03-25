@@ -1,6 +1,5 @@
-/** @jsx jsx */
 import React from "react";
-import { jsx, Box, Button } from "theme-ui";
+import { Box, Button } from "theme-ui";
 import "../App.css";
 import { range } from "lodash";
 

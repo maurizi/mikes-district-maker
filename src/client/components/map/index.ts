@@ -1,4 +1,4 @@
-import MapboxGL, { MapboxGeoJSONFeature } from "mapbox-gl";
+import maplibregl, { MapGeoJSONFeature } from "maplibre-gl";
 import { cloneDeep } from "lodash";
 import { s3ToHttps } from "../../s3";
 import {
@@ -182,19 +182,19 @@ export function getEqualPopulationLabels(popThreshold: number) {
 }
 
 export function getGeolevelLinePaintStyle(geoLevel: string) {
-  const largeGeolevel: MapboxGL.LinePaint = {
+  const largeGeolevel: maplibregl.LineLayerSpecification["paint"] = {
     "line-color": "#000",
     "line-opacity": 1,
     "line-width": ["interpolate", ["linear"], ["zoom"], 6, 1.5, 14, 4.5]
   };
 
-  const mediumGeolevel: MapboxGL.LinePaint = {
+  const mediumGeolevel: maplibregl.LineLayerSpecification["paint"] = {
     "line-color": "#000",
     "line-opacity": ["interpolate", ["linear"], ["zoom"], 6, 0.2, 14, 0.6],
     "line-width": ["interpolate", ["linear"], ["zoom"], 6, 0.75, 14, 2.25]
   };
 
-  const smallGeolevel: MapboxGL.LinePaint = {
+  const smallGeolevel: maplibregl.LineLayerSpecification["paint"] = {
     "line-color": "#000",
     "line-opacity": ["interpolate", ["linear"], ["zoom"], 6, 0.1, 14, 0.3],
     "line-width": ["interpolate", ["linear"], ["zoom"], 6, 0, 14, 1.5]
@@ -220,7 +220,7 @@ export function generateMapLayers(
   geoLevels: readonly GeoLevelInfo[],
   minZoom: number,
   maxZoom: number,
-  map: mapboxgl.Map,
+  map: maplibregl.Map,
   geojson: DistrictsGeoJSON,
   populationDeviation: number
 ) {
@@ -267,11 +267,11 @@ export function generateMapLayers(
       layout: { visibility: "none" },
       filter: ["match", ["get", "color"], ["transparent"], false, true],
       paint: {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         "fill-color": {
           property: "compactness",
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           stops: getCompactnessStops() as unknown as any[][]
-        },
+        } as any,
         "fill-outline-color": "gray",
         "fill-opacity": 0.9
       }
@@ -287,12 +287,12 @@ export function generateMapLayers(
       layout: { visibility: "none" },
       filter: ["match", ["get", "color"], ["transparent"], false, true],
       paint: {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         "fill-color": {
           property: "pvi",
           type: "interval",
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           stops: getPviSteps() as unknown as any[][]
-        },
+        } as any,
         "fill-outline-color": "gray",
         "fill-opacity": 0.9
       }
@@ -308,7 +308,8 @@ export function generateMapLayers(
       layout: { visibility: "none" },
       filter: ["match", ["get", "color"], ["transparent"], false, true],
       paint: {
-        "fill-color": { type: "identity", property: "majorityRaceFill" },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        "fill-color": { type: "identity", property: "majorityRaceFill" } as any,
         "fill-outline-color": "gray",
         "fill-opacity": 0.9
       }
@@ -324,12 +325,12 @@ export function generateMapLayers(
       layout: { visibility: "none" },
       filter: ["match", ["get", "color"], ["transparent"], false, true],
       paint: {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         "fill-color": {
           property: "percentDeviation",
           type: "interval",
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           stops: getEqualPopulationStops(populationDeviation) as unknown as any[][]
-        },
+        } as any,
         "fill-outline-color": "gray",
         "fill-opacity": 0.9
       }
@@ -574,7 +575,7 @@ export function generateMapLayers(
       "all",
       map.getFilter(layer),
       ["match", ["get", "iso_3166_2"], [`US-${regionCode}`], true, false]
-    ]);
+    ] as maplibregl.FilterSpecification);
     map.setLayoutProperty(layer, "visibility", "visible");
   });
 }
@@ -594,7 +595,7 @@ export function levelToSelectionLayerId(geoLevel: string) {
   return `${geoLevel}-selected`;
 }
 
-type FeatureLike = Pick<MapboxGL.MapboxGeoJSONFeature, "id" | "sourceLayer">;
+type FeatureLike = Pick<maplibregl.MapGeoJSONFeature, "id" | "sourceLayer">;
 
 /*
  * Used for getting/setting feature state for geounits in geography.
@@ -617,7 +618,7 @@ export function featureStateDistricts(districtId: DistrictId) {
   };
 }
 
-export function isFeatureSelected(map: MapboxGL.Map, feature: FeatureLike): boolean {
+export function isFeatureSelected(map: maplibregl.Map, feature: FeatureLike): boolean {
   const featureState = map.getFeatureState(featureStateGeoLevel(feature));
   return featureState.selected === true;
 }
@@ -665,7 +666,7 @@ function isGeoUnitLocked(
 }
 
 export function setFeaturesSelectedFromGeoUnits(
-  map: MapboxGL.Map,
+  map: maplibregl.Map,
   geoUnits: GeoUnits,
   selected: boolean
 ) {
@@ -703,7 +704,7 @@ export function filterGeoUnits(units: GeoUnits, includeFn: (id: number) => boole
 }
 
 export function deselectChildGeounits(
-  map: MapboxGL.Map,
+  map: maplibregl.Map,
   geoUnits: GeoUnits,
   staticMetadata: IStaticMetadata,
   staticGeoLevels: TypedArrays
@@ -729,7 +730,7 @@ export function deselectChildGeounits(
 }
 
 export function getGeoLevelVisibility(
-  map: MapboxGL.Map,
+  map: maplibregl.Map,
   staticMetadata: IStaticMetadata
 ): readonly boolean[] {
   const mapZoom = map.getZoom();
@@ -741,8 +742,8 @@ export function getGeoLevelVisibility(
 
 /* eslint-disable */
 export interface ISelectionTool {
-  enable: (map: MapboxGL.Map, ...args: any) => void;
-  disable: (map: MapboxGL.Map, ...args: any) => void;
+  enable: (map: maplibregl.Map, ...args: any) => void;
+  disable: (map: maplibregl.Map, ...args: any) => void;
   [x: string]: any;
 }
 /* eslint-enable */
@@ -754,7 +755,7 @@ export interface ISelectionTool {
  * could possibly be locked then `featuresToUnlockedGeoUnits` should be used.
  */
 export function featuresToGeoUnits(
-  features: readonly MapboxGeoJSONFeature[],
+  features: readonly MapGeoJSONFeature[],
   geoLevelHierarchy: readonly GeoLevelInfo[]
 ): GeoUnits {
   const geoLevelIds = geoLevelHierarchy.map(geoLevel => geoLevel.id);
@@ -770,7 +771,7 @@ export function featuresToGeoUnits(
       [geoLevelId]: new Map(
         features
           .filter(feature => feature.sourceLayer === geoLevelId)
-          .map((feature: MapboxGeoJSONFeature) => [
+          .map((feature: MapGeoJSONFeature) => [
             feature.id as FeatureId,
             geoLevelHierarchyKeys.reduce((geounitData, key) => {
               const geounitId = feature.properties && feature.properties[key];
@@ -873,7 +874,7 @@ export function removeLockedGeoUnits(
 }
 
 export function featuresToUnlockedGeoUnits(
-  features: readonly MapboxGeoJSONFeature[],
+  features: readonly MapGeoJSONFeature[],
   staticMetadata: IStaticMetadata,
   districtsDefinition: DistrictsDefinition,
   lockedDistricts: LockedDistricts,

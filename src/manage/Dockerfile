@@ -1,4 +1,4 @@
-FROM node:16-bullseye-slim AS tippecanoe
+FROM node:24-bookworm-slim AS tippecanoe
 
 ENV TIPPECANOE_VERSION="1.36.0"
 
@@ -20,7 +20,7 @@ RUN make -j2 -C /usr/local/src/tippecanoe-${TIPPECANOE_VERSION}
 RUN make -C /usr/local/src/tippecanoe-${TIPPECANOE_VERSION} install
 
 
-FROM node:16-bullseye-slim
+FROM node:24-bookworm-slim
 
 RUN mkdir -p /home/node/app/manage
 WORKDIR /home/node/app/manage
@@ -28,14 +28,14 @@ WORKDIR /home/node/app/manage
 RUN set -ex \
   && deps=" \
   libsqlite3-dev \
-  procps=2:3.3* \
+  procps \
   " \
   && apt-get update && apt-get install -yq $deps --no-install-recommends
 
 COPY package.json /home/node/app/manage
 COPY yarn.lock /home/node/app/manage
 RUN set -ex \
-  && yarn install
+  && yarn install --ignore-engines
 
 COPY --from=tippecanoe /usr/local/bin/tippecanoe /usr/local/bin/tippecanoe
 COPY --from=tippecanoe /usr/local/bin/tile-join /usr/local/bin/tile-join

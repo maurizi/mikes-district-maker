@@ -1,7 +1,6 @@
-/** @jsx jsx */
 import React from "react";
 import AriaModal from "react-aria-modal";
-import { Box, Button, Flex, Heading, jsx, ThemeUIStyleObject } from "theme-ui";
+import { Box, Button, Flex, Heading, ThemeUIStyleObject } from "theme-ui";
 import { connect } from "react-redux";
 
 import { SelectionTool } from "../../actions/districtDrawing";

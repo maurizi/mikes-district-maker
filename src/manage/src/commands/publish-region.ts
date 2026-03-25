@@ -1,55 +1,48 @@
-import { Command, flags } from "@oclif/command";
-import { IArg } from "@oclif/parser/lib/args";
-import S3 from "aws-sdk/clients/s3";
-import cli from "cli-ux";
+import { Args, Command, Flags, ux } from "@oclif/core";
+import { S3Client } from "@aws-sdk/client-s3";
+import { Upload } from "@aws-sdk/lib-storage";
 import { createReadStream } from "fs";
 import { readFile } from "fs/promises";
 import { join } from "path";
 import readDir from "recursive-readdir";
 import { Topology } from "topojson-specification";
-import { createConnection } from "typeorm";
-
 import { RegionConfig } from "../../../server/src/region-configs/entities/region-config.entity";
 import { getTopologyLayerSize } from "../../../server/src/common/functions";
-import { connectionOptions } from "../lib/dbUtils";
+import { createDataSource } from "../lib/dbUtils";
 import { shouldPublishFile } from "../lib/fileUtils";
 
 export default class PublishRegion extends Command {
   static description = "upload processed region files to S3";
 
   static flags = {
-    bucketName: flags.string({
+    bucketName: Flags.string({
       char: "b",
       description: "Bucket to upload the files to",
       default: "global-districtbuilder-dev-us-east-1"
     })
   };
 
-  static args: IArg[] = [
-    {
-      name: "staticDataDir",
+  static args = {
+    staticDataDir: Args.string({
       description: "Directory of the region's static data (the output of `process-geojson`)",
       required: true
-    },
-    {
-      name: "countryCode",
+    }),
+    countryCode: Args.string({
       description: "Country code, e.g. US",
       required: true
-    },
-    {
-      name: "regionCode",
+    }),
+    regionCode: Args.string({
       description: "Region code, e.g. PA",
       required: true
-    },
-    {
-      name: "regionName",
+    }),
+    regionName: Args.string({
       description: "Name of the region, e.g. Pennsylvania",
       required: true
-    }
-  ];
+    })
+  };
 
   async run(): Promise<void> {
-    const { args, flags } = this.parse(PublishRegion);
+    const { args, flags } = await this.parse(PublishRegion);
     const versionDt = new Date();
     const keyPrefix = `regions/${args.countryCode}/${args.regionCode}/${versionDt.toISOString()}`;
 
@@ -61,21 +54,23 @@ export default class PublishRegion extends Command {
       return;
     }
 
-    cli.action.start(`Uploading ${filePaths.length} files`);
-    const s3Client = new S3();
+    ux.action.start(`Uploading ${filePaths.length} files`);
+    const s3Client = new S3Client({});
     const uploadPromises = filePaths.map(filePath => {
       // Strip off relative parts of the path we don't need for use in the S3 key
       const keyName = join(keyPrefix, filePath.substring(args.staticDataDir.length));
-      return s3Client
-        .upload({
+      const upload = new Upload({
+        client: s3Client,
+        params: {
           Body: createReadStream(filePath),
           Bucket: flags.bucketName,
           Key: keyName
-        })
-        .promise();
+        }
+      });
+      return upload.done();
     });
     const responses = await Promise.all(uploadPromises);
-    cli.action.stop();
+    ux.action.stop();
     this.log(`Received ${responses.length} responses`);
 
     const topology = JSON.parse(
@@ -91,8 +86,8 @@ export default class PublishRegion extends Command {
     regionConfig.version = versionDt;
     regionConfig.layerSizeInBytes = getTopologyLayerSize(topology);
 
-    const connection = await createConnection(connectionOptions);
-    const repo = connection.getRepository(RegionConfig);
+    const dataSource = await createDataSource();
+    const repo = dataSource.getRepository(RegionConfig);
     // @ts-ignore
     await repo.save(regionConfig);
     this.log("Region config saved to database");

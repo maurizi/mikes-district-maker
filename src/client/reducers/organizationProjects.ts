@@ -1,7 +1,7 @@
-import { Cmd, Loop, loop, LoopReducer } from "redux-loop";
+import { Cmd, Loop, loop } from "redux-loop";
 import { getType } from "typesafe-actions";
 
-import { Action } from "../actions";
+import { Action, LoopAction } from "../actions";
 
 import { IProjectTemplateWithProjects } from "../../shared/entities";
 import {
@@ -33,10 +33,10 @@ export const initialState = {
   featuredProjects: { isPending: false }
 };
 
-const organizationProjectsReducer: LoopReducer<OrganizationProjectsState, Action> = (
+const organizationProjectsReducer = (
   state: OrganizationProjectsState = initialState,
-  action: Action
-): OrganizationProjectsState | Loop<OrganizationProjectsState, Action> => {
+  action: LoopAction
+): OrganizationProjectsState | Loop<OrganizationProjectsState> => {
   switch (action.type) {
     case getType(organizationProjectsFetch):
       return loop(
@@ -98,7 +98,7 @@ const organizationProjectsReducer: LoopReducer<OrganizationProjectsState, Action
         Cmd.run(
           () =>
             saveProjectFeatured(action.payload.project).then(() => {
-              return { organization: action.payload.organization };
+              return action.payload;
             }),
           {
             successActionCreator: toggleProjectFeaturedSuccess,

@@ -21,7 +21,7 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     else
         # Bring up PostgreSQL and NestJS in a way that respects
         # configured service health checks.
-        docker-compose \
+        docker compose \
             -f docker-compose.yml \
             up -d database server
 
@@ -30,7 +30,7 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
         #  - PA has '16 but not '20 political data
         #  - IL has both '16 and '20 political data
         #  - DE appears twice, with an archived '10 census version and an unarchived '20 census version
-        docker-compose \
+        docker compose \
             exec database psql -U districtbuilder districtbuilder -c "
               INSERT INTO region_config
               VALUES (
@@ -121,7 +121,7 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
             "
 
         # Add chambers to the database
-        docker-compose \
+        docker compose \
             exec database psql -U districtbuilder districtbuilder -c "
               INSERT INTO chamber
               VALUES (
@@ -152,13 +152,13 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
         ./scripts/manage update-organization dev-data/azavea.yaml
         
         # Add user to testing organization
-        docker-compose \
+        docker compose \
             exec database psql -U districtbuilder districtbuilder -c "
               INSERT INTO organization_users_user VALUES((SELECT id FROM organization WHERE slug = 'azavea'), (SELECT id FROM \"user\" ORDER BY id LIMIT 1)) ON CONFLICT DO NOTHING;
             "
 
         # Set testing organization admin (no-op if there are no users) 
-        docker-compose \
+        docker compose \
             exec database psql -U districtbuilder districtbuilder -c "
               UPDATE organization SET user_id = (SELECT id FROM \"user\" ORDER BY id LIMIT 1) WHERE slug = 'azavea';
             "

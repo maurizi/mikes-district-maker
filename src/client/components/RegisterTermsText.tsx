@@ -1,6 +1,5 @@
-/** @jsx jsx */
 import React from "react";
-import { Box, jsx } from "theme-ui";
+import { Box} from "theme-ui";
 
 const T_C_LINK = "https://www.azavea.com/terms-of-use/";
 

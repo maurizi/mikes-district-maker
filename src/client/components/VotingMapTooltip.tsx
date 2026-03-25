@@ -1,6 +1,5 @@
-/** @jsx jsx */
 import { mapValues, sum } from "lodash";
-import { Box, jsx, Themed, ThemeUIStyleObject } from "theme-ui";
+import { Box, ThemeUIStyleObject } from "theme-ui";
 
 import { getPartyColor, capitalizeFirstLetter } from "../functions";
 
@@ -30,14 +29,14 @@ const Row = ({
   readonly percent?: number;
   readonly color: string;
 }) => (
-  <Themed.tr
+  <tr
     sx={{
       color: "muted",
       border: "none"
     }}
   >
-    <Themed.td sx={style.label}>{capitalizeFirstLetter(label)}</Themed.td>
-    <Themed.td sx={{ minWidth: "50px", py: 0 }}>
+    <td sx={style.label}>{capitalizeFirstLetter(label)}</td>
+    <td sx={{ minWidth: "50px", py: 0 }}>
       <Box
         style={{
           width: `${percent}%`
@@ -48,12 +47,12 @@ const Row = ({
           borderRadius: "1px"
         }}
       />
-    </Themed.td>
-    <Themed.td sx={style.number}>
+    </td>
+    <td sx={style.number}>
       {percent ? percent.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "0"}
       {"%"}
-    </Themed.td>
-  </Themed.tr>
+    </td>
+  </tr>
 );
 
 const VotingMapTooltip = ({ voting }: { readonly voting: { readonly [id: string]: number } }) => {
@@ -69,7 +68,7 @@ const VotingMapTooltip = ({ voting }: { readonly voting: { readonly [id: string]
 
   return (
     <Box sx={{ width: "100%", minHeight: "100%" }}>
-      <Themed.table sx={{ margin: "0", width: "100%" }}>
+      <table sx={{ margin: "0", width: "100%" }}>
         <tbody>
           <Row label={"Dem."} percent={percentages["democrat"]} color={getPartyColor("democrat")} />
           <Row
@@ -83,7 +82,7 @@ const VotingMapTooltip = ({ voting }: { readonly voting: { readonly [id: string]
             color={getPartyColor("other party")}
           />
         </tbody>
-      </Themed.table>
+      </table>
     </Box>
   );
 };

@@ -1,6 +1,6 @@
 import { Logger } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
-import S3 from "aws-sdk/clients/s3";
+import { S3Client } from "@aws-sdk/client-s3";
 import Queue from "promise-queue";
 
 import { AppModule } from "../app.module";
@@ -23,12 +23,12 @@ async function bootstrap(): Promise<void> {
     .select(RegionConfigsModule)
     .get(RegionConfigsService, { strict: true });
 
-  const s3 = new S3();
+  const s3 = new S3Client({});
   const queue = new Queue(4);
   const findOpts =
     process.argv.includes("-f") || process.argv.includes("--force")
       ? {}
-      : ({ layerSizeInBytes: 0 } as const);
+      : { where: { layerSizeInBytes: 0 } as const };
   const regionConfigs = await regionConfigsService.find(findOpts);
   logger.log(`Found ${regionConfigs.length} regions`);
   await Promise.all(

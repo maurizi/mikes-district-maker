@@ -1,6 +1,5 @@
-/** @jsx jsx */
 import React, { useState } from "react";
-import { Box, Button, Checkbox, Flex, jsx, Label, Themed } from "theme-ui";
+import { Box, Button, Checkbox, Flex, Label } from "theme-ui";
 import { toast } from "react-toastify";
 import { connect } from "react-redux";
 import { Link, useLocation } from "react-router-dom";
@@ -25,7 +24,7 @@ const RegisterContent = ({
   readonly children: React.ReactNode;
   readonly organization: Resource<IOrganization>;
 }) => {
-  const location = useLocation<AuthLocationState>();
+  const location = useLocation();
   const [registrationResource, setRegistrationResource] = useState<WriteResource<Register, void>>({
     data: {
       email: "",
@@ -136,13 +135,13 @@ const RegisterContent = ({
       </Button>
       <Box sx={{ fontSize: 1, textAlign: "center", mt: 3 }}>
         Already have an account?{" "}
-        <Themed.a
-          as={Link}
-          to={{ pathname: "/login", state: location.state }}
+        <Link
+          to={{ pathname: "/login" }}
+          state={location.state}
           sx={{ cursor: "pointer", color: "blue.5" }}
         >
           Log in
-        </Themed.a>
+        </Link>
       </Box>
     </Flex>
   );

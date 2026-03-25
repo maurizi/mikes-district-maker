@@ -1,15 +1,13 @@
-/** @jsx jsx */
 import { Button as MenuButton, Wrapper, Menu, MenuItem } from "react-aria-menubutton";
 import Avatar from "react-avatar";
 import React, { useState } from "react";
-import { Link, NavLink, useHistory } from "react-router-dom";
-import * as H from "history";
+import { Link, NavLink, useNavigate, type NavigateFunction } from "react-router-dom";
 import Icon from "../components/Icon";
 import SupportMenu from "../components/SupportMenu";
 import OrganizationDropdown from "../components/OrganizationDropdown";
-import { Alert, Themed, Box, Button, Flex, Heading, jsx, ThemeUIStyleObject } from "theme-ui";
+import { Alert, Box, Button, Flex, Heading, ThemeUIStyleObject } from "theme-ui";
 
-import { ReactComponent as Logo } from "../media/logos/logo.svg";
+import Logo from "../media/logos/logo.svg?react";
 
 import { resetState } from "../actions/root";
 import { clearJWT, isUserLoggedIn } from "../jwt";
@@ -131,7 +129,7 @@ const style: Record<string, ThemeUIStyleObject> = {
 };
 
 const SiteHeader = ({ user }: Props) => {
-  const history = useHistory();
+  const navigate = useNavigate();
   const isLoggedIn = isUserLoggedIn();
   const [resendEmail, setResendEmail] = useState<WriteResource<void, void>>({ data: void 0 });
 
@@ -171,9 +169,9 @@ const SiteHeader = ({ user }: Props) => {
             {"errors" in resendEmail && (
               <Box sx={{ fontWeight: "body" }}>
                 Error resending email. If this error persists, please contact us at{" "}
-                <Themed.a sx={{ color: "muted" }} href="mailto:support@districtbuilder.org">
+                <a sx={{ color: "muted" }} href="mailto:support@districtbuilder.org">
                   support@districtbuilder.org
-                </Themed.a>
+                </a>
                 .
               </Box>
             )}
@@ -198,7 +196,7 @@ const SiteHeader = ({ user }: Props) => {
         ) : "resource" in user ? (
           <React.Fragment>
             <span sx={style.linkItem}>
-              <NavLink exact to="/">
+              <NavLink to="/">
                 My maps
               </NavLink>
             </span>
@@ -206,7 +204,7 @@ const SiteHeader = ({ user }: Props) => {
               <OrganizationDropdown organizations={user.resource.organizations} />
             )}
             <span sx={style.linkItem}>
-              <NavLink exact to="/maps">
+              <NavLink to="/maps">
                 Community maps
               </NavLink>
             </span>
@@ -220,7 +218,7 @@ const SiteHeader = ({ user }: Props) => {
             >
               <SupportMenu />
             </span>
-            <Wrapper onSelection={handleSelection(history)} sx={{ ml: 3 }}>
+            <Wrapper onSelection={handleSelection(navigate)} sx={{ ml: 3 }}>
               <MenuButton sx={style.menuButton}>
                 <Avatar
                   name={user.resource.name}
@@ -256,15 +254,15 @@ const SiteHeader = ({ user }: Props) => {
   );
 };
 
-const handleSelection = (history: H.History) => (key: string | number) => {
+const handleSelection = (navigate: NavigateFunction) => (key: string | number) => {
   // eslint-disable-next-line
   if (key === UserMenuKeys.Logout) {
     logout();
-    history.push("/login");
+    navigate("/login");
   }
 
   if (key === UserMenuKeys.Account) {
-    history.push("/user-account");
+    navigate("/user-account");
   }
 };
 

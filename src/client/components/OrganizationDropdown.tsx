@@ -1,19 +1,17 @@
-/** @jsx jsx */
-import { jsx } from "theme-ui";
+
 import { Button as MenuButton, Wrapper, Menu, MenuItem } from "react-aria-menubutton";
 import { invertStyles, style } from "./MenuButton.styles";
 import { OrganizationNest } from "../../shared/entities";
-import * as H from "history";
-import { useHistory } from "react-router-dom";
+import { useNavigate, type NavigateFunction } from "react-router-dom";
 
 interface Props {
   readonly organizations: readonly OrganizationNest[];
 }
 
 const OrganizationDropdown = ({ organizations }: Props) => {
-  const history = useHistory();
+  const navigate = useNavigate();
   return (
-    <Wrapper sx={{ position: "relative" }} onSelection={handleSelection(history)}>
+    <Wrapper sx={{ position: "relative" }} onSelection={handleSelection(navigate)}>
       <MenuButton
         sx={{
           ...{ variant: "buttons.ghost", fontWeight: "light" },
@@ -40,8 +38,8 @@ const OrganizationDropdown = ({ organizations }: Props) => {
   );
 };
 
-const handleSelection = (history: H.History) => (slug: string) => {
-  history.push(`/o/${slug}`);
+const handleSelection = (navigate: NavigateFunction) => (slug: string) => {
+  navigate(`/o/${slug}`);
 };
 
 export default OrganizationDropdown;

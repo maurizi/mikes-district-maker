@@ -1,5 +1,4 @@
-/** @jsx jsx */
-import { jsx, Box, IconButton } from "theme-ui";
+import { Box, IconButton } from "theme-ui";
 import { Button as MenuButton, Wrapper, Menu, MenuItem } from "react-aria-menubutton";
 import { IReferenceLayer, UpdateReferenceLayer } from "../../shared/entities";
 import { style, invertStyles } from "./MenuButton.styles";

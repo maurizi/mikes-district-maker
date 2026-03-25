@@ -1,6 +1,5 @@
-/** @jsx jsx */
-import { Box, Flex, Heading, jsx, Text, ThemeUIStyleObject } from "theme-ui";
-import { useHistory } from "react-router-dom";
+import { Box, Flex, Heading, Text, ThemeUIStyleObject } from "theme-ui";
+import { useNavigate } from "react-router-dom";
 
 import { IProject } from "../../shared/entities";
 import ProjectListFlyout from "./ProjectListFlyout";
@@ -70,10 +69,10 @@ const HomeScreenProjectCard = ({
   readonly project: IProject;
   readonly isOrganizationAdmin: boolean;
 }) => {
-  const history = useHistory();
+  const navigate = useNavigate();
 
   function goToProject(project: IProject) {
-    history.push(`/projects/${project.id}`);
+    navigate(`/projects/${project.id}`);
   }
 
   return (

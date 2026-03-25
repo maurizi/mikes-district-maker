@@ -1,18 +1,20 @@
-FROM node:16-bullseye-slim
+FROM node:24-bookworm-slim
 
 RUN mkdir -p /home/node/app/server
 WORKDIR /home/node/app/server
 
 RUN set -ex \
-    && deps=" \
-    procps=2:3.3* \
-    " \
-    && apt-get update && apt-get install -yq $deps --no-install-recommends
+    && apt-get update && apt-get install -yq \
+    procps \
+    python3 \
+    make \
+    g++ \
+    --no-install-recommends
 
 COPY package.json /home/node/app/server
 COPY yarn.lock /home/node/app/server
 RUN set -ex \
-    && yarn install
+    && yarn install --ignore-engines
 
 COPY . /home/node/app/server
 

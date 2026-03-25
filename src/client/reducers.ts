@@ -1,7 +1,7 @@
 import { combineReducers } from "redux-loop";
 import { getType } from "typesafe-actions";
 
-import { Action } from "./actions";
+import { LoopAction } from "./actions";
 import { resetState } from "./actions/root";
 import authReducer, { AuthState, initialState as initialAuthState } from "./reducers/auth";
 import organizationReducer, {
@@ -74,7 +74,7 @@ const allReducers = combineReducers({
   user: userReducer
 });
 
-export default (state = initialState, action: Action) => {
+export default (state = initialState, action: LoopAction) => {
   const newState: State | undefined =
     action && action.type === getType(resetState) ? undefined : state;
   return allReducers(newState, action);

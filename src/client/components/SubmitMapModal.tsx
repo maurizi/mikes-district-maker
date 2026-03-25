@@ -1,7 +1,6 @@
-/** @jsx jsx */
 import AriaModal from "react-aria-modal";
 import { connect } from "react-redux";
-import { Box, Button, Flex, Heading, jsx, ThemeUIStyleObject } from "theme-ui";
+import { Box, Button, Flex, Heading, ThemeUIStyleObject } from "theme-ui";
 
 import { IProject } from "../../shared/entities";
 import { showSubmitMapModal } from "../actions/projectModals";

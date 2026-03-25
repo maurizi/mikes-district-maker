@@ -1,15 +1,13 @@
-import { Command } from "@oclif/command";
-import { IArg } from "@oclif/parser/lib/args";
+import { Args, Command } from "@oclif/core";
 import { readFileSync } from "fs";
 import yaml from "js-yaml";
-import { createConnection } from "typeorm";
 import { UserId } from "../../../shared/entities";
 
 import { Organization } from "../../../server/src/organizations/entities/organization.entity";
 import { ProjectTemplate } from "../../../server/src/project-templates/entities/project-template.entity";
 import { User } from "../../../server/src/users/entities/user.entity";
 
-import { connectionOptions } from "../lib/dbUtils";
+import { createDataSource } from "../lib/dbUtils";
 
 interface TemplateConfig {
   readonly id: string;
@@ -38,16 +36,15 @@ interface OrganizationConfig {
 export default class UpdateOrganization extends Command {
   static description = "update or create organization information from a YAML configuration";
 
-  static args: IArg[] = [
-    {
-      name: "config",
+  static args = {
+    config: Args.string({
       description: "Path to YAML configuration file with organization details",
       required: true
-    }
-  ];
+    })
+  };
 
   async run(): Promise<void> {
-    const { args } = this.parse(UpdateOrganization);
+    const { args } = await this.parse(UpdateOrganization);
 
     const config = yaml.load(readFileSync(args.config, "utf8"));
 
@@ -60,14 +57,14 @@ export default class UpdateOrganization extends Command {
 
     this.log("Saving organization to database");
 
-    const connection = await createConnection(connectionOptions);
-    const orgRepo = connection.getRepository(Organization);
-    const templateRepo = connection.getRepository(ProjectTemplate);
-    const userRepo = connection.getRepository(User);
+    const dataSource = await createDataSource();
+    const orgRepo = dataSource.getRepository(Organization);
+    const templateRepo = dataSource.getRepository(ProjectTemplate);
+    const userRepo = dataSource.getRepository(User);
 
-    const result = await orgRepo.findOne({ slug: organizationDetails.slug });
+    const result = await orgRepo.findOne({ where: { slug: organizationDetails.slug } });
 
-    const admin = await userRepo.findOne({ id: organizationDetails.admin });
+    const admin = await userRepo.findOne({ where: { id: organizationDetails.admin } });
 
     const organization = result || new Organization();
     organization.slug = organizationDetails.slug;
@@ -86,7 +83,7 @@ export default class UpdateOrganization extends Command {
 
     for (const config of organizationDetails.projectTemplates || []) {
       const id = config.id;
-      const result = await templateRepo.findOne({ id });
+      const result = await templateRepo.findOne({ where: { id } });
       const template = result || new ProjectTemplate();
       template.organization = organization;
       template.id = id;

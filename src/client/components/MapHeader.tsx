@@ -1,6 +1,5 @@
-/** @jsx jsx */
 import React, { useEffect, useState } from "react";
-import { Flex, Box, Label, Button, jsx, Select, Slider, Text, ThemeUIStyleObject } from "theme-ui";
+import { Flex, Box, Label, Button, Select, Slider, Text, ThemeUIStyleObject } from "theme-ui";
 import {
   GeoLevelInfo,
   GeoLevelHierarchy,

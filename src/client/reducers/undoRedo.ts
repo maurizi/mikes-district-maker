@@ -16,7 +16,7 @@ export interface UndoableState {
 }
 
 // Accompanying effect builder for state update when undone/redone (eg. saving districts definition)
-export type Effect = (state: UndoableState) => CmdType<Action>;
+export type Effect = (state: UndoableState) => CmdType;
 
 export interface UndoableStateAndEffect {
   readonly state: UndoableState;

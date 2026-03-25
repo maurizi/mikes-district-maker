@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { TypeOrmCrudService } from "@nestjsx/crud-typeorm";
+import { TypeOrmCrudService } from "@dataui/crud-typeorm";
 import { Repository, SelectQueryBuilder, DeepPartial } from "typeorm";
 
 import { Project } from "../entities/project.entity";
@@ -17,6 +17,10 @@ type AllProjectsOptions = IPaginationOptions & {
 export class ProjectsService extends TypeOrmCrudService<Project> {
   constructor(@InjectRepository(Project) repo: Repository<Project>) {
     super(repo);
+  }
+
+  get repository(): Repository<Project> {
+    return this.repo;
   }
 
   save(project: DeepPartial<Project>): Promise<Project> {

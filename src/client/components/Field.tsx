@@ -1,4 +1,3 @@
-/** @jsx jsx */
 import React, { RefAttributes } from "react";
 import {
   Box,
@@ -9,7 +8,6 @@ import {
   Label,
   Select,
   SelectProps,
-  Themed,
   ThemeUIStyleObject
 } from "theme-ui";
 
@@ -45,7 +43,7 @@ export default function Field<D, R>({
           fieldErrors.map((msg: string, index: number) => (
             <React.Fragment key={index}>
               {msg}
-              <Themed.div />
+              <div />
             </React.Fragment>
           ))}
       </Box>

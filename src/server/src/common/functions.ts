@@ -1,6 +1,4 @@
-import S3, { GetObjectRequest } from "aws-sdk/clients/s3";
-import { AWSError } from "aws-sdk/lib/error";
-import { Request } from "aws-sdk/lib/request";
+import { GetObjectCommand, GetObjectCommandInput, S3Client } from "@aws-sdk/client-s3";
 import { existsSync } from "fs";
 import { mkdir, readFile, writeFile } from "fs/promises";
 import sizeof from "object-sizeof";
@@ -11,19 +9,16 @@ import { S3URI } from "../../../shared/entities";
 
 import { RegionConfig } from "../region-configs/entities/region-config.entity";
 
-export function s3Options(path: S3URI, fileName: string): GetObjectRequest {
+export function s3Options(path: S3URI, fileName: string): GetObjectCommandInput {
   const url = new URL(path);
   const pathWithoutLeadingSlash = url.pathname.substring(1);
   const options = { Bucket: url.hostname, Key: `${pathWithoutLeadingSlash}${fileName}` };
   return options;
 }
 
-// Wraps S3.getObject to optionally allow for unauthenticated requests
-export function getObject(s3: S3, req: GetObjectRequest): Promise<S3.Types.GetObjectOutput> {
-  const request: Request<S3.Types.GetObjectOutput, AWSError> = s3.config.credentials
-    ? s3.getObject(req)
-    : s3.makeUnauthenticatedRequest("getObject", req);
-  return request.promise();
+export async function getObject(s3: S3Client, params: GetObjectCommandInput) {
+  const result = await s3.send(new GetObjectCommand(params));
+  return result;
 }
 
 export function formatBytes(bytes: number, decimals = 2) {
@@ -39,7 +34,7 @@ export function formatBytes(bytes: number, decimals = 2) {
 }
 
 // Gets the specified topology, downloading it from S3 and caching it locally if it is not already cached
-export async function getTopology(regionConfig: RegionConfig, s3: S3): Promise<Topology> {
+export async function getTopology(regionConfig: RegionConfig, s3: S3Client): Promise<Topology> {
   const cacheDir = process.env.TOPOLOGY_CACHE_DIRECTORY || "/tmp";
   const folderPath = join(cacheDir, regionConfig.id);
   const filePath = join(folderPath, "topo.json");
@@ -47,7 +42,7 @@ export async function getTopology(regionConfig: RegionConfig, s3: S3): Promise<T
   let json;
   if (!existsSync(filePath)) {
     const topojsonResponse = await getObject(s3, s3Options(regionConfig.s3URI, "topo.json"));
-    json = topojsonResponse.Body?.toString("utf-8") || "";
+    json = await topojsonResponse.Body?.transformToString("utf-8") ?? "";
     // Save file to disk for speedier access later
     if (!existsSync(folderPath)) {
       await mkdir(folderPath, { recursive: true });

@@ -1,10 +1,9 @@
-/** @jsx jsx */
 import React from "react";
 import { connect } from "react-redux";
-import { Box, Button, Flex, Heading, jsx, ThemeUIStyleObject } from "theme-ui";
+import { Box, Button, Flex, Heading, ThemeUIStyleObject } from "theme-ui";
 
 import { CreateProjectData, IOrganization, IUser, IProject } from "../../shared/entities";
-import { useHistory } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { State } from "../reducers";
 import store from "../store";
 import { Resource } from "../resource";
@@ -46,7 +45,7 @@ const ConfirmJoinOrganization = ({
   readonly projectTemplateData?: CreateProjectData;
   readonly onCancel: () => void;
 }) => {
-  const history = useHistory();
+  const navigate = useNavigate();
 
   function joinOrg() {
     "resource" in user &&
@@ -67,7 +66,7 @@ const ConfirmJoinOrganization = ({
   function createProjectFromTemplate() {
     projectTemplateData &&
       void createProject(projectTemplateData).then((project: IProject) =>
-        history.push(`/projects/${project.id}`)
+        navigate(`/projects/${project.id}`)
       );
   }
 

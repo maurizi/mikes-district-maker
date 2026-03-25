@@ -1,8 +1,7 @@
-/** @jsx jsx */
 import React from "react";
 import { Button as MenuButton, Menu, Wrapper } from "react-aria-menubutton";
 import { connect } from "react-redux";
-import { Box, Button, Heading, jsx, Themed } from "theme-ui";
+import { Box, Button, Heading} from "theme-ui";
 
 import { IProject } from "../../../shared/entities";
 import { projectSubmit } from "../../actions/projectData";
@@ -55,12 +54,12 @@ const SubmitMapButton = ({
                 <React.Fragment>
                   {" "}
                   View{" "}
-                  <Themed.a
+                  <a
                     href="javascript:void(0)"
                     onClick={() => store.dispatch(showSubmitMapModal(true))}
                   >
                     next steps
-                  </Themed.a>
+                  </a>
                   .
                 </React.Fragment>
               ) : null}

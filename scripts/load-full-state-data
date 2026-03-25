@@ -74,12 +74,12 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     else
         # Bring up PostgreSQL and NestJS in a way that respects
         # configured service health checks.
-        docker-compose \
+        docker compose \
             -f docker-compose.yml \
             up -d database server
 
         for S3_URI in "${S3_URIS[@]}"; do
-          docker-compose \
+          docker compose \
               exec database psql -U districtbuilder districtbuilder -c "
                 INSERT INTO region_config
                 VALUES (

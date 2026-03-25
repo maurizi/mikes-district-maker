@@ -1,8 +1,7 @@
-/** @jsx jsx */
 import React, { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Box, Button, Card, Flex, Heading, jsx, Themed } from "theme-ui";
-import { ReactComponent as Logo } from "../media/logos/logo.svg";
+import { Box, Button, Card, Flex, Heading} from "theme-ui";
+import Logo from "../media/logos/logo.svg?react";
 
 import { initiateForgotPassword } from "../api";
 import CenteredContent from "../components/CenteredContent";
@@ -23,8 +22,9 @@ export interface ResetPasswordLocationState {
 }
 
 const ForgotPasswordScreen = () => {
-  const location = useLocation<(AuthLocationState & ResetPasswordLocationState) | undefined>();
-  const { email } = location.state || {};
+  const location = useLocation();
+  const locationState = location.state as (AuthLocationState & ResetPasswordLocationState) | undefined;
+  const { email } = locationState || {};
   const [emailResource, setEmailResource] = useState<WriteResource<ForgotPasswordForm, void>>({
     data: {
       email: email === undefined ? "" : email
@@ -69,9 +69,9 @@ const ForgotPasswordScreen = () => {
                 Password reset email sent to <b>{data.email}</b>
               </p>
               <p sx={{ fontSize: 1, lineHeight: "1", mb: "0" }}>Used the wrong email address?</p>
-              <Themed.a
-                as={Link}
-                to={{ pathname: "/forgot-password", state: location.state }}
+              <Link
+                to={{ pathname: "/forgot-password" }}
+                state={location.state}
                 onClick={(e: React.MouseEvent<HTMLAnchorElement>): void => {
                   e.preventDefault();
                   setEmailResource({ data: { email: "" } });
@@ -79,7 +79,7 @@ const ForgotPasswordScreen = () => {
                 sx={{ fontSize: 1, color: "success.6" }}
               >
                 Reset your password again
-              </Themed.a>
+              </Link>
             </Box>
           ) : (
             <React.Fragment>
@@ -109,23 +109,23 @@ const ForgotPasswordScreen = () => {
       </Card>
       <Box sx={{ fontSize: 1, textAlign: "center" }}>
         Know your password?{" "}
-        <Themed.a
-          as={Link}
-          to={{ pathname: "/login", state: location.state }}
+        <Link
+          to={{ pathname: "/login" }}
+          state={location.state}
           sx={{ color: "primary" }}
         >
           Log in
-        </Themed.a>
+        </Link>
       </Box>
       <Box sx={{ fontSize: 1, textAlign: "center" }}>
         Need an account?{" "}
-        <Themed.a
-          as={Link}
-          to={{ pathname: "/register", state: location.state }}
+        <Link
+          to={{ pathname: "/register" }}
+          state={location.state}
           sx={{ color: "primary" }}
         >
           Sign up for free
-        </Themed.a>
+        </Link>
       </Box>
     </CenteredContent>
   );

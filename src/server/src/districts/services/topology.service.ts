@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import S3 from "aws-sdk/clients/s3";
+import { S3Client } from "@aws-sdk/client-s3";
 import { spawn } from "child_process";
 import _ from "lodash";
 import Queue from "promise-queue";
@@ -30,7 +30,7 @@ interface Layers {
 export class TopologyService {
   private _layers?: Layers = undefined;
   private readonly logger = new Logger(TopologyService.name);
-  private readonly s3 = new S3();
+  private readonly s3 = new S3Client({});
   private readonly downloadQueue = new Queue(BATCH_SIZE);
 
   constructor(
@@ -105,7 +105,7 @@ export class TopologyService {
         s3Options(regionConfig.s3URI, "static-metadata.json")
       );
 
-      const staticMetadataBody = staticMetadataResponse.Body?.toString("utf8");
+      const staticMetadataBody = await staticMetadataResponse.Body?.transformToString("utf-8");
       if (staticMetadataBody) {
         const staticMetadata = JSON.parse(staticMetadataBody) as IStaticMetadata;
         const geoLevelHierarchy = staticMetadata.geoLevelHierarchy.map(gl => gl.id);
@@ -172,9 +172,9 @@ export class TopologyService {
 
     return new Promise((resolve, reject) => {
       Promise.all(requests)
-        .then(response =>
+        .then(async response =>
           resolve(
-            response.map((res, ind) => {
+            await Promise.all(response.map(async (res, ind) => {
               const bpe = files[ind].bytesPerElement;
               const unsigned = files[ind].unsigned;
               const typedArrayConstructor =
@@ -193,7 +193,7 @@ export class TopologyService {
               // Note this is different from how we construct these typed
               // arrays on the client, due to differences in how Buffer works
               // in Node.js (see https://nodejs.org/api/buffer.html)
-              const buf = res.Body as Buffer;
+              const buf = Buffer.from(await res.Body!.transformToByteArray());
               // We use a SharedArrayBuffer instead of re-using the S3 buffer in
               // order to share the data between threads
               const sharedArray = new typedArrayConstructor(
@@ -202,7 +202,7 @@ export class TopologyService {
               sharedArray.set(new typedArrayConstructor(buf.buffer));
 
               return sharedArray;
-            })
+            }))
           )
         )
         .catch(error => reject(error.message));

@@ -1,7 +1,7 @@
-import { Cmd, Loop, loop, LoopReducer } from "redux-loop";
+import { Cmd, Loop, loop } from "redux-loop";
 import { getType } from "typesafe-actions";
 
-import { Action } from "../actions";
+import { Action, LoopAction } from "../actions";
 import {
   regionConfigsFetch,
   regionConfigsFetchFailure,
@@ -28,10 +28,10 @@ export const initialState = {
   currentRegion: undefined
 };
 
-const regionConfigReducer: LoopReducer<RegionConfigState, Action> = (
+const regionConfigReducer = (
   state: RegionConfigState = initialState,
-  action: Action
-): RegionConfigState | Loop<RegionConfigState, Action> => {
+  action: LoopAction
+): RegionConfigState | Loop<RegionConfigState> => {
   switch (action.type) {
     case getType(regionConfigsFetch):
       return loop(

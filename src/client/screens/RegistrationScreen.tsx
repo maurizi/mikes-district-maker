@@ -1,9 +1,8 @@
-/** @jsx jsx */
 import React, { useState } from "react";
-import { Link, Redirect, useLocation } from "react-router-dom";
+import { Link, Navigate, useLocation } from "react-router-dom";
 import { connect } from "react-redux";
-import { Alert, Box, Card, Close, Flex, Heading, jsx, Themed } from "theme-ui";
-import { ReactComponent as Logo } from "../media/logos/logo.svg";
+import { Alert, Box, Card, Close, Flex, Heading} from "theme-ui";
+import Logo from "../media/logos/logo.svg?react";
 
 import { isUserLoggedIn } from "../jwt";
 import RegisterContent from "../components/RegisterContent";
@@ -20,8 +19,9 @@ interface StateProps {
 
 const RegistrationScreen = ({ user }: StateProps) => {
   const isLoggedIn = "resource" in user && isUserLoggedIn();
-  const location = useLocation<AuthLocationState>();
-  const to = location.state?.from || { pathname: "/" };
+  const location = useLocation();
+  const locationState = location.state as AuthLocationState | undefined;
+  const to = locationState?.from || { pathname: "/" };
   const toParams = new URLSearchParams(to.search);
   const [showStartProjectAlert, setShowStartProjectAlert] = useState(
     to.pathname === "/start-project" && toParams.has("name")
@@ -30,7 +30,7 @@ const RegistrationScreen = ({ user }: StateProps) => {
   return (
     <CenteredContent>
       {isLoggedIn ? (
-        <Redirect to={to} />
+        <Navigate to={to} replace />
       ) : (
         <React.Fragment>
           <Heading as="h1" sx={{ textAlign: "center" }}>
@@ -46,13 +46,13 @@ const RegistrationScreen = ({ user }: StateProps) => {
                   <Flex>
                     <Box>
                       Create an account or{" "}
-                      <Themed.a
-                        as={Link}
+                      <Link
                         sx={{ variant: "links.alert" }}
-                        to={{ pathname: "/login", state: location.state }}
+                        to={{ pathname: "/login" }}
+                        state={location.state}
                       >
                         log in
-                      </Themed.a>{" "}
+                      </Link>{" "}
                       to create your &ldquo;{toParams.get("name")}&rdquo; map.
                     </Box>
                     <Close

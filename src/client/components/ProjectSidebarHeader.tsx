@@ -1,6 +1,5 @@
-/** @jsx jsx */
 import { connect } from "react-redux";
-import { Button, Box, Flex, Heading, jsx, Spinner, Text, ThemeUIStyleObject } from "theme-ui";
+import { Button, Box, Flex, Heading, Spinner, Text, ThemeUIStyleObject } from "theme-ui";
 
 import { GeoUnits } from "../../shared/entities";
 import { SavingState } from "../types";

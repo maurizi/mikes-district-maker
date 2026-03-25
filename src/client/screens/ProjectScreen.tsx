@@ -1,11 +1,10 @@
-/** @jsx jsx */
-import MapboxGL from "mapbox-gl";
+import maplibregl from "maplibre-gl";
 import React, { useEffect, useRef, useState } from "react";
 import { useBeforeunload } from "react-beforeunload";
 import { connect } from "react-redux";
-import { Redirect, useParams } from "react-router-dom";
+import { Navigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
-import { Flex, jsx, Spinner, ThemeUIStyleObject } from "theme-ui";
+import { Flex, Spinner, ThemeUIStyleObject } from "theme-ui";
 
 import {
   GeoUnitHierarchy,
@@ -115,8 +114,8 @@ const ProjectScreen = ({
   limitSelectionToCounty,
   projectOptions
 }: StateProps) => {
-  const { projectId } = useParams<Params>();
-  const [map, setMap] = useState<MapboxGL.Map | undefined>(undefined);
+  const { projectId } = useParams();
+  const [map, setMap] = useState<maplibregl.Map | undefined>(undefined);
   const isLoggedIn = isUserLoggedIn();
   const isFirstLoadPending = isLoading && (project === undefined || staticMetadata === undefined);
   const presentDrawingState = districtDrawing.undoHistory.present.state;
@@ -187,7 +186,7 @@ const ProjectScreen = ({
       </Flex>
     </CenteredContent>
   ) : "errorMessage" in user ? (
-    <Redirect to={"/login"} />
+    <Navigate to={"/login"} replace />
   ) : projectNotFound ? (
     <Flex sx={{ height: "100%", flexDirection: "column" }}>
       <SiteHeader user={user} />

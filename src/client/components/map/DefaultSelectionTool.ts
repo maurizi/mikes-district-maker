@@ -1,4 +1,4 @@
-import MapboxGL from "mapbox-gl";
+import maplibregl from "maplibre-gl";
 import store from "../../store";
 import { removeSelectedGeounits, editSelectedGeounits } from "../../actions/districtDrawing";
 import {
@@ -24,7 +24,7 @@ import {
 } from "../../../shared/entities";
 
 function areAllUnlockedChildGeoUnitsSelected(
-  map: MapboxGL.Map,
+  map: maplibregl.Map,
   unlockedGeoUnits: GeoUnits,
   geoUnitForFeature: GeoUnitIndices | undefined,
   staticMetadata: IStaticMetadata,
@@ -57,7 +57,7 @@ function areAllUnlockedChildGeoUnitsSelected(
  */
 const DefaultSelectionTool: ISelectionTool = {
   enable: function (
-    map: MapboxGL.Map,
+    map: maplibregl.Map,
     geoLevelId: string,
     staticMetadata: IStaticMetadata,
     districtsDefinition: DistrictsDefinition,
@@ -74,10 +74,10 @@ const DefaultSelectionTool: ISelectionTool = {
     // Add a click event to the top geolevel that logs demographic information.
     // Note that the feature can't be directly selected under the cursor, so
     // we need to use a small bounding box and select the first feature we find.
-    const clickHandler = (e: MapboxGL.MapMouseEvent) => {
+    const clickHandler = (e: maplibregl.MapMouseEvent) => {
       const buffer = 1;
-      const southWest: MapboxGL.PointLike = [e.point.x - buffer, e.point.y - buffer];
-      const northEast: MapboxGL.PointLike = [e.point.x + buffer, e.point.y + buffer];
+      const southWest: maplibregl.PointLike = [e.point.x - buffer, e.point.y - buffer];
+      const northEast: maplibregl.PointLike = [e.point.x + buffer, e.point.y + buffer];
       const features = map.queryRenderedFeatures([southWest, northEast], {
         layers: [levelToSelectionLayerId(geoLevelId)]
       });
@@ -142,7 +142,7 @@ const DefaultSelectionTool: ISelectionTool = {
     // Save the click handler function so it can be removed later
     this.clickHandler = clickHandler; // eslint-disable-line
   },
-  disable: function (map: MapboxGL.Map) {
+  disable: function (map: maplibregl.Map) {
     /* eslint-disable */
     this.clickHandler && map.off("click", this.clickHandler);
     this.setCursor && map.off("mousemove", DISTRICTS_LAYER_ID, this.setCursor);

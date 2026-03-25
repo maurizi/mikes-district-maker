@@ -1,8 +1,7 @@
-/** @jsx jsx */
 import { useEffect } from "react";
 import { connect } from "react-redux";
 import { Link, useParams } from "react-router-dom";
-import { Box, Flex, Heading, jsx, ThemeUIStyleObject } from "theme-ui";
+import { Box, Flex, Heading, ThemeUIStyleObject } from "theme-ui";
 
 import { organizationFetch } from "../actions/organization";
 import { organizationProjectsFetch } from "../actions/organizationProjects";
@@ -93,7 +92,7 @@ const style: Record<string, ThemeUIStyleObject> = {
 };
 
 const OrganizationAdminScreen = ({ organization, user, organizationProjects }: StateProps) => {
-  const { organizationSlug } = useParams<Params>();
+  const { organizationSlug = "" } = useParams();
   const templates =
     "resource" in organizationProjects.projectTemplates
       ? organizationProjects.projectTemplates.resource

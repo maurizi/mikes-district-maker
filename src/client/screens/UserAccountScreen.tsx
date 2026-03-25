@@ -1,4 +1,3 @@
-/** @jsx jsx */
 import React, { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Link as RouterLink } from "react-router-dom";
@@ -10,7 +9,6 @@ import {
   Flex,
   Heading,
   Label,
-  Themed,
   Text,
   ThemeUIStyleObject,
   jsx,
@@ -273,13 +271,13 @@ const UserAccountScreen = () => {
                 </Heading>
                 <Box sx={style.textBox}>
                   <Text>Forgot your password?</Text>{" "}
-                  <Themed.a
-                    as={RouterLink}
-                    to={{ pathname: `/forgot-password/`, state: { email: data.email } }}
+                  <RouterLink
+                    to={{ pathname: `/forgot-password/` }}
+                    state={{ email: data.email }}
                     sx={{ cursor: "pointer", color: "blue.5" }}
                   >
                     Reset password
-                  </Themed.a>
+                  </RouterLink>
                   .
                 </Box>
               </Box>

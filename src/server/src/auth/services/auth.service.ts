@@ -4,7 +4,7 @@ import { JwtService } from "@nestjs/jwt";
 import { InjectRepository } from "@nestjs/typeorm";
 import base64url from "base64url";
 import { randomBytes } from "crypto";
-import { getManager, Repository } from "typeorm";
+import { DataSource, Repository } from "typeorm";
 
 import { LoginErrors } from "../../../../shared/constants";
 import { IUser, JWT, UserId } from "../../../../shared/entities";
@@ -36,11 +36,12 @@ export class AuthService {
     private readonly emailVerificationRepo: Repository<EmailVerification>,
     private readonly mailerService: MailerService,
     private readonly usersService: UsersService,
-    private readonly jwtService: JwtService
+    private readonly jwtService: JwtService,
+    private readonly dataSource: DataSource
   ) {}
 
   async validateLogin(email: string, pass: string): Promise<User | LoginErrors> {
-    const user = await this.usersService.findOne({ email });
+    const user = await this.usersService.findOne({ where: { email } });
     if (!user) {
       return LoginErrors.NOT_FOUND;
     }
@@ -164,10 +165,7 @@ export class AuthService {
       .insert()
       .into(EmailVerification)
       .values(data)
-      .onConflict(
-        `("email", "type") DO UPDATE SET "emailToken" = :emailToken, "timestamp" = :timestamp`
-      )
-      .setParameters(data)
+      .orUpdate(["emailToken", "timestamp"], ["email", "type"])
       .execute();
 
     return emailToken;
@@ -178,17 +176,19 @@ export class AuthService {
     type: VerificationType,
     updateUser: (user: User) => void | Promise<void>
   ): Promise<User | undefined> {
-    const emailVerif = await this.emailVerificationRepo.findOne({ emailToken, type });
+    const emailVerif = await this.emailVerificationRepo.findOne({
+      where: { emailToken, type }
+    });
     const now = new Date();
     const lastValidTimestamp = new Date(now.getTime() - EMAIL_EXPIRATION_IN_MS);
     if (emailVerif && emailVerif.timestamp > lastValidTimestamp) {
       const userFromDb = await this.usersService.findOne({
-        email: emailVerif.email
+        where: { email: emailVerif.email }
       });
       if (userFromDb) {
         await updateUser(userFromDb);
         let savedUser;
-        await getManager().transaction(async transactionalEntityManager => {
+        await this.dataSource.transaction(async transactionalEntityManager => {
           savedUser = await transactionalEntityManager.save(userFromDb);
           await transactionalEntityManager.remove(emailVerif);
         });

@@ -17,11 +17,11 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     if [ "${1:-}" = "--help" ]; then
         usage
     elif [[ -z "${1}" ]]; then
-        docker-compose \
+        docker compose \
             run --rm server \
             migration:run
     else
-        docker-compose \
+        docker compose \
             run --rm server \
             "migration:${1}" "${*:2}"
     fi

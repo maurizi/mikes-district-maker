@@ -1,7 +1,8 @@
-version: "2.4"
 services:
   database:
-    image: postgis/postgis:13-3.1
+    image: postgis/postgis
+    build:
+      context: https://github.com/postgis/docker-postgis.git#master:18-3.6
     environment:
       - POSTGRES_USER=districtbuilder
       - POSTGRES_PASSWORD=districtbuilder
@@ -36,9 +37,9 @@ services:
     volumes:
       - ./src/server:/home/node/app/server
       - ./src/shared:/home/node/app/shared
-      - /var/cache/district-builder-server-node-modules:/home/node/app/server/node_modules
-      - /var/cache/district-builder-server-topology:/opt/topology
-      - $HOME/.cache/district-builder:/usr/local/share/.cache/yarn
+      - server-node-modules:/home/node/app/server/node_modules
+      - server-topology:/opt/topology
+      - yarn-cache:/usr/local/share/.cache/yarn
       - $HOME/.aws:/root/.aws:ro
     working_dir: /home/node/app/server
     depends_on:
@@ -46,22 +47,19 @@ services:
         condition: service_healthy
     command: start:dev
     mem_limit: 12g
-    memswap_limit: 12g
 
   client:
-    image:  node:16-bullseye-slim
+    image:  node:24-bookworm-slim
     environment:
       - BASE_URL=${BASE_URL:-http://server:3005}
-      - PORT=3003
-      - REACT_APP_ROLLBAR_CLIENT_ACCESS_TOKEN
-      - DISABLE_NEW_JSX_TRANSFORM=true
+      - VITE_ROLLBAR_CLIENT_ACCESS_TOKEN=${VITE_ROLLBAR_CLIENT_ACCESS_TOKEN:-}
     volumes:
       - ./:/home/node/app
       - ./src/server/dist/server/src/static:/home/node/app/build
-      - /var/cache/district-builder-client-node-modules:/home/node/app/node_modules
-      - $HOME/.cache/district-builder:/usr/local/share/.cache/yarn
+      - client-node-modules:/home/node/app/node_modules
+      - yarn-cache:/usr/local/share/.cache/yarn
     working_dir: /home/node/app
-    command: yarn start
+    command: yarn dev
 
   manage:
     image: districtbuilder-manage
@@ -80,12 +78,19 @@ services:
       - ./src/server:/home/node/app/server
       - ./src/shared:/home/node/app/shared
       - ./src/manage:/home/node/app/manage
-      - /var/cache/district-builder-server-node-modules:/home/node/app/server/node_modules
-      - /var/cache/district-builder-manage-node-modules:/home/node/app/manage/node_modules
-      - $HOME/.cache/district-builder:/usr/local/share/.cache/yarn
+      - server-node-modules:/home/node/app/server/node_modules
+      - manage-node-modules:/home/node/app/manage/node_modules
+      - yarn-cache:/usr/local/share/.cache/yarn
       - $HOME/.aws:/root/.aws:ro
     working_dir: /home/node/app/manage
     depends_on:
       database:
         condition: service_healthy
     command: bash
+
+volumes:
+  server-node-modules:
+  server-topology:
+  client-node-modules:
+  manage-node-modules:
+  yarn-cache:

@@ -1,7 +1,6 @@
-/** @jsx jsx */
 import { useEffect, useState } from "react";
 import { toast } from "react-toastify";
-import { Box, Button, Flex, Heading, jsx, Spinner, Themed, ThemeUIStyleObject } from "theme-ui";
+import { Box, Button, Flex, Heading, Spinner, ThemeUIStyleObject } from "theme-ui";
 
 import { IProject } from "../../../../shared/entities";
 import { projectFetchSuccess } from "../../../actions/projectData";
@@ -144,23 +143,23 @@ const CompetitivenessMetricDetail = ({
         ) || " N/A"}
       </Heading>
       <CompetitivenessChart pviBuckets={pviBuckets} />
-      <Themed.table sx={style.table}>
+      <table sx={style.table}>
         <thead>
-          <Themed.tr>
-            <Themed.th sx={{ ...style.th, ...style.colFirst }}>Number</Themed.th>
-            <Themed.th sx={{ ...style.th, ...style.colLast }}>Partisan Voting Index</Themed.th>
-          </Themed.tr>
+          <tr>
+            <th sx={{ ...style.th, ...style.colFirst }}>Number</th>
+            <th sx={{ ...style.th, ...style.colLast }}>Partisan Voting Index</th>
+          </tr>
         </thead>
         <tbody>
           {geojson?.features.map(
             (feature, id) =>
               id > 0 && (
-                <Themed.tr key={id}>
-                  <Themed.td sx={{ ...style.td, ...style.colFirst }}>{id}</Themed.td>
-                  <Themed.td sx={{ ...style.td, ...style.colLast }}>
+                <tr key={id}>
+                  <td sx={{ ...style.td, ...style.colFirst }}>{id}</td>
+                  <td sx={{ ...style.td, ...style.colLast }}>
                     {feature.properties.voting && metric.electionYear ? (
                       <Flex sx={{ alignItems: "center" }}>
-                        <Themed.div
+                        <div
                           sx={{
                             mr: 2,
                             width: "15px",
@@ -174,18 +173,18 @@ const CompetitivenessMetricDetail = ({
                                 )
                               : undefined
                           }}
-                        ></Themed.div>
+                        ></div>
                         <PVIDisplay properties={feature.properties} year={metric.electionYear} />
                       </Flex>
                     ) : (
                       <Box sx={style.blankValue}>-</Box>
                     )}
-                  </Themed.td>
-                </Themed.tr>
+                  </td>
+                </tr>
               )
           )}
         </tbody>
-      </Themed.table>
+      </table>
       <Box
         sx={{
           mb: 2,
@@ -227,9 +226,9 @@ const CompetitivenessMetricDetail = ({
         ) : (
           project.planscoreUrl &&
           project.planscoreUrl !== "error" && (
-            <Themed.a href={project.planscoreUrl} target="_blank">
+            <a href={project.planscoreUrl} target="_blank">
               View on PlanScore
-            </Themed.a>
+            </a>
           )
         )}
       </Box>

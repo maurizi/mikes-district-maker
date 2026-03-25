@@ -1,5 +1,4 @@
-/** @jsx jsx */
-import { Box, Flex, jsx, Themed, ThemeUIStyleObject, Heading } from "theme-ui";
+import { Box, Flex, ThemeUIStyleObject, Heading } from "theme-ui";
 import { IProject, IStaticMetadata, RegionLookupProperties } from "../../../../shared/entities";
 import { useState, useEffect } from "react";
 import { getLabelLookup } from "../../map/labels";
@@ -103,41 +102,41 @@ const CountySplitMetricDetail = ({
       <Heading as="h2" sx={{ variant: "text.h5", mt: 4 }}>
         {metric.value} / {metric.total} {geoLevelLabel(geoLevel)} {metric.description}
       </Heading>
-      <Themed.table sx={style.table}>
+      <table sx={style.table}>
         <thead>
-          <Themed.tr>
-            <Themed.th sx={{ ...style.th, ...style.colFirst }}>
+          <tr>
+            <th sx={{ ...style.th, ...style.colFirst }}>
               {geoLevelLabelSingular(geoLevel)}
-            </Themed.th>
-            <Themed.th sx={{ ...style.th, ...style.colLast }}>Split</Themed.th>
-          </Themed.tr>
+            </th>
+            <th sx={{ ...style.th, ...style.colLast }}>Split</th>
+          </tr>
         </thead>
         <tbody>
           {countyLookup ? (
             project?.districtsDefinition.map((d, id) => (
-              <Themed.tr key={id}>
-                <Themed.td sx={{ ...style.td, ...style.colFirst }}>
+              <tr key={id}>
+                <td sx={{ ...style.td, ...style.colFirst }}>
                   {countyLookup && id in countyLookup && staticMetadata
                     ? getLabelLookup(geoLevel, countyLookup[id])
                     : staticMetadata
                     ? getLabelLookup(geoLevel, undefined, id)
                     : ""}
-                </Themed.td>
-                <Themed.td sx={{ ...style.td, ...style.colLast }}>
+                </td>
+                <td sx={{ ...style.td, ...style.colLast }}>
                   <Flex sx={{ alignItems: "center" }}>
                     <Box sx={Array.isArray(d) ? style.fillBox : style.unfilledBox}></Box>
                     <Box>{Array.isArray(d) ? "Split" : "Not split"}</Box>
                   </Flex>
-                </Themed.td>
-              </Themed.tr>
+                </td>
+              </tr>
             ))
           ) : (
-            <Themed.tr>
-              <Themed.td sx={style.td}>Loading...</Themed.td>
-            </Themed.tr>
+            <tr>
+              <td sx={style.td}>Loading...</td>
+            </tr>
           )}
         </tbody>
-      </Themed.table>
+      </table>
     </Box>
   );
 };

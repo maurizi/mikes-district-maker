@@ -1,9 +1,10 @@
 import React from "react";
-import * as H from "history";
-import { BrowserRouter as Router, Redirect, Route, RouteProps, Switch } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Provider, RollbarContext } from "@rollbar/react";
 import Rollbar from "rollbar";
 import { ThemeProvider } from "theme-ui";
+import { QueryParamProvider } from "use-query-params";
+import { ReactRouter6Adapter } from "use-query-params/adapters/react-router-6";
 
 import { getJWT, jwtIsExpired } from "./jwt";
 import Toast from "./components/Toast";
@@ -24,31 +25,24 @@ import theme from "./theme";
 import "./App.css";
 import StartProjectScreen from "./screens/StartProjectScreen";
 import PublishedMapsListScreen from "./screens/PublishedMapsListScreen";
-import { PushReplaceHistory, QueryParamProvider } from "use-query-params";
-import { createBrowserHistory } from "history";
 import { DEBUG } from "../shared/constants";
 
-const PrivateRoute = ({ children, ...props }: { children: React.ReactNode } & RouteProps) => {
+const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
+  const location = useLocation();
   const savedJWT = getJWT();
   const notLoggedIn = !savedJWT || jwtIsExpired(savedJWT);
-  return (
-    <Route
-      {...props}
-      render={({ location }: { readonly location: H.Location }) => {
-        return notLoggedIn ? (
-          <Redirect to={{ pathname: "/login", state: { from: location } }} />
-        ) : (
-          children
-        );
-      }}
-    />
-  );
+
+  if (notLoggedIn) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return <>{children}</>;
 };
 
 const environment = window.location.href.includes("staging") ? "staging" : "production";
 
 const rollbarConfig: Rollbar.Configuration = {
-  accessToken: process.env.REACT_APP_ROLLBAR_CLIENT_ACCESS_TOKEN || "",
+  accessToken: import.meta.env.VITE_ROLLBAR_CLIENT_ACCESS_TOKEN || "",
   captureUncaught: true,
   captureUnhandledRejections: true,
   enabled: !DEBUG,
@@ -64,106 +58,35 @@ const rollbarConfig: Rollbar.Configuration = {
   }
 };
 
-const history = createBrowserHistory();
-const pushReplaceHistory: PushReplaceHistory = {
-  push: (location: Location): void => {
-    history.push(location);
-  },
-  replace: (location: Location): void => {
-    history.replace(location);
-  },
-  location: window.location
-};
-
-const Routes = () => (
-  <Router>
-    <QueryParamProvider history={pushReplaceHistory}>
-      <Switch>
-        <PrivateRoute path="/" exact={true}>
-          <RollbarContext context="home">
-            <HomeScreen />
-          </RollbarContext>
-        </PrivateRoute>
-        <Route path="/o/:organizationSlug" exact={true}>
-          <RollbarContext context="organization">
-            <OrganizationScreen />
-          </RollbarContext>
-        </Route>
-        <PrivateRoute path="/o/:organizationSlug/admin" exact={true}>
-          <RollbarContext context="organization-admin">
-            <OrganizationAdminScreen />
-          </RollbarContext>
-        </PrivateRoute>
-        <Route path="/projects/:projectId" exact={true}>
-          <RollbarContext context="project">
-            <ProjectScreen />
-          </RollbarContext>
-        </Route>
-        <Route path="/login" exact={true}>
-          <RollbarContext context="login">
-            <LoginScreen />
-          </RollbarContext>
-        </Route>
-        <Route path="/maps" exact={true}>
-          <RollbarContext context="published-map-list">
-            <PublishedMapsListScreen />
-          </RollbarContext>
-        </Route>
-        <Route path="/register" exact={true}>
-          <RollbarContext context="register">
-            <RegistrationScreen />
-          </RollbarContext>
-        </Route>
-        <Route path="/forgot-password" exact={true}>
-          <RollbarContext context="forgot-password">
-            <ForgotPasswordScreen />
-          </RollbarContext>
-        </Route>
-        <Route path="/activate/:token" exact={true}>
-          <RollbarContext context="activate-account">
-            <ActivateAccountScreen />
-          </RollbarContext>
-        </Route>
-        <Route path="/activate/:token/:organizationSlug" exact={true}>
-          <RollbarContext context="activate-account-organization">
-            <ActivateAccountScreen />
-          </RollbarContext>
-        </Route>
-        <Route path="/password-reset/:token" exact={true}>
-          <RollbarContext context="reset-password">
-            <ResetPasswordScreen />
-          </RollbarContext>
-        </Route>
-        <PrivateRoute path="/create-project" exact={true}>
-          <RollbarContext context="create-project">
-            <CreateProjectScreen />
-          </RollbarContext>
-        </PrivateRoute>
-        <PrivateRoute path="/start-project" exact={true}>
-          <RollbarContext context="start-project">
-            <StartProjectScreen />
-          </RollbarContext>
-        </PrivateRoute>
-        <PrivateRoute path="/import-project" exact={true}>
-          <RollbarContext context="import-project">
-            <ImportProjectScreen />
-          </RollbarContext>
-        </PrivateRoute>
-        <PrivateRoute path="/user-account" exact={true}>
-          <RollbarContext context="user-account">
-            <UserAccountScreen />
-          </RollbarContext>
-        </PrivateRoute>
-      </Switch>
+const AppRoutes = () => (
+  <BrowserRouter>
+    <QueryParamProvider adapter={ReactRouter6Adapter}>
+      <Routes>
+        <Route path="/" element={<PrivateRoute><RollbarContext context="home"><HomeScreen /></RollbarContext></PrivateRoute>} />
+        <Route path="/o/:organizationSlug" element={<RollbarContext context="organization"><OrganizationScreen /></RollbarContext>} />
+        <Route path="/o/:organizationSlug/admin" element={<PrivateRoute><RollbarContext context="organization-admin"><OrganizationAdminScreen /></RollbarContext></PrivateRoute>} />
+        <Route path="/projects/:projectId" element={<RollbarContext context="project"><ProjectScreen /></RollbarContext>} />
+        <Route path="/login" element={<RollbarContext context="login"><LoginScreen /></RollbarContext>} />
+        <Route path="/maps" element={<RollbarContext context="published-map-list"><PublishedMapsListScreen /></RollbarContext>} />
+        <Route path="/register" element={<RollbarContext context="register"><RegistrationScreen /></RollbarContext>} />
+        <Route path="/forgot-password" element={<RollbarContext context="forgot-password"><ForgotPasswordScreen /></RollbarContext>} />
+        <Route path="/activate/:token" element={<RollbarContext context="activate-account"><ActivateAccountScreen /></RollbarContext>} />
+        <Route path="/activate/:token/:organizationSlug" element={<RollbarContext context="activate-account-organization"><ActivateAccountScreen /></RollbarContext>} />
+        <Route path="/password-reset/:token" element={<RollbarContext context="reset-password"><ResetPasswordScreen /></RollbarContext>} />
+        <Route path="/create-project" element={<PrivateRoute><RollbarContext context="create-project"><CreateProjectScreen /></RollbarContext></PrivateRoute>} />
+        <Route path="/start-project" element={<PrivateRoute><RollbarContext context="start-project"><StartProjectScreen /></RollbarContext></PrivateRoute>} />
+        <Route path="/import-project" element={<PrivateRoute><RollbarContext context="import-project"><ImportProjectScreen /></RollbarContext></PrivateRoute>} />
+        <Route path="/user-account" element={<PrivateRoute><RollbarContext context="user-account"><UserAccountScreen /></RollbarContext></PrivateRoute>} />
+      </Routes>
     </QueryParamProvider>
-  </Router>
+  </BrowserRouter>
 );
 
 const App = () => (
   <Provider config={rollbarConfig}>
     <ThemeProvider theme={theme}>
       <Toast />
-      <Routes />
+      <AppRoutes />
     </ThemeProvider>
   </Provider>
 );

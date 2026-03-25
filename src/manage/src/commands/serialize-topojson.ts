@@ -1,10 +1,8 @@
-import { Command, flags } from "@oclif/command";
-import S3 from "aws-sdk/clients/s3";
-import cli from "cli-ux";
-import { mapSync } from "event-stream";
+import { Command, Flags, ux } from "@oclif/core";
+import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import { Readable } from "stream";
 import { parse } from "JSONStream";
 import Pbf from "pbf";
-import { createReadStream } from "streamifier";
 import { Objects, Topology } from "topojson-specification";
 import { serialize, deserialize } from "v8";
 import { decode, encode } from "topobuf";
@@ -19,13 +17,13 @@ export default class SerializeTopojson extends Command {
   static strict = false;
 
   static flags = {
-    input: flags.string({
+    input: Flags.string({
       char: "i",
       description: "File type to read from",
       options: ["buf", "json", "pbf"],
       default: "buf"
     }),
-    output: flags.string({
+    output: Flags.string({
       char: "o",
       description: "File type to write to",
       options: ["buf", "json", "pbf"],
@@ -34,73 +32,67 @@ export default class SerializeTopojson extends Command {
   };
 
   async run(): Promise<void> {
-    const { argv, flags } = this.parse(SerializeTopojson);
+    const { argv, flags } = await this.parse(SerializeTopojson);
     if (flags.input === flags.output) {
-      cli.error("Input and output file types cannot be the same");
+      this.error("Input and output file types cannot be the same");
     }
 
-    for (const s3URI of argv) {
-      cli.action.start(`Reading base TopoJSON: ${s3URI}`);
+    for (const s3URI of argv as string[]) {
+      ux.action.start(`Reading base TopoJSON: ${s3URI}`);
       const baseTopojson = await (flags.input === "json"
         ? this.readJson(s3URI)
         : flags.input === "buf"
         ? this.readBuf(s3URI)
         : this.readPbf(s3URI));
-      cli.action.stop();
+      ux.action.stop();
 
-      cli.action.start(`Uploading serialized TopoJSON: ${s3URI}`);
+      ux.action.start(`Uploading serialized TopoJSON: ${s3URI}`);
       await (flags.output === "buf"
         ? this.writeBuf(s3URI, baseTopojson)
         : flags.output === "json"
         ? this.writeJson(s3URI, baseTopojson)
         : this.writePbf(s3URI, baseTopojson));
-      cli.action.stop();
+      ux.action.stop();
     }
   }
 
   // Reads a TopoJSON file from S3, given the S3 run directory
   async readJson(inputS3Dir: string): Promise<Topology<Objects<{}>>> {
     this.log("Reading topo.json");
-    const response: any = await new S3().getObject(this.s3Options(inputS3Dir, "json")).promise();
+    const s3Client = new S3Client({});
+    const response: any = await s3Client.send(new GetObjectCommand(this.s3Options(inputS3Dir, "json")));
+    const body = Buffer.from(await response.Body!.transformToByteArray());
 
     const objects = await new Promise(resolve =>
-      createReadStream(response.Body as Buffer)
+      Readable.from(body)
         .pipe(parse("objects"))
-        .pipe(
-          mapSync((objects: any) => {
-            resolve(objects);
-          })
-        )
+        .on("data", (objects: any) => {
+          resolve(objects);
+        })
     );
 
     const arcs = await new Promise(resolve =>
-      createReadStream(response.Body as Buffer)
+      Readable.from(body)
         .pipe(parse("arcs"))
-        .pipe(
-          mapSync((arcs: any) => {
-            resolve(arcs);
-          })
-        )
+        .on("data", (arcs: any) => {
+          resolve(arcs);
+        })
     );
 
     const bbox = await new Promise(resolve =>
-      createReadStream(response.Body as Buffer)
+      Readable.from(body)
         .pipe(parse("bbox"))
-        .pipe(
-          mapSync((bbox: any) => {
-            resolve(bbox);
-          })
-        )
+        .on("data", (bbox: any) => {
+          resolve(bbox);
+        })
     );
 
     const transform = await new Promise(resolve =>
-      createReadStream(response.Body as Buffer)
+      Readable.from(body)
         .pipe(parse("transform"))
-        .pipe(
-          mapSync((transform: any) => {
-            resolve(transform);
-          })
-        )
+        .on("data", (transform: any) => {
+          resolve(transform);
+        })
     );
 
     return {
@@ -112,10 +104,11 @@ export default class SerializeTopojson extends Command {
     } as Topology<Objects<{}>>;
   }
 
-  read(inputS3Dir: string, ext: string) {
+  async read(inputS3Dir: string, ext: string) {
     this.log(`Reading topo.${ext}`);
-    const s3Client = new S3();
-    return s3Client.getObject(this.s3Options(inputS3Dir, ext)).promise();
+    const s3Client = new S3Client({});
+    const response = await s3Client.send(new GetObjectCommand(this.s3Options(inputS3Dir, ext)));
+    return { Body: Buffer.from(await response.Body!.transformToByteArray()) };
   }
 
   s3Options(inputS3Dir: string, ext: string) {
@@ -136,15 +129,13 @@ export default class SerializeTopojson extends Command {
     return decode(new Pbf(resp.Body as Buffer)) as Topology;
   }
 
-  write(inputS3Dir: string, ext: string, body: string | Buffer | Uint8Array) {
+  async write(inputS3Dir: string, ext: string, body: string | Buffer | Uint8Array) {
     this.log(`Writing topo.${ext}`);
-    const s3Client = new S3();
-    return s3Client
-      .upload({
-        Body: body,
-        ...this.s3Options(inputS3Dir, ext)
-      })
-      .promise();
+    const s3Client = new S3Client({});
+    return s3Client.send(new PutObjectCommand({
+      Body: typeof body === "string" ? Buffer.from(body) : body,
+      ...this.s3Options(inputS3Dir, ext)
+    }));
   }
 
   writeJson(inputS3Dir: string, topology: Topology<Objects<{}>>) {

@@ -21,7 +21,7 @@ import {
   ParsedBody,
   ParsedRequest,
   CrudAuth
-} from "@nestjsx/crud";
+} from "@dataui/crud";
 import isUUID from "validator/lib/isUUID";
 import { OptionalJwtAuthGuard } from "../../auth/guards/jwt-auth.guard";
 import { QueryFailedError } from "typeorm";

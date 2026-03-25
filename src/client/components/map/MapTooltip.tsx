@@ -1,9 +1,8 @@
-/** @jsx jsx */
 import throttle from "lodash/throttle";
-import MapboxGL from "mapbox-gl";
+import maplibregl from "maplibre-gl";
 import React, { useEffect, useRef, useState } from "react";
 import { connect } from "react-redux";
-import { Box, Divider, Heading, jsx, Grid, ThemeUIStyleObject } from "theme-ui";
+import { Box, Divider, Heading, Grid, ThemeUIStyleObject } from "theme-ui";
 
 import {
   DemographicCounts,
@@ -56,7 +55,7 @@ interface Data {
 }
 
 const throttledDataSetter = throttle(
-  function <T>(setData: (arg0: T) => void, data: T) {
+  function (setData: (arg0: Data | undefined) => void, data: Data | undefined) {
     setData(data);
   },
   100,
@@ -76,12 +75,12 @@ const MapTooltip = ({
   readonly highlightedGeounits: GeoUnits;
   readonly staticMetadata?: IStaticMetadata;
   readonly project?: IProject;
-  readonly map?: MapboxGL.Map;
+  readonly map?: maplibregl.Map;
   readonly electionYear: ElectionYear;
   readonly populationKey: GroupTotal;
 }) => {
   const [point, setPoint] = useState({ x: 0, y: 0 });
-  const [feature, setFeature] = useState<MapboxGL.MapboxGeoJSONFeature | undefined>(undefined);
+  const [feature, setFeature] = useState<maplibregl.MapGeoJSONFeature | undefined>(undefined);
   const [data, setData] = useState<Data | undefined>(undefined);
   const tooltipRef = useRef<HTMLDivElement>(null);
 
@@ -91,7 +90,7 @@ const MapTooltip = ({
 
   useEffect(() => {
     const throttledSetFeature = throttle(
-      (point: MapboxGL.Point | undefined, geoLevel: string | undefined) => {
+      (point: maplibregl.Point | undefined, geoLevel: string | undefined) => {
         // eslint-disable-next-line
         if (!point || !geoLevel) {
           setFeature(undefined);
@@ -108,7 +107,7 @@ const MapTooltip = ({
       SET_FEATURE_DELAY
     );
 
-    const onMouseMoveThrottled = throttle((e: MapboxGL.MapMouseEvent) => {
+    const onMouseMoveThrottled = throttle((e: maplibregl.MapMouseEvent) => {
       // eslint-disable-next-line
       if (map && staticMetadata && invertedGeoLevelIndex !== undefined) {
         const geoLevel = staticMetadata.geoLevelHierarchy[invertedGeoLevelIndex].id;
@@ -124,7 +123,7 @@ const MapTooltip = ({
       throttledSetFeature(undefined, undefined);
     }, 5);
 
-    const onDrag = (e: MapboxGL.MapMouseEvent) => {
+    const onDrag = (e: maplibregl.MapMouseEvent) => {
       setPoint({ x: e.originalEvent.offsetX, y: e.originalEvent.offsetY });
     };
 
@@ -192,7 +191,7 @@ const MapTooltip = ({
         !outdated &&
           throttledDataSetter(
             setData,
-            demographics && (voting ? { demographics, voting, heading } : { demographics, heading })
+            demographics ? (voting ? { demographics, voting, heading } : { demographics, heading }) : undefined
           );
       }
     }

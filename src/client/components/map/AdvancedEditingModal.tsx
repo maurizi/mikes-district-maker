@@ -1,8 +1,7 @@
-/** @jsx jsx */
 import { useState } from "react";
 import AriaModal from "react-aria-modal";
 import { connect } from "react-redux";
-import { Box, Button, Flex, Heading, jsx } from "theme-ui";
+import { Box, Button, Flex, Heading} from "theme-ui";
 
 import Icon from "../Icon";
 import { GeoLevelInfo, ProjectId } from "../../../shared/entities";

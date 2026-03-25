@@ -1,5 +1,4 @@
-/** @jsx jsx */
-import { Box, Button, Flex, jsx, ThemeUIStyleObject, Heading, Text, Select } from "theme-ui";
+import { Box, Button, Flex, ThemeUIStyleObject, Heading, Text, Select } from "theme-ui";
 import { IProject, IStaticMetadata, RegionLookupProperties } from "../../../shared/entities";
 import Icon from "../Icon";
 import { DistrictsGeoJSON, ElectionYear, EvaluateMetricWithValue, PviBucket } from "../../types";

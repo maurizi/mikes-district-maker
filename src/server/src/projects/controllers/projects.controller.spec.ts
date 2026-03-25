@@ -8,7 +8,7 @@ import { ProjectsService } from "../services/projects.service";
 import { DeepPartial } from "typeorm";
 import { RegionConfig } from "../../region-configs/entities/region-config.entity";
 import { DEFAULT_PINNED_METRIC_FIELDS, ProjectVisibility } from "../../../../shared/constants";
-import { CrudRequest } from "@nestjsx/crud";
+import { CrudRequest } from "@dataui/crud";
 import { TopologyService } from "../../districts/services/topology.service";
 
 const moduleMocker = new ModuleMocker(global);
@@ -62,9 +62,18 @@ describe("ProjectsController", () => {
     })
       .useMocker(token => {
         if (token === ProjectsService) {
+          const mockQueryBuilder = {
+            leftJoinAndSelect: jest.fn().mockReturnThis(),
+            where: jest.fn().mockReturnThis(),
+            andWhere: jest.fn().mockReturnThis(),
+            getOne: jest.fn().mockResolvedValue(project)
+          };
           return {
             findOne: jest.fn().mockResolvedValue(project),
-            updateOne: (req: unknown, data: DeepPartial<Project>) => Promise.resolve(data)
+            updateOne: (req: unknown, data: DeepPartial<Project>) => Promise.resolve(data),
+            repository: {
+              createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder)
+            }
           };
         }
         if (typeof token === "function") {

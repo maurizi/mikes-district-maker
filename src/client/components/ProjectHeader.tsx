@@ -1,11 +1,10 @@
-/** @jsx jsx */
-import MapboxGL from "mapbox-gl";
+import maplibregl from "maplibre-gl";
 import React from "react";
 import { connect } from "react-redux";
 import { Link } from "react-router-dom";
-import { ReactComponent as Logo } from "../media/logos/mark-white.svg";
+import Logo from "../media/logos/mark-white.svg?react";
 
-import { Box, Button, Flex, jsx, ThemeUIStyleObject } from "theme-ui";
+import { Box, Button, Flex, ThemeUIStyleObject } from "theme-ui";
 import { IProject } from "../../shared/entities";
 import { undo, redo, toggleEvaluate } from "../actions/districtDrawing";
 import { heights } from "../theme";
@@ -92,7 +91,7 @@ const ProjectHeader = ({
   isReadOnly,
   undoHistory
 }: {
-  readonly map?: MapboxGL.Map;
+  readonly map?: maplibregl.Map;
   readonly project?: IProject;
   readonly isArchived: boolean;
   readonly isOwnProject: boolean;

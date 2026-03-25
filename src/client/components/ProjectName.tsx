@@ -1,10 +1,9 @@
-/** @jsx jsx */
 import React, { useEffect, useRef, useState } from "react";
 import { Button as MenuButton, Wrapper, Menu, MenuItem } from "react-aria-menubutton";
 import AriaModal from "react-aria-modal";
 import { connect } from "react-redux";
 import { Link } from "react-router-dom";
-import { Box, Button, Flex, Heading, Input, jsx, Themed, Text, ThemeUIStyleObject } from "theme-ui";
+import { Box, Button, Flex, Heading, Input, Text, ThemeUIStyleObject } from "theme-ui";
 import { IProject, IProjectTemplate } from "../../shared/entities";
 import {
   setProjectNameEditing,
@@ -139,9 +138,9 @@ const ProjectName = ({
       underlayStyle={{ paddingTop: "4.5rem" }}
     >
       <Flex sx={style.modal}>
-        <Themed.a as={Link} to={`/o/${template.organization.slug}`}>
+        <Link to={`/o/${template.organization.slug}`}>
           {template.organization.name} ›
-        </Themed.a>
+        </Link>
         <Heading>{template.name}</Heading>
         <Text sx={{ mb: 2 }}>
           {template.regionConfig.name} · {template.numberOfDistricts} districts

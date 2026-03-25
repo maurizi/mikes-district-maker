@@ -79,7 +79,7 @@ export class AuthController {
   }
 
   async getOrg(organizationSlug: OrganizationSlug): Promise<Organization> {
-    const org = await this.orgService.findOne({ slug: organizationSlug });
+    const org = await this.orgService.findOne({ where: { slug: organizationSlug } });
     if (!org) {
       throw new NotFoundException(`Organization ${organizationSlug} not found`);
     }
@@ -102,7 +102,7 @@ export class AuthController {
       }
 
       return this.authService.generateJwt(newUser);
-    } catch (error) {
+    } catch (error: any) {
       if (error.name === "QueryFailedError" && error.code === PG_UNIQUE_VIOLATION) {
         throw new BadRequestException({
           error: RegisterResponse.DUPLICATE,
@@ -140,7 +140,7 @@ export class AuthController {
   @Post("email/resend-verification/:email")
   public async sendEmailVerification(@Param("email") email: string): Promise<string> {
     try {
-      const user = await this.userService.findOne({ email });
+      const user = await this.userService.findOne({ where: { email } });
       if (!user) {
         throw new NotFoundException("User not found for this email", ResendResponse.NOT_FOUND);
       }
@@ -159,7 +159,7 @@ export class AuthController {
   @Post("email/forgot-password/:email")
   public async initiateForgotPassword(@Param("email") email: string): Promise<string> {
     try {
-      const user = await this.userService.findOne({ email });
+      const user = await this.userService.findOne({ where: { email } });
       if (!user) {
         throw new NotFoundException(
           "User not found for this email",

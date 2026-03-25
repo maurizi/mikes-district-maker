@@ -1,5 +1,4 @@
-/** @jsx jsx */
-import { Box, Flex, jsx, Themed, ThemeUIStyleObject, Heading } from "theme-ui";
+import { Box, Flex, ThemeUIStyleObject, Heading } from "theme-ui";
 import { getEqualPopulationStops } from "../../map/index";
 import { DistrictsGeoJSON, EvaluateMetricWithValue } from "../../../types";
 import { computeRowFill } from "../../../functions";
@@ -83,27 +82,27 @@ const EqualPopulationMetricDetail = ({
           Math.floor(metric.populationPerRepresentative).toLocaleString()}
         &nbsp;/&nbsp;Rep.)
       </Heading>
-      <Themed.table sx={style.table}>
+      <table sx={style.table}>
         <thead>
-          <Themed.tr>
-            <Themed.th sx={{ ...style.th, ...style.colFirst }}>Number</Themed.th>
-            <Themed.th sx={style.th}>Deviation (%)</Themed.th>
-            <Themed.th sx={{ ...style.th, ...style.number }}>Number of reps</Themed.th>
-            <Themed.th sx={{ ...style.th, ...style.number, ...style.colLast }}>Deviation</Themed.th>
-          </Themed.tr>
+          <tr>
+            <th sx={{ ...style.th, ...style.colFirst }}>Number</th>
+            <th sx={style.th}>Deviation (%)</th>
+            <th sx={{ ...style.th, ...style.number }}>Number of reps</th>
+            <th sx={{ ...style.th, ...style.number, ...style.colLast }}>Deviation</th>
+          </tr>
         </thead>
         <tbody>
           {geojson?.features.map(
             (feature, id) =>
               id > 0 && (
-                <Themed.tr key={id}>
-                  <Themed.td sx={{ ...style.td, ...style.colFirst }}>{id}</Themed.td>
+                <tr key={id}>
+                  <td sx={{ ...style.td, ...style.colFirst }}>{id}</td>
 
-                  <Themed.td sx={style.td}>
+                  <td sx={style.td}>
                     {feature.properties.percentDeviation !== undefined &&
                     feature.properties.populationDeviation !== undefined ? (
                       <Flex sx={{ alignItems: "center" }}>
-                        <Themed.div
+                        <div
                           sx={{
                             mr: 2,
                             width: "15px",
@@ -117,23 +116,23 @@ const EqualPopulationMetricDetail = ({
                                 true
                               )
                           }}
-                        ></Themed.div>
+                        ></div>
                         <Box>{Math.floor(feature.properties.percentDeviation * 1000) / 10}%</Box>
                       </Flex>
                     ) : (
                       <Box sx={style.blankValue}>-</Box>
                     )}
-                  </Themed.td>
+                  </td>
 
-                  <Themed.td sx={{ ...style.td, ...style.number }}>
+                  <td sx={{ ...style.td, ...style.number }}>
                     {numberOfMembers !== undefined && numberOfMembers[id - 1] ? (
                       numberOfMembers[id - 1]
                     ) : (
                       <Box sx={style.blankValue}>-</Box>
                     )}
-                  </Themed.td>
+                  </td>
 
-                  <Themed.td sx={{ ...style.td, ...style.number, ...style.colLast }}>
+                  <td sx={{ ...style.td, ...style.number, ...style.colLast }}>
                     {feature.properties.populationDeviation !== undefined ? (
                       Math.ceil(feature.properties.populationDeviation) === 0 ? (
                         // Need this to handle negative 0, which Math.ceil likes to return
@@ -144,12 +143,12 @@ const EqualPopulationMetricDetail = ({
                     ) : (
                       <Box sx={style.blankValue}>-</Box>
                     )}
-                  </Themed.td>
-                </Themed.tr>
+                  </td>
+                </tr>
               )
           )}
         </tbody>
-      </Themed.table>
+      </table>
     </Box>
   );
 };

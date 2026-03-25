@@ -15,7 +15,7 @@ import {
   Override,
   ParsedBody,
   ParsedRequest
-} from "@nestjsx/crud";
+} from "@dataui/crud";
 import { OptionalJwtAuthGuard } from "../../auth/guards/jwt-auth.guard";
 import { TopologyService } from "../../districts/services/topology.service";
 import { QueryFailedError } from "typeorm";
@@ -61,7 +61,7 @@ export class RegionConfigsController implements CrudController<RegionConfig> {
     @Param("geounit") geounit: string,
     @Query("fields") fields: string[]
   ): Promise<readonly RegionLookupProperties[]> {
-    const regionConfig = await this.service.findOne({ id: regionId });
+    const regionConfig = await this.service.findOne({ where: { id: regionId } });
 
     const geoCollection = regionConfig && (await this.topologyService.get(regionConfig));
     if (!geoCollection) {

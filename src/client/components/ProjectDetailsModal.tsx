@@ -1,4 +1,3 @@
-/** @jsx jsx */
 import React, { useState } from "react";
 import AriaModal from "react-aria-modal";
 import { connect } from "react-redux";

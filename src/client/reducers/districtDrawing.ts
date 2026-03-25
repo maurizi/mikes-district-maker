@@ -1,7 +1,7 @@
-import { Cmd, Loop, loop, LoopReducer } from "redux-loop";
+import { Cmd, Loop, loop } from "redux-loop";
 import { getType } from "typesafe-actions";
 
-import { Action } from "../actions";
+import { Action, LoopAction } from "../actions";
 import { SavingState, EvaluateMetricWithValue } from "../types";
 
 import {
@@ -155,10 +155,10 @@ export const initialDistrictDrawingState: DistrictDrawingState = {
   }
 };
 
-const districtDrawingReducer: LoopReducer<ProjectState, Action> = (
+const districtDrawingReducer = (
   state: ProjectState = initialProjectState,
-  action: Action
-): ProjectState | Loop<ProjectState, Action> => {
+  action: LoopAction
+): ProjectState | Loop<ProjectState> => {
   const { present } = state.undoHistory;
   switch (action.type) {
     case getType(resetProjectState):

@@ -1,4 +1,3 @@
-/** @jsx jsx */
 import {
   IOrganization,
   IUser,
@@ -6,7 +5,7 @@ import {
   OrganizationSlug,
   OrganizationNest
 } from "../../shared/entities";
-import { Box, jsx, Card, Label, Radio, Flex, Spinner, ThemeUIStyleObject } from "theme-ui";
+import { Box, Card, Label, Radio, Flex, Spinner, ThemeUIStyleObject } from "theme-ui";
 import OrganizationTemplates from "./OrganizationTemplates";
 import { useState, useEffect } from "react";
 import { organizationFetch, organizationReset } from "../actions/organization";

@@ -1,7 +1,6 @@
-/** @jsx jsx */
 import AriaModal from "react-aria-modal";
 import { connect } from "react-redux";
-import { Box, Button, Flex, Heading, jsx, Select, Label } from "theme-ui";
+import { Box, Button, Flex, Heading, Select, Label } from "theme-ui";
 
 import Icon from "./Icon";
 import { IProject, IProjectTemplate, OrganizationNest } from "../../shared/entities";
@@ -12,7 +11,7 @@ import React, { useState } from "react";
 import { WriteResource } from "../resource";
 import { InputField } from "./Field";
 import { createProjectTemplate } from "../api";
-import { useHistory } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 interface Form {
   readonly organization?: OrganizationNest;
@@ -31,7 +30,7 @@ const TemplateFromProjectModal = ({
   readonly project?: IProject;
   readonly adminOrganizations: readonly OrganizationNest[];
 }) => {
-  const history = useHistory();
+  const navigate = useNavigate();
   const hideModal = () => store.dispatch(setTemplateProject(undefined));
   const [resource, setResource] = useState<WriteResource<Form, IProjectTemplate>>({
     data: {
@@ -66,7 +65,7 @@ const TemplateFromProjectModal = ({
             })
               .then(() => {
                 hideModal();
-                history.push(`/o/${slug}`);
+                navigate(`/o/${slug}`);
               })
               .catch(errors => {
                 setResource({ ...resource, errors });

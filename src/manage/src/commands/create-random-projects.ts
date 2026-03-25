@@ -1,10 +1,7 @@
-import { Command } from "@oclif/command";
-import { IArg } from "@oclif/parser/lib/args";
-import cli from "cli-ux";
-import { createConnection } from "typeorm";
+import { Args, Command } from "@oclif/core";
 import _ from "lodash";
 
-import { connectionOptions } from "../lib/dbUtils";
+import { createDataSource, dataSourceOptions } from "../lib/dbUtils";
 import { RegionConfig } from "../../../server/src/region-configs/entities/region-config.entity";
 import { Project } from "../../../server/src/projects/entities/project.entity";
 import { TopologyService } from "../../../server/src/districts/services/topology.service";
@@ -16,35 +13,33 @@ const PERCENT_COMPLETE = 0.25;
 export default class CreateRandomProjects extends Command {
   static description = "creates randomly generated projects for development testing";
 
-  static args: IArg[] = [
-    {
-      name: "number",
+  static args = {
+    number: Args.string({
       description: "Number of projects to create",
       required: true
-    },
-    {
-      name: "region",
+    }),
+    region: Args.string({
       description: "Region code to create projects for, or 'all'. Defaults to 'all'",
       required: false,
       default: "all"
-    }
-  ];
+    })
+  };
 
   async run(): Promise<void> {
-    const { args } = this.parse(CreateRandomProjects);
+    const { args } = await this.parse(CreateRandomProjects);
 
-    const connection = await createConnection({ ...connectionOptions, logging: false });
-    const regionConfigRepo = connection.getRepository(RegionConfig);
-    const projectRepo = connection.getRepository(Project);
-    const userRepo = connection.getRepository(User);
+    const dataSource = await createDataSource();
+    const regionConfigRepo = dataSource.getRepository(RegionConfig);
+    const projectRepo = dataSource.getRepository(Project);
+    const userRepo = dataSource.getRepository(User);
 
-    const regions = await regionConfigRepo.find(
-      args.region === "all"
+    const regions = await regionConfigRepo.find({
+      where: args.region === "all"
         ? { hidden: false, archived: false }
         : { regionCode: args.region, hidden: false, archived: false }
-    );
+    });
 
-    const user = await userRepo.findOneOrFail();
+    const user = await userRepo.findOneOrFail({ where: {} });
 
     const topologyService = new TopologyService(regionConfigRepo, new WorkerPoolService());
     await topologyService.loadLayers();
@@ -54,8 +49,8 @@ export default class CreateRandomProjects extends Command {
     await Promise.all(layers);
 
     this.log(`Generating ${args.number} projects in ${regions.length} region(s)`);
-    const bar = cli.progress();
-    bar.start(Number(args.number));
+    let completed = 0;
+    const total = Number(args.number);
 
     for (let i = 0; i < Number(args.number); i++) {
       const region = _.sample(regions);
@@ -108,9 +103,9 @@ export default class CreateRandomProjects extends Command {
 
       // @ts-ignore
       await projectRepo.save(project, { reload: false });
-      bar.increment();
+      completed++;
+      this.log(`  ${completed}/${total}`);
     }
-    bar.stop();
     this.log(`Projects created`);
     this.exit(0);
   }

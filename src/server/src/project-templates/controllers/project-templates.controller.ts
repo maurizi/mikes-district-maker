@@ -100,7 +100,8 @@ export class ProjectTemplatesController {
     if (!userIsAdmin) {
       throw new BadRequestException(`User is not an admin for organization ${organizationSlug}`);
     }
-    const project = await this.projectsService.findOne(dto.project.id, {
+    const project = await this.projectsService.findOne({
+      where: { id: dto.project.id },
       relations: ["regionConfig", "chamber"]
     });
     if (!project) {
@@ -241,7 +242,7 @@ export class ProjectTemplatesController {
     if (!userIsAdmin) {
       throw new BadRequestException(`User is not an admin for organization ${organizationSlug}`);
     }
-    const template = await this.service.findOne(id);
+    const template = await this.service.findOne({ where: { id } });
     if (!template) {
       throw new NotFoundException(`Project ${id} not found`);
     }

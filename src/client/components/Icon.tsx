@@ -1,5 +1,4 @@
-/** @jsx jsx */
-import { jsx, ThemeUIStyleObject } from "theme-ui";
+import { ThemeUIStyleObject } from "theme-ui";
 import icons from "../icons";
 
 interface IconProps {

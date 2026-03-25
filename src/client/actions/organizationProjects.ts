@@ -32,7 +32,7 @@ export const toggleProjectFeatured = createAction("Toggle project featured")<{
   readonly organization: OrganizationSlug;
 }>();
 export const toggleProjectFeaturedSuccess = createAction("Toggle project featured success")<{
-  readonly project: IProject;
+  readonly project: ProjectNest;
   readonly organization: OrganizationSlug;
 }>();
 export const toggleProjectFeaturedFailure = createAction(

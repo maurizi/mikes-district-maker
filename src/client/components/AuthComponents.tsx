@@ -1,6 +1,5 @@
-/** @jsx jsx */
 import React, { useState } from "react";
-import { Box, Button, Flex, Heading, Text, jsx, ThemeUIStyleObject, Divider } from "theme-ui";
+import { Box, Button, Flex, Heading, Text, ThemeUIStyleObject, Divider } from "theme-ui";
 
 import { Login, JWT, IOrganization } from "../../shared/entities";
 import RegisterContent from "./RegisterContent";
@@ -13,9 +12,9 @@ import { userFetch } from "../actions/user";
 import { assertNever } from "../functions";
 import { IProject } from "../../shared/entities";
 import store from "../store";
-import { ReactComponent as SignupIconAudience } from "../media/signup-icon-audience.svg";
-import { ReactComponent as SignupIconDollar } from "../media/signup-icon-dollar.svg";
-import { ReactComponent as SignupIconSearch } from "../media/signup-icon-search.svg";
+import SignupIconAudience from "../media/signup-icon-audience.svg?react";
+import SignupIconDollar from "../media/signup-icon-dollar.svg?react";
+import SignupIconSearch from "../media/signup-icon-search.svg?react";
 import RegisterTermsText from "./RegisterTermsText";
 
 const style: Record<string, ThemeUIStyleObject> = {

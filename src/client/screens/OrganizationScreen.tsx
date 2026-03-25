@@ -1,7 +1,6 @@
-/** @jsx jsx */
 import { useEffect, useState } from "react";
 import { connect } from "react-redux";
-import { useParams, Link as RouterLink, useHistory } from "react-router-dom";
+import { useParams, Link as RouterLink, useNavigate } from "react-router-dom";
 import {
   Box,
   Button,
@@ -153,7 +152,7 @@ const style: Record<string, ThemeUIStyleObject> = {
 };
 
 const OrganizationScreen = ({ organization, organizationProjects, user }: StateProps) => {
-  const { organizationSlug } = useParams<Params>();
+  const { organizationSlug = "" } = useParams();
   const [projectTemplateData, setProjectTemplateData] = useState<CreateProjectData | undefined>(
     undefined
   );
@@ -167,12 +166,12 @@ const OrganizationScreen = ({ organization, organizationProjects, user }: StateP
 
   const userIsVerified = "resource" in user && user.resource && user.resource.isEmailVerified;
   const orgAdminUrl = `/o/${organizationSlug}/admin`;
-  const history = useHistory();
+  const navigate = useNavigate();
 
   function setupProjectFromTemplate(data: CreateProjectData) {
     if (userInOrg) {
       return createProject(data).then((project: IProject) =>
-        history.push(`/projects/${project.id}`)
+        navigate(`/projects/${project.id}`)
       );
     } else {
       setProjectTemplateData(data);

@@ -1,7 +1,6 @@
-/** @jsx jsx */
-import MapboxGL from "mapbox-gl";
+import maplibregl from "maplibre-gl";
 import { connect } from "react-redux";
-import { Box, Button, Flex, jsx, Select, Text, ThemeUIStyleObject } from "theme-ui";
+import { Box, Button, Flex, Select, Text, ThemeUIStyleObject } from "theme-ui";
 import bbox from "@turf/bbox";
 import { polygon } from "@turf/helpers";
 
@@ -66,7 +65,7 @@ const FindMenu = ({
   readonly findTool: FindTool;
   readonly evaluateMode: boolean;
   readonly geojson?: DistrictsGeoJSON;
-  readonly map?: MapboxGL.Map;
+  readonly map?: maplibregl.Map;
 }) => {
   const findCoords = getFindCoords(findTool, geojson);
   const num = findCoords?.length || 0;

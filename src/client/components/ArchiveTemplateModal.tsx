@@ -1,6 +1,5 @@
-/** @jsx jsx */
 import AriaModal from "react-aria-modal";
-import { Box, Button, Flex, Heading, jsx } from "theme-ui";
+import { Box, Button, Flex, Heading} from "theme-ui";
 
 import Icon from "./Icon";
 import { IOrganization } from "../../shared/entities";

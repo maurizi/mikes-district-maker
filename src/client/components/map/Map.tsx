@@ -1,12 +1,11 @@
-/** @jsx jsx */
 import { maxBy } from "lodash";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Box, Flex, Text, jsx, ThemeUIStyleObject, Themed } from "theme-ui";
+import { Box, Flex, Text, ThemeUIStyleObject } from "theme-ui";
 import bbox from "@turf/bbox";
-import { BBox2d } from "@turf/helpers/lib/geojson";
+type BBox2d = [number, number, number, number];
 
-import MapboxGL from "mapbox-gl";
-import "mapbox-gl/dist/mapbox-gl.css";
+import maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
 import polylabel from "polylabel";
 import { Feature, FeatureCollection, Point, Position } from "geojson";
 
@@ -92,7 +91,7 @@ import RectangleSelectionTool from "./RectangleSelectionTool";
 import store from "../../store";
 import { State } from "../../reducers";
 import { connect } from "react-redux";
-import { MAPBOX_STYLE, MAPBOX_TOKEN } from "../../constants/map";
+import { MAP_STYLE } from "../../constants/map";
 import { KEYBOARD_SHORTCUTS } from "./keyboardShortcuts";
 import Icon from "../Icon";
 import { ReferenceLayerTypes } from "../../../shared/constants";
@@ -103,7 +102,7 @@ import theme from "../../theme";
 import { getDemographicsGroups } from "../../../shared/functions";
 import CopyMapButton from "../CopyMapButton";
 
-function removeEvaluateMetricLayers(map: MapboxGL.Map) {
+function removeEvaluateMetricLayers(map: maplibregl.Map) {
   map.setLayoutProperty(DISTRICTS_COMPACTNESS_CHOROPLETH_LAYER_ID, "visibility", "none");
   map.setLayoutProperty(DISTRICTS_COMPETITIVENESS_CHOROPLETH_LAYER_ID, "visibility", "none");
   map.setLayoutProperty(DISTRICTS_EQUAL_POPULATION_CHOROPLETH_LAYER_ID, "visibility", "none");
@@ -114,7 +113,7 @@ function removeEvaluateMetricLayers(map: MapboxGL.Map) {
 }
 
 function disableEditMode(
-  map: MapboxGL.Map,
+  map: maplibregl.Map,
   staticMetadata: IStaticMetadata,
   activeReferenceLayers: readonly IReferenceLayer[]
 ) {
@@ -147,7 +146,7 @@ function disableEditMode(
 }
 
 function enableEditmode(
-  map: MapboxGL.Map,
+  map: maplibregl.Map,
   staticMetadata: IStaticMetadata,
   geoLevelIndex: number,
   activeReferenceLayers: readonly IReferenceLayer[]
@@ -190,21 +189,21 @@ function enableEditmode(
   });
 }
 
-function enableCommonEvaluateLayers(map: MapboxGL.Map) {
+function enableCommonEvaluateLayers(map: maplibregl.Map) {
   // Display district labels in evaluate mode
   map.setLayoutProperty(DISTRICTS_EVALUATE_LABELS_LAYER_ID, "visibility", "visible");
 }
 
-function enableSummaryEvaluateLayers(map: MapboxGL.Map) {
+function enableSummaryEvaluateLayers(map: maplibregl.Map) {
   map.setLayoutProperty(DISTRICTS_LAYER_ID, "visibility", "visible");
   map.setPaintProperty(DISTRICTS_LAYER_ID, "fill-opacity", 1);
 }
 
-function disableSummaryEvaluateLayers(map: MapboxGL.Map) {
+function disableSummaryEvaluateLayers(map: maplibregl.Map) {
   map.setLayoutProperty(DISTRICTS_LAYER_ID, "visibility", "none");
 }
 
-function disableAllTools(map: MapboxGL.Map) {
+function disableAllTools(map: maplibregl.Map) {
   // Disable any existing selection tools
   DefaultSelectionTool.disable(map);
   RectangleSelectionTool.disable(map);
@@ -241,11 +240,11 @@ interface Props {
   readonly showReferenceLayers: ReadonlySet<ReferenceLayerId>;
   readonly findTool: FindTool;
   readonly label?: string;
-  readonly map?: MapboxGL.Map;
+  readonly map?: maplibregl.Map;
   readonly electionYear: ElectionYear;
   readonly populationKey: GroupTotal;
   // eslint-disable-next-line
-  readonly setMap: (map: MapboxGL.Map) => void;
+  readonly setMap: (map: maplibregl.Map) => void;
 }
 
 interface LabelId {
@@ -390,12 +389,9 @@ const DistrictsMap = ({
       return;
     }
 
-    // eslint-disable-next-line
-    MapboxGL.accessToken = MAPBOX_TOKEN;
-
-    const map = new MapboxGL.Map({
+    const map = new maplibregl.Map({
       container: mapRef.current,
-      style: MAPBOX_STYLE,
+      style: MAP_STYLE,
       bounds: [b0, b1, b2, b3],
       fitBoundsOptions: { padding: 75 },
       minZoom: minZoom,
@@ -403,7 +399,7 @@ const DistrictsMap = ({
     });
 
     map.addControl(
-      new MapboxGL.NavigationControl({
+      new maplibregl.NavigationControl({
         showCompass: false,
         showZoom: true
       }),
@@ -439,14 +435,11 @@ const DistrictsMap = ({
     map.on("zoomend", setLevelVisibility);
     map.loadImage(
       // eslint-disable-next-line @typescript-eslint/no-var-requires
-      require("../../media/map-pin.png"),
-      (error: unknown, image: HTMLImageElement | ArrayBufferView | ImageData) => {
-        // eslint-disable-next-line functional/no-throw-statement
-        if (error) throw error;
-        // add image to the active style and make it SDF-enabled
-        map.addImage("map-pin", image, { sdf: true });
-      }
-    );
+      require("../../media/map-pin.png")
+    ).then(image => {
+      // add image to the active style and make it SDF-enabled
+      map.addImage("map-pin", image.data, { sdf: true });
+    });
 
     return () => {
       map.off("load", onMapLoad);
@@ -623,7 +616,9 @@ const DistrictsMap = ({
     });
 
     const districtsSource = map && map.getSource(DISTRICTS_SOURCE_ID);
-    districtsSource && districtsSource.type === "geojson" && districtsSource.setData(geojson);
+    districtsSource &&
+      districtsSource.type === "geojson" &&
+      (districtsSource as maplibregl.GeoJSONSource).setData(geojson);
   }, [
     map,
     geojson,
@@ -761,7 +756,7 @@ const DistrictsMap = ({
     }
   }, [map, showReferenceLayers, referenceLayers, activeReferenceLayers]);
 
-  const removeSelectedFeatures = (map: MapboxGL.Map, staticMetadata: IStaticMetadata) => {
+  const removeSelectedFeatures = (map: maplibregl.Map, staticMetadata: IStaticMetadata) => {
     staticMetadata.geoLevelHierarchy
       .map(geoLevel => geoLevel.id)
       .forEach(sourceLayer =>
@@ -839,12 +834,14 @@ const DistrictsMap = ({
   // Update districts source when geojson is fetched
   useEffect(() => {
     const districtsSource = map && map.getSource(DISTRICTS_SOURCE_ID);
-    districtsSource && districtsSource.type === "geojson" && districtsSource.setData(geojson);
+    districtsSource &&
+      districtsSource.type === "geojson" &&
+      (districtsSource as maplibregl.GeoJSONSource).setData(geojson);
 
     const districtsLabelsSource = map && map.getSource(DISTRICTS_LABELS_SOURCE_ID);
     districtsLabelsSource &&
       districtsLabelsSource.type === "geojson" &&
-      districtsLabelsSource.setData(generateLabelsGeojson(geojson));
+      (districtsLabelsSource as maplibregl.GeoJSONSource).setData(generateLabelsGeojson(geojson));
   }, [map, geojson]);
 
   // Handle evaluate mode map views
@@ -1314,20 +1311,20 @@ const DistrictsMap = ({
         <Box sx={style.legendBox}>
           <Flex sx={{ alignItems: "center" }}>
             <Text sx={style.legendTitle}>Majority Race</Text>
-            <Themed.table sx={{ margin: "0", width: "100%" }}>
+            <table sx={{ margin: "0", width: "100%" }}>
               <thead>
-                <Themed.tr>
+                <tr>
                   {Object.keys(getMajorityRaceFills()).map(race => (
-                    <Themed.th sx={style.raceHeader} key={race}>
+                    <th sx={style.raceHeader} key={race}>
                       {race.charAt(0).toUpperCase() + race.slice(1)}
-                    </Themed.th>
+                    </th>
                   ))}
-                </Themed.tr>
+                </tr>
               </thead>
               <tbody>
-                <Themed.tr>
+                <tr>
                   {Object.keys(getMajorityRaceFills()).map(race => (
-                    <Themed.td sx={style.td} key={race}>
+                    <td sx={style.td} key={race}>
                       <Box
                         sx={{
                           ...style.legendColorSwatch,
@@ -1335,12 +1332,12 @@ const DistrictsMap = ({
                         }}
                       ></Box>
                       <Box sx={style.legendLabel}>&gt; 65%</Box>
-                    </Themed.td>
+                    </td>
                   ))}
-                </Themed.tr>
-                <Themed.tr>
+                </tr>
+                <tr>
                   {Object.keys(getMajorityRaceFills()).map(race => (
-                    <Themed.td sx={style.td} key={race}>
+                    <td sx={style.td} key={race}>
                       <Box
                         sx={{
                           ...style.legendColorSwatch,
@@ -1348,11 +1345,11 @@ const DistrictsMap = ({
                         }}
                       ></Box>
                       <Box sx={style.legendLabel}>50-65%</Box>
-                    </Themed.td>
+                    </td>
                   ))}
-                </Themed.tr>
+                </tr>
               </tbody>
-            </Themed.table>
+            </table>
           </Flex>
         </Box>
       )}

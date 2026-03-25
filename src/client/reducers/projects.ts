@@ -1,7 +1,7 @@
-import { Cmd, Loop, loop, LoopReducer } from "redux-loop";
+import { Cmd, Loop, loop } from "redux-loop";
 import { getType } from "typesafe-actions";
 
-import { Action } from "../actions";
+import { Action, LoopAction } from "../actions";
 import {
   projectArchive,
   projectArchiveSuccess,
@@ -56,10 +56,10 @@ export const initialState = {
   archiveProjectPending: false
 };
 
-const projectsReducer: LoopReducer<ProjectsState, Action> = (
+const projectsReducer = (
   state: ProjectsState = initialState,
-  action: Action
-): ProjectsState | Loop<ProjectsState, Action> => {
+  action: LoopAction
+): ProjectsState | Loop<ProjectsState> => {
   switch (action.type) {
     case getType(userProjectsFetch):
       return loop(

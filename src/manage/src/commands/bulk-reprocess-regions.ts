@@ -1,5 +1,4 @@
-import { Command, flags } from "@oclif/command";
-import { IArg } from "@oclif/parser/lib/args";
+import { Args, Command, Flags } from "@oclif/core";
 import { existsSync, readFileSync, mkdirSync } from "fs";
 import UpdateRegion from "./update-region";
 import ProcessGeojson from "./process-geojson";
@@ -22,14 +21,13 @@ export default class BulkReprocessRegions extends Command {
   static description = `use a configuration file to process and update many regions`;
 
   static flags = {
-    dryRun: flags.boolean({
+    dryRun: Flags.boolean({
       allowNo: false,
       description: `Dry run; only prints actions that would be taken.`
     })
   };
-  static args: [IArg] = [
-    {
-      name: "configFile",
+  static args = {
+    configFile: Args.string({
       required: true,
       description: `Path to a configuration file containing information on how each region should be processed.
 
@@ -56,11 +54,11 @@ Within each state, the parameters are as follows:
 - updateS3Dir: Behaves identically to the equivalent parameter to the update-region command, and is also used as the --inputS3Dir to process-geojson.
 - processGeojsonFlags: All flags that could be passed to the process-geojson command are valid EXCEPT --inputS3Dir; flags should be entered as an array of strings.
 `
-    }
-  ];
+    })
+  };
 
   async run(): Promise<void> {
-    const { args, flags } = this.parse(BulkReprocessRegions);
+    const { args, flags } = await this.parse(BulkReprocessRegions);
     // Invert dryRun for cleaner expressions
     const doWork = !flags.dryRun;
 

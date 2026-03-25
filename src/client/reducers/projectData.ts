@@ -1,7 +1,7 @@
-import { Cmd, Loop, loop, LoopReducer } from "redux-loop";
+import { Cmd, Loop, loop } from "redux-loop";
 import { getType } from "typesafe-actions";
 
-import { Action } from "../actions";
+import { Action, LoopAction } from "../actions";
 import {
   exportCsv,
   exportCsvFailure,
@@ -139,10 +139,10 @@ export const initialProjectDataState = {
   duplicatedProject: null
 } as const;
 
-const projectDataReducer: LoopReducer<ProjectState, Action> = (
+const projectDataReducer = (
   state: ProjectState = initialProjectState,
-  action: Action
-): ProjectState | Loop<ProjectState, Action> => {
+  action: LoopAction
+): ProjectState | Loop<ProjectState> => {
   switch (action.type) {
     case getType(resetProjectState):
       return {
@@ -449,7 +449,7 @@ const projectDataReducer: LoopReducer<ProjectState, Action> = (
               ...state,
               saving: "saving"
             },
-            Cmd.list<Action>(
+            Cmd.list(
               [
                 Cmd.run(patchProject, {
                   successActionCreator: updateDistrictsDefinitionSuccess,
@@ -717,7 +717,7 @@ const projectDataReducer: LoopReducer<ProjectState, Action> = (
         },
         "resource" in state.projectData &&
           state.projectData.resource.project.projectTemplate?.contestNextSteps
-          ? Cmd.list<Action>([
+          ? Cmd.list([
               Cmd.action(clearSelectedGeounits(true)),
               Cmd.action(showSubmitMapModal(true))
             ])

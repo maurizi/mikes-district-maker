@@ -1,5 +1,4 @@
-/** @jsx jsx */
-import { jsx, Button } from "theme-ui";
+import { Button } from "theme-ui";
 import { DistrictId } from "../../shared/entities";
 import store from "../store";
 import { setZoomToDistrictId } from "../actions/districtDrawing";
@@ -18,8 +17,7 @@ const DistrictOptionsFlyout = ({
   return (
     <Menu
       viewScroll="close"
-      animation={false}
-      offsetX={30}
+      gap={30}
       menuButton={
         <Button
           sx={{ mr: 2 }}
@@ -31,7 +29,7 @@ const DistrictOptionsFlyout = ({
       }
     >
       <MenuItem
-        styles={{
+        style={{
           fontSize: "14px"
         }}
         onClick={() => {

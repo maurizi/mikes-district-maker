@@ -23,34 +23,34 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
             CONFIG_ARGS=( "-f" "docker-compose.yml" )
         fi
         # Ensure container images are current
-        docker-compose "${CONFIG_ARGS[@]}" build --pull
+        docker compose "${CONFIG_ARGS[@]}" build --pull
 
         # Clean dist directory
-        docker-compose "${CONFIG_ARGS[@]}" \
+        docker compose "${CONFIG_ARGS[@]}" \
             run --rm --no-deps server \
             clean
 
         # Update frontend, Yarn dependencies and build static asset bundle
-        docker-compose "${CONFIG_ARGS[@]}" \
+        docker compose "${CONFIG_ARGS[@]}" \
             run --rm --no-deps client \
-            bash -c "yarn install && yarn compile && yarn build"
+            bash -c "yarn install --ignore-engines --check-files && yarn compile && yarn build"
 
         # Update backend, Yarn dependencies and build server
-        docker-compose "${CONFIG_ARGS[@]}" \
+        docker compose "${CONFIG_ARGS[@]}" \
             run --rm --no-deps --entrypoint "bash -c" server \
-            "yarn install && npm rebuild && yarn build"
+            "yarn install --check-files && npm rebuild && yarn build"
 
         # Update manage, Yarn dependencies and build
-        docker-compose "${CONFIG_ARGS[@]}" \
+        docker compose "${CONFIG_ARGS[@]}" \
             run --rm --no-deps manage \
-            bash -c "yarn install && yarn build"
+            bash -c "yarn install --check-files && yarn build"
 
         # Bring up PostgreSQL and NestJS in a way that respects
         # configured service health checks.
-        docker-compose "${CONFIG_ARGS[@]}" \
+        docker compose "${CONFIG_ARGS[@]}" \
             up -d database server
 
-        docker-compose "${CONFIG_ARGS[@]}" \
+        docker compose "${CONFIG_ARGS[@]}" \
             run --rm server \
             migration:run
     fi

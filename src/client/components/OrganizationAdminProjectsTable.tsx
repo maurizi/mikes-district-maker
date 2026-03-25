@@ -1,8 +1,7 @@
-/** @jsx jsx */
 import { useMemo, useEffect, useState } from "react";
 import { useTable, Row, HeaderGroup, Cell, useSortBy, SortingRule, Column } from "react-table";
 import { Link } from "react-router-dom";
-import { Button, Flex, jsx, Themed, ThemeUIStyleObject } from "theme-ui";
+import { Button, Flex, ThemeUIStyleObject } from "theme-ui";
 
 import { ProjectVisibility } from "../../shared/constants";
 import { OrganizationSlug, ProjectNest, IProjectTemplateWithProjects } from "../../shared/entities";
@@ -61,54 +60,47 @@ const OrganizationAdminProjectsTable = ({ templates, organizationSlug }: Project
 
   const sort = useMemo<SortingRule<ProjectRow>>(() => ({ id: "updatedDt", desc: true }), []);
   // eslint-disable-next-line
-  let columns = useMemo<Array<Column<ProjectRow>>>(
-    () => [
+  let columns = useMemo(
+    (): Column<ProjectRow>[] => [
       {
         Header: "Map",
-        accessor: "project" as const,
-        Cell: (p: Cell<ProjectRow>) => {
-          return (
-            <Themed.a as={Link} to={`/projects/${p.value.id}`} target="_blank">
-              {p.value.name}
-            </Themed.a>
-          );
-        }
+        accessor: "project",
+        Cell: ({ value }: { value: ProjectRow["project"] }) => (
+          <Link to={`/projects/${value.id}`} target="_blank">
+            {value.name}
+          </Link>
+        )
       },
       {
         Header: "Template",
-        accessor: "templateName" as const
+        accessor: "templateName"
       },
       {
         Header: "Creator",
-        accessor: row => row.user.name
+        accessor: (row: ProjectRow) => row.user.name,
+        Cell: ({ value }: { value: string }) => <a href={`mailto:${value}`}>{value}</a>
       },
       {
         Header: "Creator email",
-        accessor: row => row.user.email,
-        Cell: (p: Cell<ProjectRow>) => {
-          return <a href={`mailto:${p.value}`}>{p.value}</a>;
-        }
+        accessor: (row: ProjectRow) => row.user.email,
+        Cell: ({ value }: { value: string }) => <a href={`mailto:${value}`}>{value}</a>
       },
       {
         Header: "Updated on",
-        accessor: "updatedDt" as const,
-        Cell: (p: Cell<ProjectRow>) => {
-          return p.row.original.updatedAgo;
-        }
+        accessor: "updatedDt",
+        Cell: ({ row }: { row: { original: ProjectRow } }) => row.original.updatedAgo
       },
       {
         Header: "Submitted on",
-        accessor: "submittedOn" as const,
-        Cell: (p: Cell<ProjectRow>) => {
-          return p.row.original.submittedOn;
-        }
+        accessor: "submittedOn",
+        Cell: ({ row }: { row: { original: ProjectRow } }) => row.original.submittedOn
       },
       {
         Header: "",
-        accessor: "visibility" as const,
+        accessor: "visibility",
         disableSortBy: true,
-        Cell: ({ row }: Cell<ProjectRow>) => {
-          return row.original.visibility === ProjectVisibility.Published ? (
+        Cell: ({ row }: { row: { original: ProjectRow } }) =>
+          row.original.visibility === ProjectVisibility.Published ? (
             <Button
               onClick={() =>
                 store.dispatch(
@@ -120,8 +112,7 @@ const OrganizationAdminProjectsTable = ({ templates, organizationSlug }: Project
             </Button>
           ) : (
             "Unpublished"
-          );
-        }
+          )
       }
     ],
     [organizationSlug]

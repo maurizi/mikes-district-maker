@@ -1,5 +1,4 @@
-/** @jsx jsx */
-import { Box, IconButton, Flex, jsx, ThemeUIStyleObject, Heading, Text } from "theme-ui";
+import { Box, IconButton, Flex, ThemeUIStyleObject, Heading, Text } from "theme-ui";
 
 import Icon from "../Icon";
 import store from "../../store";

@@ -2,12 +2,12 @@
 
 const { execSync } = require("child_process");
 const kebabCase = require("kebab-case");
-const colors = require("colors");
+const chalk = require("chalk");
 
 function shellExec(cmd, args, outputPath) {
   const commandAndArgs = `${cmd} ${args.join(" ")}`;
   const fullCommand = outputPath ? `${commandAndArgs} >${outputPath}` : commandAndArgs;
-  console.log(fullCommand.green);
+  console.log(chalk.green(fullCommand));
   console.log(execSync(fullCommand, { maxBuffer: 1024 * 1024 * 1024 /* 1Gb */ }));
 }
 

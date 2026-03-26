@@ -124,7 +124,7 @@ export default class SerializeTopojson extends Command {
     return deserialize(resp.Body as Buffer);
   }
 
-  async readPbf(inputS3Dir: string) {
+  async readPbf(inputS3Dir: string): Promise<Topology> {
     const resp = await this.read(inputS3Dir, "pbf");
     return decode(new Pbf(resp.Body as Buffer)) as Topology;
   }

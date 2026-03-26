@@ -193,13 +193,13 @@ export class TopologyService {
               // Note this is different from how we construct these typed
               // arrays on the client, due to differences in how Buffer works
               // in Node.js (see https://nodejs.org/api/buffer.html)
-              const buf = Buffer.from(await res.Body!.transformToByteArray());
+              const bytes = await res.Body!.transformToByteArray();
               // We use a SharedArrayBuffer instead of re-using the S3 buffer in
               // order to share the data between threads
               const sharedArray = new typedArrayConstructor(
-                new SharedArrayBuffer(buf.buffer.byteLength)
+                new SharedArrayBuffer(bytes.byteLength)
               );
-              sharedArray.set(new typedArrayConstructor(buf.buffer));
+              sharedArray.set(new typedArrayConstructor(bytes.buffer, bytes.byteOffset, bytes.byteLength / bpe));
 
               return sharedArray;
             }))

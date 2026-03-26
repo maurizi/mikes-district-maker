@@ -15,6 +15,16 @@
   },
   "dependencies": {
     "@oclif/core": "4.3.2",
+    "@nestjs/common": "11.1.17",
+    "@nestjs/core": "11.1.17",
+    "@nestjs/typeorm": "11.0.0",
+    "reflect-metadata": "0.2.2",
+    "bcrypt": "6.0.0",
+    "object-sizeof": "2.6.5",
+    "promise-queue": "2.2.5",
+    "threads": "1.7.0",
+    "class-transformer": "0.5.1",
+    "class-validator": "0.14.1",
     "JSONStream": "1.3.5",
     "chalk": "4.1.2",
     "geojson-polygon-labels": "^1.5.0",
@@ -70,7 +80,7 @@
   ],
   "main": "lib/index.js",
   "oclif": {
-    "commands": "./lib/commands",
+    "commands": "./lib/manage/src/commands",
     "bin": "manage",
     "plugins": [
       "@oclif/core"

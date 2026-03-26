@@ -8,6 +8,7 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import polylabel from "polylabel";
 import { Feature, FeatureCollection, Point, Position } from "geojson";
+import mapPinUrl from "../../media/map-pin.png";
 
 import {
   setGeoLevelVisibility,
@@ -433,10 +434,7 @@ const DistrictsMap = ({
     setLevelVisibility();
     map.on("load", onMapLoad);
     map.on("zoomend", setLevelVisibility);
-    map.loadImage(
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      require("../../media/map-pin.png")
-    ).then(image => {
+    map.loadImage(mapPinUrl).then(image => {
       // add image to the active style and make it SDF-enabled
       map.addImage("map-pin", image.data, { sdf: true });
     });

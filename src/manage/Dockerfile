@@ -29,6 +29,9 @@ RUN set -ex \
   && deps=" \
   libsqlite3-dev \
   procps \
+  python3 \
+  make \
+  g++ \
   " \
   && apt-get update && apt-get install -yq $deps --no-install-recommends
 

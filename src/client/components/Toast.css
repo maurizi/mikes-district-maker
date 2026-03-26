@@ -3,20 +3,14 @@
     min-width: 375px;
   }
 }
-.Toastify__toast {
-}
-.Toastify__toast--rtl {
-}
-.Toastify__toast--dark {
-}
-.Toastify__toast--default {
-  color: #2c2c2c;
-}
+
 .Toastify__toast--info {
   background-color: #6d98ba;
+  color: #ffffff;
 }
 .Toastify__toast--success {
   background-color: #09bc8a;
+  color: #ffffff;
 }
 .Toastify__toast--warning {
   background-color: #eec643;
@@ -24,8 +18,24 @@
 }
 .Toastify__toast--error {
   background-color: #f06543;
+  color: #ffffff;
 }
-.Toastify__toast-body {
+
+/* Override icon colors to match text */
+.Toastify__toast--info .Toastify__toast-icon svg,
+.Toastify__toast--success .Toastify__toast-icon svg,
+.Toastify__toast--error .Toastify__toast-icon svg {
+  fill: #ffffff;
+}
+.Toastify__toast--warning .Toastify__toast-icon svg {
+  fill: #2c2c2c;
+}
+
+/* Close button colors */
+.Toastify__toast--info .Toastify__close-button,
+.Toastify__toast--success .Toastify__close-button,
+.Toastify__toast--error .Toastify__close-button {
+  color: #ffffff;
 }
 
 @keyframes fadeIn {

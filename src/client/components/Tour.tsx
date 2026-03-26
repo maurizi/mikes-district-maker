@@ -1,9 +1,11 @@
 import { Component } from "react";
-import Joyride, { CallBackProps, STATUS, Step } from "react-joyride";
+import { Joyride, EventData, STATUS, Step } from "react-joyride";
 import { IProject, IStaticMetadata, IUser } from "../../shared/entities";
 import { patchUser } from "../api";
 import { geoLevelLabel, getPopulationPerRepresentative } from "../functions";
 import SalamanderIllustration from "../media/tour-salamander-builder.svg?react";
+import tourClickingGif from "../media/tour-clicking-counties-sidebar.gif";
+import tourCountiesGif from "../media/tour-counties-blockgroups.gif";
 import { DistrictsGeoJSON } from "../types";
 
 /* eslint-disable */
@@ -62,23 +64,13 @@ class Tour extends Component<Props, State> {
             skip: <strong aria-label="skip">No, thanks</strong>,
             next: <span aria-label="next">Yes, please</span>
           },
-          floaterProps: {
-            styles: {
-              arrow: {
-                length: 0,
-                margin: 0
-              }
-            }
-          },
           showProgress: false,
           placement: "top-start",
-          disableOverlay: true,
-          disableBeacon: true,
+          hideOverlay: true,
+          skipBeacon: true,
           target: "#tour-start",
+          width: 300,
           styles: {
-            options: {
-              width: 300
-            },
             tooltipContainer: {
               textAlign: "center"
             }
@@ -93,10 +85,8 @@ class Tour extends Component<Props, State> {
           ),
           placement: "center",
           target: "body",
+          width: 350,
           styles: {
-            options: {
-              width: 350
-            },
             tooltipContainer: {
               textAlign: "center"
             }
@@ -111,13 +101,11 @@ class Tour extends Component<Props, State> {
               DistrictBuilder to group {availableGeolevelsText} into districts.
             </p>
           ),
-          disableBeacon: true,
+          skipBeacon: true,
           placement: "center",
           target: "body",
+          width: 500,
           styles: {
-            options: {
-              width: 500
-            },
             tooltipContainer: {
               textAlign: "center"
             }
@@ -127,13 +115,9 @@ class Tour extends Component<Props, State> {
           content:
             "The sidebar lists all your districts and their stats. Each district is represented by a unique color and number.",
           placement: "right-start",
-          disableBeacon: true,
+          skipBeacon: true,
           target: ".map-sidebar",
-          styles: {
-            options: {
-              width: 350
-            }
-          }
+          width: 350
         },
         {
           content: (
@@ -152,13 +136,9 @@ class Tour extends Component<Props, State> {
             </div>
           ),
           placement: "auto",
-          disableBeacon: true,
+          skipBeacon: true,
           target: ".deviation-header",
-          styles: {
-            options: {
-              width: 400
-            }
-          }
+          width: 400
         },
         {
           content: (
@@ -169,14 +149,9 @@ class Tour extends Component<Props, State> {
             </p>
           ),
           placement: "right",
-          disableBeacon: true,
-          spotlightClicks: true,
+          skipBeacon: true,
           target: ".unassigned-row",
-          styles: {
-            options: {
-              width: 450
-            }
-          }
+          width: 450
         },
         {
           content: (
@@ -191,7 +166,7 @@ class Tour extends Component<Props, State> {
                 }}
               >
                 <img
-                  src={require("../media/tour-clicking-counties-sidebar.gif")}
+                  src={tourClickingGif}
                   width="100%"
                   height="auto"
                   alt="User clicks on two geounits in the application and the sidebar updates."
@@ -208,14 +183,10 @@ class Tour extends Component<Props, State> {
             </div>
           ),
           placement: "left",
-          disableBeacon: true,
+          skipBeacon: true,
           isFixed: true,
           target: ".maplibregl-map",
-          styles: {
-            options: {
-              width: 350
-            }
-          }
+          width: 350
         },
         {
           content: (
@@ -228,13 +199,9 @@ class Tour extends Component<Props, State> {
             </div>
           ),
           placement: "right-start",
-          disableBeacon: true,
+          skipBeacon: true,
           target: ".sidebar-header",
-          styles: {
-            options: {
-              width: 400
-            }
-          }
+          width: 400
         },
         {
           content: (
@@ -251,7 +218,7 @@ class Tour extends Component<Props, State> {
                 }}
               >
                 <img
-                  src={require("../media/tour-counties-blockgroups.gif")}
+                  src={tourCountiesGif}
                   width="100%"
                   height="auto"
                   alt="User toggles geolevel selection"
@@ -280,13 +247,9 @@ class Tour extends Component<Props, State> {
             </div>
           ),
           placement: "auto",
-          disableBeacon: true,
+          skipBeacon: true,
           target: ".geolevel-button-group",
-          styles: {
-            options: {
-              width: 500
-            }
-          }
+          width: 500
         },
         {
           content: (
@@ -297,19 +260,15 @@ class Tour extends Component<Props, State> {
             </p>
           ),
           placement: "auto",
-          disableBeacon: true,
+          skipBeacon: true,
           target: ".support-menu",
-          styles: {
-            options: {
-              width: 400
-            }
-          }
+          width: 400
         }
       ]
     };
   }
 
-  private handleJoyrideCallback(data: CallBackProps) {
+  private handleJoyrideCallback(data: EventData) {
     const { status } = data;
     const finishedStatuses: readonly string[] = [STATUS.FINISHED, STATUS.SKIPPED];
 
@@ -323,52 +282,30 @@ class Tour extends Component<Props, State> {
     const { run, steps } = this.state;
 
     return (
+      // TODO: [react-joyride v3] 'spotlightClicks' was removed (v3 default: blockTargetInteraction is false).
+      // TODO: [react-joyride v3] 'disableScrollParentFix' was removed with no replacement.
       <Joyride
-        callback={data => this.handleJoyrideCallback(data)}
+        onEvent={data => this.handleJoyrideCallback(data)}
         continuous={true}
         run={run}
         scrollToFirstStep={false}
-        showProgress={true}
-        showSkipButton={true}
-        spotlightClicks={true}
         locale={{
           skip: <strong aria-label="skip">Skip tour</strong>
         }}
         steps={steps}
-        disableOverlayClose={true}
-        disableScrolling={true}
-        disableScrollParentFix={true}
-        spotlightPadding={10}
-        floaterProps={{
-          styles: {
-            floater: {
-              filter: "drop-shadow(0 0 5px rgba(0, 0, 0, 0.5))"
-            },
-            arrow: {
-              length: 12,
-              margin: 3
-            }
-          }
-        }}
         styles={{
-          options: {
-            arrowColor: "#fff",
-            backgroundColor: "#fff",
-            overlayColor: "rgba(20, 20, 20, 0.4)",
-            primaryColor: "#6d98ba",
-            textColor: "#595959",
-            width: 500,
-            zIndex: 1000
-          },
           beacon: {
             display: "none"
           },
+
           tooltip: {
             borderRadius: "3px"
           },
+
           tooltipContainer: {
             textAlign: "left"
           },
+
           tooltipTitle: {
             fontSize: 21,
             color: "#141414",
@@ -376,29 +313,47 @@ class Tour extends Component<Props, State> {
             fontFamily:
               'frank-new, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif'
           },
+
           buttonClose: {
             display: "none"
           },
-          buttonNext: {
+
+          buttonPrimary: {
             borderRadius: "3px",
             fontFamily:
               'frank-new, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif'
           },
+
           buttonBack: {
             fontSize: 14,
             color: "#395c78",
             fontWeight: "bold"
           },
+
           buttonSkip: {
             fontSize: 14,
             color: "#395c78",
             fontWeight: "bold"
           },
+
           tooltipContent: {
             padding: "20px 10px 5px"
           }
         }}
-      />
+        options={{
+          showProgress: true,
+          overlayClickAction: false,
+          skipScroll: true,
+          spotlightPadding: 10,
+          arrowColor: "#fff",
+          backgroundColor: "#fff",
+          overlayColor: "rgba(20, 20, 20, 0.4)",
+          primaryColor: "#6d98ba",
+          textColor: "#595959",
+          width: 500,
+          zIndex: 1000,
+          buttons: ['back', 'close', 'primary', 'skip']
+        }} />
     );
   }
 }

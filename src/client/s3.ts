@@ -1,5 +1,4 @@
 import axios from "axios";
-import { parse, resolve } from "url";
 
 import {
   TypedArrays,
@@ -14,12 +13,12 @@ import { StaticProjectData, WorkerProjectData } from "./types";
 const s3Axios = axios.create();
 
 export function s3ToHttps(path: S3URI): HttpsURI {
-  const uri = parse(path);
-  return resolve(`https://${uri.host}.s3.amazonaws.com`, uri.path || "");
+  const uri = new URL(path);
+  return new URL(uri.pathname, `https://${uri.hostname}.s3.amazonaws.com`).href;
 }
 
 function staticDataUri(path: S3URI, fileName: string): HttpsURI {
-  return resolve(s3ToHttps(path), fileName);
+  return new URL(fileName, s3ToHttps(path)).href;
 }
 
 export async function fetchStaticMetadata(path: S3URI): Promise<IStaticMetadata> {

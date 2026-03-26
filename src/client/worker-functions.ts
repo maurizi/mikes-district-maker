@@ -6,7 +6,7 @@ import { DemographicCounts, GeoUnits, IProject, IStaticMetadata, S3URI } from ".
 import { StaticCounts } from "../client/types";
 import { WorkerFunctions } from "./worker";
 
-const worker = Comlink.wrap<WorkerFunctions>(new Worker(new URL("./worker.ts", import.meta.url)));
+const worker = Comlink.wrap<WorkerFunctions>(new Worker(new URL("./worker.ts", import.meta.url), { type: "module" }));
 
 // eslint-disable-next-line
 function replacer(this: unknown, key: string | number, value: unknown): unknown {

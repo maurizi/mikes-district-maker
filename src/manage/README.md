@@ -30,6 +30,7 @@ USAGE
 <!-- usagestop -->
 # Commands
 <!-- commands -->
+* [`manage prepare-dev-data STATEFIPS STATEABBR`](#manage-prepare-dev-data-statefips-stateabbr)
 * [`manage bulk-reprocess-regions CONFIGFILE`](#manage-bulk-reprocess-regions-configfile)
 * [`manage create-random-projects NUMBER [REGION]`](#manage-create-random-projects-number-region)
 * [`manage help [COMMAND]`](#manage-help-command)
@@ -38,6 +39,52 @@ USAGE
 * [`manage serialize-topojson`](#manage-serialize-topojson)
 * [`manage update-organization CONFIG`](#manage-update-organization-config)
 * [`manage update-region STATICDATADIR UPDATES3DIR`](#manage-update-region-staticdatadir-updates3dir)
+
+## `manage prepare-dev-data STATEFIPS STATEABBR`
+
+Download Census 2020 block data and demographics, optionally join VEST election voting data, and output a GeoJSON file ready for `process-geojson`.
+
+This command automates the data pipeline for creating DistrictBuilder region data from public sources:
+1. Downloads Census TIGER block shapefiles (geometry)
+2. Downloads Block Assignment Files (block → precinct/VTD mapping)
+3. Fetches demographics from the Census API (population, race)
+4. Optionally joins VEST election shapefile voting data
+
+```
+USAGE
+  $ manage prepare-dev-data STATEFIPS STATEABBR [-v <vest.zip>] [-p <field>] [-o <output>]
+
+ARGUMENTS
+  STATEFIPS  2-digit state FIPS code (e.g. 10 for Delaware, 44 for Rhode Island)
+  STATEABBR  State abbreviation (e.g. DE, RI)
+
+FLAGS
+  -v, --vest=<path>               Path to VEST election shapefile zip (optional)
+  -p, --vestPrecinctField=<name>  [default: PRECINCT] Field name for precinct ID in VEST shapefile
+                                  (use VTDST20 for Rhode Island)
+  -o, --output=<path>             [default: dev-data/output.geojson] Output GeoJSON file path
+
+EXAMPLES
+  # Delaware with 2020 presidential voting data
+  $ manage prepare-dev-data 10 DE --vest /data/de_2020.zip -o dev-data/de.geojson
+
+  # Rhode Island (uses VTDST20 for precinct field)
+  $ manage prepare-dev-data 44 RI --vest /data/ri_2020.zip -p VTDST20 -o dev-data/ri.geojson
+
+  # Then process the output:
+  $ manage process-geojson dev-data/de.geojson \
+      -l block,precinct,county -n 8,4,0 -x 14,12,8 \
+      -d population,white,black,asian,hispanic,other \
+      -v democrat,republican,otherparty \
+      -o dev-data/de-output/
+```
+
+The output GeoJSON has these properties on each feature:
+- `block` — Census block GEOID (15-digit)
+- `precinct` — VTD/precinct ID from Block Assignment File
+- `county` — County FIPS code (3-digit)
+- `population`, `white`, `black`, `asian`, `hispanic`, `other` — Census demographics
+- `democrat`, `republican`, `otherparty` — Aggregated presidential votes (if VEST data provided)
 
 ## `manage bulk-reprocess-regions CONFIGFILE`
 

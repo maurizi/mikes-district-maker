@@ -16,14 +16,17 @@ import {
   ParsedBody,
   ParsedRequest
 } from "@dataui/crud";
+import { S3Client } from "@aws-sdk/client-s3";
 import { OptionalJwtAuthGuard } from "../../auth/guards/jwt-auth.guard";
-import { TopologyService } from "../../districts/services/topology.service";
 import { QueryFailedError } from "typeorm";
 import { RegionLookupProperties } from "../../../../shared/entities";
 import { JwtAuthGuard } from "../../auth/guards/jwt-auth.guard";
 import { RegionConfig } from "../entities/region-config.entity";
 import { RegionConfigsService } from "../services/region-configs.service";
+import { fetchCachedJson } from "../../common/functions";
 import * as _ from "lodash";
+
+const s3 = new S3Client({});
 
 @Crud({
   model: {
@@ -52,7 +55,7 @@ export class RegionConfigsController implements CrudController<RegionConfig> {
     return this;
   }
   private readonly logger = new Logger(RegionConfigsController.name);
-  constructor(public service: RegionConfigsService, public topologyService: TopologyService) {}
+  constructor(public service: RegionConfigsService) {}
 
   @Get(":regionId/properties/:geounit")
   @UseGuards(OptionalJwtAuthGuard)
@@ -62,12 +65,17 @@ export class RegionConfigsController implements CrudController<RegionConfig> {
     @Query("fields") fields: string[]
   ): Promise<readonly RegionLookupProperties[]> {
     const regionConfig = await this.service.findOne({ where: { id: regionId } });
-
-    const geoCollection = regionConfig && (await this.topologyService.get(regionConfig));
-    if (!geoCollection) {
+    if (!regionConfig) {
       throw new InternalServerErrorException();
     }
-    const props = (await geoCollection.getTopologyProperties())[geounit];
+
+    const geoProperties = await fetchCachedJson<Record<string, Record<string, unknown>[]>>(
+      s3, regionConfig.s3URI, "geo-properties.json"
+    );
+    const props = geoProperties[geounit];
+    if (!props) {
+      throw new InternalServerErrorException();
+    }
     return fields ? props.map(f => _.pick(f, fields)) : props;
   }
 

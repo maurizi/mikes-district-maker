@@ -180,15 +180,6 @@ async function fetchProject(id: ProjectId): Promise<IProject> {
   });
 }
 
-export async function fetchProjectGeoJson(id: ProjectId): Promise<DistrictsGeoJSON> {
-  return new Promise((resolve, reject) => {
-    apiAxios
-      .get(`/api/projects/${id}/export/geojson`)
-      .then(response => resolve(response.data))
-      .catch(error => reject(error.response.data));
-  });
-}
-
 export async function fetchProjectReferenceLayers(
   id: ProjectId
 ): Promise<readonly IReferenceLayer[]> {
@@ -231,10 +222,13 @@ export async function fetchAllPublishedProjects(
 }
 
 export async function fetchProjectData(id: ProjectId): Promise<DynamicProjectData> {
-  return Promise.all([fetchProject(id), fetchProjectGeoJson(id)]).then(([project, geojson]) => ({
+  // GeoJSON is now computed client-side after static data loads.
+  // Provide empty placeholder here; localMergeComplete will fill it.
+  const project = await fetchProject(id);
+  return {
     project,
-    geojson
-  }));
+    geojson: { type: "FeatureCollection", features: [] }
+  };
 }
 
 export async function fetchRegionConfigs(): Promise<readonly IRegionConfig[]> {
@@ -275,45 +269,16 @@ export async function patchProject(
   });
 }
 
-export async function exportProjectCsv(project: IProject): Promise<void> {
+export async function convertGeoJsonToShapefile(
+  geojson: DistrictsGeoJSON,
+  projectName: string
+): Promise<void> {
   return new Promise((resolve, reject) => {
     apiAxios
-      .get(`/api/projects/${project.id}/export/csv`)
+      .post("/api/projects/convert/shp", geojson, { responseType: "blob" })
       .then(response => {
         return resolve(
-          saveAs(
-            new Blob([response.data], { type: "text/csv;charset=utf-8" }),
-            `${project.name}.csv`
-          )
-        );
-      })
-      .catch(error => reject(error.message));
-  });
-}
-
-export async function exportProjectGeoJson(project: IProject): Promise<void> {
-  return new Promise((resolve, reject) => {
-    apiAxios
-      .get(`/api/projects/${project.id}/export/geojson`)
-      .then(response => {
-        return resolve(
-          saveAs(
-            new Blob([JSON.stringify(response.data)], { type: "application/json" }),
-            `${project.name}.geojson`
-          )
-        );
-      })
-      .catch(error => reject(error.message));
-  });
-}
-
-export async function exportProjectShp(project: IProject): Promise<void> {
-  return new Promise((resolve, reject) => {
-    apiAxios
-      .get(`/api/projects/${project.id}/export/shp`, { responseType: "blob" })
-      .then(response => {
-        return resolve(
-          saveAs(new Blob([response.data], { type: "application/zip" }), `${project.name}.zip`)
+          saveAs(new Blob([response.data], { type: "application/zip" }), `${projectName}.zip`)
         );
       })
       .catch(error => reject(error.message));

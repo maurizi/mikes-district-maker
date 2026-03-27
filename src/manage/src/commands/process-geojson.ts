@@ -28,6 +28,7 @@ import {
   IStaticMetadata,
   DemographicsGroup
 } from "../../../shared/entities";
+import { extractAdjacencyData } from "../lib/extract-adjacency";
 import { geojsonPolygonLabels, tileJoin, tippecanoe } from "../lib/cmd";
 import _ from "lodash";
 
@@ -242,12 +243,12 @@ it when necessary (file sizes ~1GB+).
     if (!flags.inputS3Dir) {
       this.log("No inputS3Dir provided, no sorting needed");
     } else {
-      ux.action.start("Pulling down previous TopoJSON for sorting");
-      const prevTopoJson = await this.readTopoJsonFromS3(flags.inputS3Dir);
+      ux.action.start("Pulling down previous geo-properties for sorting");
+      const prevGeoProperties = await this.readPrevGeoProperties(flags.inputS3Dir);
       ux.action.stop();
 
       this.log("Sorting TopoJSON based on previous version");
-      const errorMessage = this.sortTopoJsonByPrev(topoJsonHierarchy, prevTopoJson, geoLevelIds);
+      const errorMessage = this.sortTopoJsonByPrev(topoJsonHierarchy, prevGeoProperties, geoLevelIds);
       if (errorMessage !== null) {
         this.error(`Error encountered while sorting TopoJSON: "${errorMessage}"`);
       }
@@ -256,6 +257,10 @@ it when necessary (file sizes ~1GB+).
     this.writeTopoJson(flags.outputDir, topoJsonHierarchy, demographicIds, votingIds);
 
     this.addGeoLevelIndices(topoJsonHierarchy, geoLevelIds);
+
+    ux.action.start("Extracting adjacency data");
+    extractAdjacencyData(topoJsonHierarchy, geoLevelIds[0], geoLevelIds, flags.outputDir);
+    ux.action.stop();
 
     // Include source geojson in output to make reprocessing easier
     this.log("Copying source file to output");
@@ -493,8 +498,10 @@ it when necessary (file sizes ~1GB+).
     );
   }
 
-  // Reads a TopoJSON file from S3, given the S3 run directory
-  async readTopoJsonFromS3(inputS3Dir: string): Promise<Topology<Objects<{}>>> {
+  // Reads previous geo-properties from S3 for sorting
+  async readPrevGeoProperties(
+    inputS3Dir: string
+  ): Promise<Record<string, Record<string, unknown>[]>> {
     const s3Client = new S3Client({});
     const uriComponents = inputS3Dir.split("/");
     const bucket = uriComponents[2];
@@ -502,7 +509,7 @@ it when necessary (file sizes ~1GB+).
 
     const response = await s3Client.send(new GetObjectCommand({
       Bucket: bucket,
-      Key: `${keyPrefix}topo.json`
+      Key: `${keyPrefix}geo-properties.json`
     }));
 
     const bodyString = await response.Body!.transformToString();
@@ -882,35 +889,36 @@ it when necessary (file sizes ~1GB+).
   // Sorts TopoJSON in the same order as a reference TopoJSON and performs structural checks
   sortTopoJsonByPrev(
     newTopoJson: Topology<Objects<{}>>,
-    prevTopoJson: Topology<Objects<{}>>,
+    prevGeoProperties: Record<string, Record<string, unknown>[]>,
     geoLevelIds: readonly string[]
   ): string | null {
     const baseLevel = geoLevelIds[0];
     for (const level of geoLevelIds) {
       this.log(`Sorting geolevel: ${level}`);
       const newFeatures = (newTopoJson.objects[level] as any).geometries;
-      const prevFeatures = (prevTopoJson.objects[level] as any).geometries;
-      if (newFeatures.length !== prevFeatures.length) {
-        return `feature count was: ${prevFeatures.length}, and is now: ${newFeatures.length}`;
+      const prevProps = prevGeoProperties[level];
+      if (!prevProps) {
+        return `previous geo-properties missing level: ${level}`;
+      }
+      if (newFeatures.length !== prevProps.length) {
+        return `feature count was: ${prevProps.length}, and is now: ${newFeatures.length}`;
       }
 
-      // For the previous TopoJSON, create a map of geounit id => index, so we can sort quickly
-      const prevIndexMap = prevFeatures.reduce(
-        (acc: Map<string, number>, feature: any, index: number) =>
-          acc.set(feature.properties[level], index),
-        new Map()
-      );
+      // Build map of geounit id => previous index
+      const prevIndexMap = new Map<string, number>();
+      prevProps.forEach((props, index) => {
+        prevIndexMap.set(props[level] as string, index);
+      });
 
-      // Sort new TopoJSON using previous TopoJSON indices as a reference
+      // Sort new TopoJSON using previous ordering
       newFeatures.sort((x: any, y: any) =>
-        prevIndexMap.get(x.properties[level]) > prevIndexMap.get(y.properties[level]) ? 1 : -1
+        prevIndexMap.get(x.properties[level])! > prevIndexMap.get(y.properties[level])! ? 1 : -1
       );
 
-      // Check that all geolevel attributes are the same between new and previous.
-      // Any differences indicate a change in structure, and we can't continue.
+      // Verify all geolevel attributes match between new and previous
       for (let i = 0; i < newFeatures.length; i++) {
         const newProperties = newFeatures[i].properties;
-        const prevProperties = prevFeatures[i].properties;
+        const prevProperties = prevProps[i];
         const baseId = newProperties[baseLevel];
         for (const geoLevel of geoLevelIds) {
           const newProp = newProperties[geoLevel];
@@ -922,7 +930,6 @@ it when necessary (file sizes ~1GB+).
       }
     }
 
-    // A return of null means no errors have been encountered
     return null;
   }
 }

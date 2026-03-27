@@ -9,13 +9,11 @@ import { DeepPartial } from "typeorm";
 import { RegionConfig } from "../../region-configs/entities/region-config.entity";
 import { DEFAULT_PINNED_METRIC_FIELDS, ProjectVisibility } from "../../../../shared/constants";
 import { CrudRequest } from "@dataui/crud";
-import { TopologyService } from "../../districts/services/topology.service";
 
 const moduleMocker = new ModuleMocker(global);
 
 describe("ProjectsController", () => {
   let controller: ProjectsController;
-  let topologyService: TopologyService;
   const userId = "1";
   const projectId = uuid.v4();
   const regionConfig: DeepPartial<RegionConfig> = {
@@ -86,19 +84,16 @@ describe("ProjectsController", () => {
       .compile();
 
     controller = moduleRef.get(ProjectsController);
-    topologyService = moduleRef.get(TopologyService);
   });
 
   describe("updateOne", () => {
-    it("should not load topology when geojson updates are not needed", async () => {
+    it("should handle non-definition updates", async () => {
       const result = await controller.updateOne(
         projectId,
         { parsed: { authPersist: { userId } }, options: null } as unknown as CrudRequest,
         { archived: true }
       );
       expect(result).toBeDefined();
-      // eslint-disable-next-line
-      expect(topologyService.get).not.toHaveBeenCalled();
     });
   });
 });

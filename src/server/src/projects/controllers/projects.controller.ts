@@ -34,6 +34,9 @@ import { Response } from "express";
 import FormData from "form-data";
 import { convert } from "geojson2shp";
 import * as _ from "lodash";
+import { spawn, Thread, Worker } from "threads";
+
+import { SimplifyFunctions } from "../../simplify-worker";
 import isUUID from "validator/lib/isUUID";
 import { Pagination } from "nestjs-typeorm-paginate";
 
@@ -43,21 +46,23 @@ import {
   PLANSCORE_POLL_MS,
   PLANSCORE_POLL_MAX_TRIES
 } from "../../../../shared/constants";
+import { S3Client } from "@aws-sdk/client-s3";
 import {
   DistrictsDefinition,
+  GeoUnitHierarchy,
+  IStaticMetadata,
   ProjectId,
   PublicUserProperties,
   UserId
 } from "../../../../shared/entities";
+import { fetchCachedJson } from "../../common/functions";
 import { ProjectVisibility } from "../../../../shared/constants";
-import { GeoUnitTopology } from "../../districts/entities/geo-unit-topology.entity";
-import { TopologyService } from "../../districts/services/topology.service";
 
 import { JwtAuthGuard, OptionalJwtAuthGuard } from "../../auth/guards/jwt-auth.guard";
 import { RegionConfig } from "../../region-configs/entities/region-config.entity";
 import { User } from "../../users/entities/user.entity";
 import { CreateProjectDto } from "../entities/create-project.dto";
-import { DistrictsGeoJSON, Project, SimplifiedDistrictsGeoJSON } from "../entities/project.entity";
+import { DistrictsGeoJSON, Project } from "../entities/project.entity";
 import { ProjectsService } from "../services/projects.service";
 import { OrganizationsService } from "../../organizations/services/organizations.service";
 
@@ -203,10 +208,10 @@ export class ProjectsController implements CrudController<Project> {
   }
 
   private readonly logger = new Logger(ProjectsController.name);
+  private readonly s3 = new S3Client({});
   constructor(
     public service: ProjectsService,
     public templateService: ProjectTemplatesService,
-    public topologyService: TopologyService,
     private readonly usersService: UsersService,
     private readonly organizationService: OrganizationsService,
     private readonly regionConfigService: RegionConfigsService,
@@ -359,97 +364,34 @@ export class ProjectsController implements CrudController<Project> {
     return project;
   }
 
-  // Helper for obtaining a topology for a given region config, throws exception if not found
-  async getGeoUnitTopology(regionConfig: RegionConfig): Promise<GeoUnitTopology> {
-    const geoCollection = await this.topologyService.get(regionConfig);
-    if (!geoCollection) {
-      throw new NotFoundException(
-        `Topology ${regionConfig.s3URI} not found`,
-        MakeDistrictsErrors.TOPOLOGY_NOT_FOUND
-      );
-    }
-    return geoCollection;
+  // Helper to fetch lightweight S3 data for a region (no topology needed)
+  private async fetchRegionS3Data(
+    regionConfig: RegionConfig
+  ): Promise<{ staticMetadata: IStaticMetadata; hierarchy: GeoUnitHierarchy }> {
+    const [staticMetadata, hierarchy] = await Promise.all([
+      fetchCachedJson<IStaticMetadata>(this.s3, regionConfig.s3URI, "static-metadata.json"),
+      fetchCachedJson<GeoUnitHierarchy>(this.s3, regionConfig.s3URI, "geounit-hierarchy.json")
+    ]);
+    return { staticMetadata, hierarchy };
   }
 
-  async getGeojson({
-    districtsDefinition,
-    numberOfDistricts,
-    user,
-    chamber,
-    regionConfig
-  }: {
-    readonly districtsDefinition: DistrictsDefinition;
-    readonly numberOfDistricts: number;
-    readonly user: User;
-    readonly chamber?: Chamber;
-    readonly regionConfig: RegionConfig;
-  }): Promise<{
-    readonly districts: DistrictsGeoJSON;
-    readonly simplifiedDistricts: SimplifiedDistrictsGeoJSON;
-  }> {
-    const geoCollection = await this.getGeoUnitTopology(regionConfig);
-    const geojson = await geoCollection.merge({
-      districtsDefinition,
-      numberOfDistricts,
-      user,
-      chamber,
-      regionConfig
-    });
-    if (geojson === null) {
-      this.logger.error(`Invalid districts definition for project`);
-      throw new BadRequestException(
-        "District definition is invalid",
-        MakeDistrictsErrors.INVALID_DEFINITION
-      );
-    }
-    return geojson;
+  // Compute districts definition length from hierarchy
+  private computeDistrictsDefLength(hierarchy: GeoUnitHierarchy): number {
+    return hierarchy.length;
   }
 
-  @UseInterceptors(CrudRequestInterceptor)
-  @UseGuards(OptionalJwtAuthGuard)
-  @Get(":id/export/geojson")
-  async exportGeoJSON(@Request() req: any, @Param("id") id: ProjectId): Promise<DistrictsGeoJSON> {
-    const user = req.user as User;
-    const project = await this.getProjectWithDistricts(id, user?.id);
-
-    // If the region is archived we can't calculate districts
-    if (project.regionConfig.archived && !project.districts) {
-      throw new BadRequestException(
-        "Saved district is not available and cannot be calculated",
-        MakeDistrictsErrors.INVALID_DEFINITION
-      );
-    }
-
-    // If the districts are out-of-date, recalculate them and save
-    if (
-      !project.districts ||
-      project.regionConfigVersion.getTime() !== project.regionConfig.version.getTime()
-    ) {
-      const { districts, simplifiedDistricts } = await this.getGeojson(project);
-
-      // Note we don't wait for save to return, and we throw away it's result
-      void this.service.save({
-        ...project,
-        districts,
-        simplifiedDistricts,
-        regionConfigVersion: project.regionConfig.version
-      });
-
-      return districts;
-    }
-
-    return project.districts;
-  }
-
-  @UseInterceptors(CrudRequestInterceptor)
-  @UseGuards(OptionalJwtAuthGuard)
-  @Get(":id/export/shp")
-  async exportShapefile(
-    @Request() req: any,
-    @Param("id") projectId: ProjectId,
+  @Post("convert/shp")
+  async convertToShapefile(
+    @Body() geojson: DistrictsGeoJSON,
     @Res() response: Response
   ): Promise<void> {
-    const geojson = await this.exportGeoJSON(req, projectId);
+    await this.convertGeoJsonToShapefile(geojson, response);
+  }
+
+  private async convertGeoJsonToShapefile(
+    geojson: DistrictsGeoJSON,
+    response: Response
+  ): Promise<void> {
     const formattedGeojson = {
       ...geojson,
       features: geojson.features.map(feature => ({
@@ -469,6 +411,17 @@ export class ProjectsController implements CrudController<Project> {
     await convert(formattedGeojson, response, { layer: "districts" });
   }
 
+  private async simplifyDistricts(districts: DistrictsGeoJSON): Promise<DistrictsGeoJSON> {
+    const worker = await spawn<SimplifyFunctions>(
+      new Worker("../../simplify-worker")
+    );
+    try {
+      return await worker.simplifyDistricts(districts);
+    } finally {
+      await Thread.terminate(worker);
+    }
+  }
+
   @UseInterceptors(CrudRequestInterceptor)
   @UseGuards(OptionalJwtAuthGuard)
   @Get(":id/export/csv")
@@ -478,9 +431,30 @@ export class ProjectsController implements CrudController<Project> {
     @Param("id") projectId: ProjectId
   ): Promise<string> {
     const project = await this.getProject(req, projectId);
-    const geoCollection = await this.getGeoUnitTopology(project.regionConfig);
-    const baseGeoLevel = geoCollection.definition.groups.slice().reverse()[0];
-    const csvRows = await geoCollection.exportToCSV(project.districtsDefinition);
+    const regionConfig = project.regionConfig;
+
+    const [blockIds, hierarchy, metadata] = await Promise.all([
+      fetchCachedJson<string[]>(this.s3, regionConfig.s3URI, "block-ids.json"),
+      fetchCachedJson<GeoUnitHierarchy>(this.s3, regionConfig.s3URI, "geounit-hierarchy.json"),
+      fetchCachedJson<IStaticMetadata>(this.s3, regionConfig.s3URI, "static-metadata.json")
+    ]);
+    const baseGeoLevel = metadata.geoLevelHierarchy[0].id;
+
+    const csvRows: [string, number][] = [];
+    function walkCsv(
+      defn: DistrictsDefinition | number,
+      hier: GeoUnitHierarchy | number
+    ) {
+      if (typeof hier === "number") {
+        csvRows.push([blockIds[hier], typeof defn === "number" ? defn : 0]);
+      } else {
+        for (let i = 0; i < hier.length; i++) {
+          const subDefn = typeof defn === "number" ? defn : defn[i];
+          walkCsv(subDefn as DistrictsDefinition | number, hier[i]);
+        }
+      }
+    }
+    walkCsv(project.districtsDefinition, hierarchy);
 
     return stringify(csvRows, {
       header: true,
@@ -684,8 +658,7 @@ export class ProjectsController implements CrudController<Project> {
     validateNumberOfMembers(dto, existingProject.numberOfDistricts);
 
     if (dto.pinnedMetricFields) {
-      const staticMetadata = (await this.getGeoUnitTopology(existingProject.regionConfig))
-        .staticMetadata;
+      const { staticMetadata } = await this.fetchRegionS3Data(existingProject.regionConfig);
       const allowedDemographicFields = getDemographicsMetricFields(staticMetadata).map(
         ([, field]) => field
       );
@@ -711,15 +684,9 @@ export class ProjectsController implements CrudController<Project> {
     const dataWithDefinitions =
       existingProject &&
       dto.districtsDefinition &&
-      (!existingProject.districts ||
-        existingProject.regionConfigVersion !== existingProject.regionConfig.version ||
-        !_.isEqual(dto.districtsDefinition, existingProject.districtsDefinition))
+      !_.isEqual(dto.districtsDefinition, existingProject.districtsDefinition)
         ? {
             ...dto,
-            ...(await this.getGeojson({
-              ...existingProject,
-              districtsDefinition: dto.districtsDefinition
-            })),
             regionConfigVersion: existingProject.regionConfig.version,
             // PlanScore link is no longer valid when districts are changed
             planscoreUrl: ""
@@ -735,6 +702,12 @@ export class ProjectsController implements CrudController<Project> {
     const data = _.isEqual(_.pick(dataWithDefinitions, fields), _.pick(existingProject, fields))
       ? { ...dataWithDefinitions }
       : { ...dataWithDefinitions, updatedDt: new Date() };
+
+    // If client sent computed districts, simplify for mini-map views
+    if (dto.districts) {
+      const simplified = await this.simplifyDistricts(dto.districts);
+      Object.assign(data, { simplifiedDistricts: simplified });
+    }
 
     return this.service.updateOne(req, {
       ...data,
@@ -781,13 +754,8 @@ export class ProjectsController implements CrudController<Project> {
       throw new NotFoundException(`Unable to find region config: ${dto.regionConfig?.id}`);
     }
 
-    const geoCollection = await this.topologyService.get(regionConfig);
-    if (!geoCollection) {
-      throw new NotFoundException(
-        `Topology ${regionConfig.s3URI} not found`,
-        MakeDistrictsErrors.TOPOLOGY_NOT_FOUND
-      );
-    }
+    const { hierarchy } = await this.fetchRegionS3Data(regionConfig);
+    const districtsDefLength = this.computeDistrictsDefLength(hierarchy);
 
     // Pulls out the fields on ProjectTemplate common to it & Project
     const templateFields = ({
@@ -825,22 +793,14 @@ export class ProjectsController implements CrudController<Project> {
 
     const data = this.formatCreateProjectDto(
       formdata,
-      geoCollection.districtsDefLength,
+      districtsDefLength,
       regionConfig,
       req
     );
 
     try {
-      const project = await this.service.createOne(req, {
-        ...data,
-        ...(await this.getGeojson({
-          numberOfDistricts: formdata.numberOfDistricts,
-          districtsDefinition: data.districtsDefinition,
-          user,
-          chamber: template?.chamber || chamber || undefined,
-          regionConfig
-        }))
-      });
+      // Districts GeoJSON is computed client-side on load
+      const project = await this.service.createOne(req, data);
       // Copy any reference layers associated with the template to the project
       if (template) {
         await this.copyReferenceLayers(project, template.referenceLayers);

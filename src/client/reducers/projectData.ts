@@ -9,6 +9,8 @@ import {
   exportGeoJsonFailure,
   exportShp,
   exportShpFailure,
+  localMergeComplete,
+  localMergeFailure,
   projectDataFetch,
   projectDataFetchFailure,
   projectDataFetchSuccess,
@@ -25,7 +27,6 @@ import {
   updateDistrictLocksFailure,
   updateDistrictLocksSuccess,
   updateDistrictsDefinition,
-  updateDistrictsDefinitionRefetchGeoJsonSuccess,
   updateDistrictsDefinitionSuccess,
   updateProjectFailed,
   updateProjectName,
@@ -59,7 +60,13 @@ import {
   SelectionTool
 } from "../actions/districtDrawing";
 import { updateCurrentState } from "../reducers/undoRedo";
-import { IProject, IReferenceLayer } from "../../shared/entities";
+import {
+  DistrictsDefinition,
+  IProject,
+  IReferenceLayer,
+  IStaticMetadata,
+  S3URI
+} from "../../shared/entities";
 import { ProjectState, initialProjectState } from "./project";
 import { resetProjectState } from "../actions/root";
 import { DistrictsGeoJSON, DynamicProjectData, SavingState, StaticProjectData } from "../types";
@@ -72,29 +79,39 @@ import {
   showResourceFailedToast
 } from "../functions";
 import {
-  exportProjectCsv,
-  exportProjectGeoJson,
-  exportProjectShp,
+  convertGeoJsonToShapefile,
   fetchProjectData,
   fetchProjectReferenceLayers,
   patchReferenceLayer,
-  fetchProjectGeoJson,
   patchProject,
   copyProject,
   deleteReferenceLayer,
   submitProject
 } from "../api";
 import { fetchAllStaticData } from "../s3";
+import { mergeDistricts, exportCsv as workerExportCsv } from "../worker-functions";
+import { saveAs } from "file-saver";
 import { toast } from "react-toastify";
 import { showSubmitMapModal } from "../actions/projectModals";
 
-function fetchGeoJsonForProject(project: IProject) {
-  return () => {
-    return fetchProjectGeoJson(project.id).then((geojson: DistrictsGeoJSON) => ({
-      project,
-      geojson
-    }));
-  };
+async function exportCsvViaWorker(
+  staticMetadata: IStaticMetadata,
+  regionURI: S3URI,
+  districtsDefinition: DistrictsDefinition,
+  projectName: string
+) {
+  const csvContent = await workerExportCsv(staticMetadata, regionURI, districtsDefinition);
+  saveAs(new Blob([csvContent], { type: "text/csv;charset=utf-8" }), `${projectName}.csv`);
+}
+
+function runLocalMerge(
+  staticMetadata: IStaticMetadata,
+  regionURI: S3URI,
+  districtsDefinition: DistrictsDefinition,
+  numberOfDistricts: number
+) {
+  return () =>
+    mergeDistricts(staticMetadata, regionURI, districtsDefinition, numberOfDistricts);
 }
 
 export function getFindCoords(findTool: FindTool, geojson?: DistrictsGeoJSON) {
@@ -341,13 +358,34 @@ const projectDataReducer = (
         ...state,
         deleteReferenceLayer: action.payload
       };
-    case getType(staticDataFetchSuccess):
-      return {
+    case getType(staticDataFetchSuccess): {
+      const newState = {
         ...state,
         staticData: {
           resource: action.payload
         }
       };
+      // Trigger local merge now that we have both project and static data
+      if ("resource" in newState.projectData) {
+        const { project } = newState.projectData.resource;
+        return loop(
+          newState,
+          Cmd.run(
+            runLocalMerge(
+              action.payload.staticMetadata,
+              project.regionConfig.s3URI,
+              project.districtsDefinition,
+              project.numberOfDistricts
+            ),
+            {
+              successActionCreator: localMergeComplete,
+              failActionCreator: localMergeFailure
+            }
+          )
+        );
+      }
+      return newState;
+    }
     case getType(toggleReferenceLayersModal):
       return {
         ...state,
@@ -485,35 +523,69 @@ const projectDataReducer = (
             )
           )
         : state;
-    case getType(updateDistrictsDefinitionSuccess):
-      return loop(
-        state,
-        Cmd.run(fetchGeoJsonForProject(action.payload), {
-          successActionCreator: updateDistrictsDefinitionRefetchGeoJsonSuccess,
-          failActionCreator: updateProjectFailed
-        })
-      );
-    case getType(updateDistrictsDefinitionRefetchGeoJsonSuccess): {
-      const findCoords = getFindCoords(state.findTool, action.payload.geojson);
-
-      return "resource" in state.projectData
-        ? updateCurrentState(
+    case getType(updateDistrictsDefinitionSuccess): {
+      // Server returned updated project. Compute GeoJSON locally.
+      const updatedProject = action.payload;
+      if ("resource" in state.staticData) {
+        return loop(
+          {
+            ...state,
+            projectData: {
+              resource: {
+                project: updatedProject,
+                geojson: "resource" in state.projectData
+                  ? state.projectData.resource.geojson
+                  : { type: "FeatureCollection", features: [] }
+              }
+            }
+          },
+          Cmd.run(
+            runLocalMerge(
+              state.staticData.resource.staticMetadata,
+              updatedProject.regionConfig.s3URI,
+              updatedProject.districtsDefinition,
+              updatedProject.numberOfDistricts
+            ),
             {
-              ...state,
-              projectData: {
-                resource: action.payload
-              },
-              findIndex:
-                state.findIndex !== undefined && findCoords && findCoords.length !== 0
-                  ? Math.min(state.findIndex, findCoords.length - 1)
-                  : undefined
-            },
-            {
-              districtsDefinition: action.payload.project.districtsDefinition
+              successActionCreator: localMergeComplete,
+              failActionCreator: localMergeFailure
             }
           )
-        : state;
+        );
+      }
+      return state;
     }
+    case getType(localMergeComplete): {
+      if ("resource" in state.projectData) {
+        const geojson = action.payload;
+        const { project } = state.projectData.resource;
+        const findCoords = getFindCoords(state.findTool, geojson);
+        // Fire-and-forget: persist GeoJSON to server (server simplifies for mini-map views)
+        void patchProject(project.id, { districts: geojson } as any);
+        return updateCurrentState(
+          {
+            ...state,
+            saving: "saved",
+            projectData: {
+              resource: { project, geojson }
+            },
+            findIndex:
+              state.findIndex !== undefined && findCoords && findCoords.length !== 0
+                ? Math.min(state.findIndex, findCoords.length - 1)
+                : undefined
+          },
+          {
+            districtsDefinition: project.districtsDefinition
+          }
+        );
+      }
+      return state;
+    }
+    case getType(localMergeFailure):
+      return loop(
+        { ...state, saving: "failed" },
+        Cmd.run(showActionFailedToast)
+      );
     case getType(updateProjectFailed):
       return loop(
         {
@@ -652,34 +724,64 @@ const projectDataReducer = (
         saving: "unsaved",
         duplicatedProject: null
       };
-    case getType(exportCsv):
-      return loop(
-        state,
-        Cmd.run(exportProjectCsv, {
-          failActionCreator: exportCsvFailure,
-          args: [action.payload] as Parameters<typeof exportProjectCsv>
-        })
-      );
+    case getType(exportCsv): {
+      const csvStaticData = "resource" in state.staticData ? state.staticData.resource : undefined;
+      if (csvStaticData) {
+        const project = action.payload;
+        return loop(
+          state,
+          Cmd.run(
+            () =>
+              exportCsvViaWorker(
+                csvStaticData.staticMetadata,
+                project.regionConfig.s3URI,
+                project.districtsDefinition,
+                project.name
+              ),
+            {
+              failActionCreator: exportCsvFailure
+            }
+          )
+        );
+      }
+      return state;
+    }
     case getType(exportCsvFailure):
       return loop(state, Cmd.run(showActionFailedToast));
-    case getType(exportGeoJson):
-      return loop(
-        state,
-        Cmd.run(exportProjectGeoJson, {
-          failActionCreator: exportGeoJsonFailure,
-          args: [action.payload] as Parameters<typeof exportProjectGeoJson>
-        })
-      );
+    case getType(exportGeoJson): {
+      const geojsonData =
+        "resource" in state.projectData ? state.projectData.resource.geojson : undefined;
+      if (geojsonData) {
+        return loop(
+          state,
+          Cmd.run(
+            () =>
+              saveAs(
+                new Blob([JSON.stringify(geojsonData)], { type: "application/json" }),
+                `${action.payload.name}.geojson`
+              ),
+            { failActionCreator: exportGeoJsonFailure }
+          )
+        );
+      }
+      return state;
+    }
     case getType(exportGeoJsonFailure):
       return loop(state, Cmd.run(showActionFailedToast));
-    case getType(exportShp):
-      return loop(
-        state,
-        Cmd.run(exportProjectShp, {
-          failActionCreator: exportShpFailure,
-          args: [action.payload] as Parameters<typeof exportProjectCsv>
-        })
-      );
+    case getType(exportShp): {
+      const shpGeojson =
+        "resource" in state.projectData ? state.projectData.resource.geojson : undefined;
+      if (shpGeojson) {
+        return loop(
+          state,
+          Cmd.run(
+            () => convertGeoJsonToShapefile(shpGeojson, action.payload.name),
+            { failActionCreator: exportShpFailure }
+          )
+        );
+      }
+      return state;
+    }
     case getType(exportShpFailure):
       return loop(state, Cmd.run(showActionFailedToast));
     case getType(projectSubmit): {

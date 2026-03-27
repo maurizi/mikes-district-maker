@@ -8,24 +8,57 @@ import {
   Query
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
+import { S3Client } from "@aws-sdk/client-s3";
 import csvParse from "csv-parse";
 import { Express } from "express";
 
 import {
+  DistrictsDefinition,
+  GeoUnitHierarchy,
   ImportRowFlag,
   DistrictsImportApiResponse,
   DistrictImportField,
   RegionConfigId
 } from "../../../../shared/entities";
 import { FIPS, MAX_IMPORT_ERRORS } from "../../../../shared/constants";
-import { TopologyService } from "../services/topology.service";
 
 import { RegionConfigsService } from "../../region-configs/services/region-configs.service";
+import { fetchCachedJson } from "../../common/functions";
+
+const s3 = new S3Client({});
+
+function importCsvToDefinition(
+  blockIds: readonly string[],
+  geoUnitHierarchy: GeoUnitHierarchy,
+  blockToDistrict: { readonly [blockId: string]: number }
+): DistrictsDefinition {
+  const idToIndex = new Map<string, number>();
+  for (let i = 0; i < blockIds.length; i++) {
+    idToIndex.set(blockIds[i], i);
+  }
+  const assignment = new Uint8Array(blockIds.length);
+  for (const [blockId, district] of Object.entries(blockToDistrict)) {
+    const idx = idToIndex.get(blockId);
+    if (idx !== undefined) {
+      assignment[idx] = district;
+    }
+  }
+  function walk(hierarchy: GeoUnitHierarchy | number): DistrictsDefinition | number {
+    if (typeof hierarchy === "number") {
+      return assignment[hierarchy];
+    }
+    const results: (DistrictsDefinition | number)[] = hierarchy.map(h => walk(h));
+    if (results.length !== 1 && results.every(item => item === results[0])) {
+      return results[0];
+    }
+    return results;
+  }
+  return walk(geoUnitHierarchy) as DistrictsDefinition;
+}
 
 @Controller("api/districts")
 export class DistrictsController {
   constructor(
-    public topologyService: TopologyService,
     private readonly regionConfigService: RegionConfigsService
   ) {}
 
@@ -73,8 +106,7 @@ export class DistrictsController {
             archived: false
           }
     });
-    const geoCollection = regionConfig && (await this.topologyService.get(regionConfig));
-    if (!geoCollection) {
+    if (!regionConfig) {
       throw new InternalServerErrorException();
     }
 
@@ -109,14 +141,15 @@ export class DistrictsController {
     });
 
     const unflaggedRows = records.filter((record, i) => !flaggedRows[i]);
-    const baseGeoLevel = geoCollection.definition.groups.slice().reverse()[0];
-    const baseGeoUnitProperties = (await geoCollection.getTopologyProperties())[baseGeoLevel];
+
+    // Fetch block IDs and hierarchy from S3 with disk cache
+    const [blockIds, geoUnitHierarchy] = await Promise.all([
+      fetchCachedJson<string[]>(s3, regionConfig.s3URI, "block-ids.json"),
+      fetchCachedJson<GeoUnitHierarchy>(s3, regionConfig.s3URI, "geounit-hierarchy.json")
+    ]);
 
     // Find unmatched records
-    const allBlockIds: Set<unknown> = new Set(
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-      baseGeoUnitProperties.map((props: any) => props[baseGeoLevel])
-    );
+    const allBlockIds: Set<string> = new Set(blockIds);
     const invalidRecords = records.filter((record, i) => {
       if (!allBlockIds.has(record[0]) && !flaggedRows[i]) {
         setFlag(record, i, "BLOCKID", "Invalid block ID");
@@ -135,7 +168,7 @@ export class DistrictsController {
     const blockToDistricts = Object.fromEntries(
       unflaggedRows.map(([block, district]) => [block, Number(district)])
     );
-    const districtsDefinition = await geoCollection.importFromCSV(blockToDistricts);
+    const districtsDefinition = importCsvToDefinition(blockIds, geoUnitHierarchy, blockToDistricts);
 
     const maxDistrictId = Object.values(blockToDistricts).reduce((a, b) => Math.max(a, b), 0);
     const rowFlags = flaggedRows.filter(r => !!r);

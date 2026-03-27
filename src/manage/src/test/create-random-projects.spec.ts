@@ -16,19 +16,21 @@ jest.mock("../lib/dbUtils", () => {
     createDataSource: jest.fn()
   };
 });
-jest.mock("../../../server/src/worker");
-jest.mock("../../../server/src/districts/services/worker-pool.service", () => {
+
+// Mock S3 to return a simple hierarchy
+const mockHierarchy = JSON.stringify([0, 1, 2]);
+jest.mock("../../../server/src/common/functions", () => {
+  const original = jest.requireActual("../../../server/src/common/functions");
   return {
-    WorkerPoolService: jest.fn().mockImplementation(() => ({
-      getTopologyProperties: () => Promise.resolve({ county: [] }),
-      merge: () =>
-        Promise.resolve({
-          districts: { type: "FeatureCollection", features: [] },
-          simplifiedDistricts: { type: "FeatureCollection", features: [] }
-        })
-    }))
+    ...original,
+    getObject: jest.fn().mockResolvedValue({
+      Body: {
+        transformToString: () => Promise.resolve(mockHierarchy)
+      }
+    })
   };
 });
+
 jest.useFakeTimers({ advanceTimers: true });
 
 describe("Create random projects", () => {
@@ -66,7 +68,6 @@ describe("Create random projects", () => {
     });
 
     mockedCreateDataSource.mockImplementation(() => Promise.resolve(connection));
-    // Create database tables
     await connection.synchronize();
     dbBackup = testDb.backup();
   });
@@ -122,27 +123,4 @@ describe("Create random projects", () => {
       expect(await projectRepo.count()).toBe(0);
     }
   });
-
-  it("should wait until all layers have loaded", async () => {
-    expect.assertions(2);
-    // We download at most 6 layers at a time in development, so having 7 regions
-    // should mean at least one is still pending
-    await Promise.all(
-      [
-        "s3://global-districtbuilder-dev-us-east-1/regions/US/DE/2020-09-09T19:50:10.921Z/",
-        "s3://global-districtbuilder-dev-us-east-1/regions/US/CT/2021-10-26T00:33:03.521Z/",
-        "s3://global-districtbuilder-dev-us-east-1/regions/US/DC/2021-08-13T09:30:57.826Z/",
-        "s3://global-districtbuilder-dev-us-east-1/regions/US/ND/2021-11-09T05:17:57.283Z/",
-        "s3://global-districtbuilder-dev-us-east-1/regions/US/PR/2022-01-07T22:22:27.542Z/",
-        "s3://global-districtbuilder-dev-us-east-1/regions/US/RI/2021-08-13T08:34:27.788Z/",
-        "s3://global-districtbuilder-dev-us-east-1/regions/US/VT/2021-08-13T09:51:55.169Z/"
-      ].map(addRegion)
-    );
-    try {
-      await CreateRandomProjects.run(["1", "VT"]);
-    } catch (err: any) {
-      expect(err.oclif.exit).toBe(0);
-      expect(await projectRepo.count()).toBe(1);
-    }
-  }, 60_000);
 });

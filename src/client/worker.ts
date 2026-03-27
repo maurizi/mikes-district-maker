@@ -11,22 +11,38 @@ import {
   NestedArray,
   S3URI
 } from "../shared/entities";
-import { StaticCounts } from "../client/types";
+import { StaticCounts, DistrictsGeoJSON } from "../client/types";
 import {
   getDemographics as getDemographicsBase,
   getVoting as getVotingBase
 } from "../shared/functions";
 import { allGeoUnitIndices } from "./functions";
-import { fetchWorkerStaticData } from "./s3";
+import { fetchWorkerStaticData, fetchAdjacencyData, fetchBlockIds } from "./s3";
 import { WorkerProjectData } from "./types";
+import {
+  AdjacencyData,
+  ReverseIndex,
+  buildReverseIndex,
+  buildBlockAssignment,
+  computeDistrictBoundaries
+} from "./boundary";
 
 interface RegionData {
   readonly uri: S3URI;
   readonly data: Promise<WorkerProjectData>;
 }
 
+interface CachedAdjacency {
+  readonly uri: S3URI;
+  readonly data: Promise<AdjacencyData>;
+  reverseIndex?: ReverseIndex;
+  numBlocks?: number;
+}
+
 // eslint-disable-next-line
 let regionData: RegionData | undefined;
+// eslint-disable-next-line
+let cachedAdjacency: CachedAdjacency | undefined;
 
 function fetchRegionData(regionURI: S3URI, staticMetadata: IStaticMetadata): RegionData {
   // eslint-disable-next-line
@@ -37,6 +53,41 @@ function fetchRegionData(regionURI: S3URI, staticMetadata: IStaticMetadata): Reg
     };
   }
   return regionData;
+}
+
+function getAdjacencyData(regionURI: S3URI): CachedAdjacency {
+  // eslint-disable-next-line
+  if (!cachedAdjacency || cachedAdjacency.uri !== regionURI) {
+    cachedAdjacency = {
+      uri: regionURI,
+      data: fetchAdjacencyData(regionURI)
+    };
+  }
+  return cachedAdjacency;
+}
+
+async function getAdjacencyWithIndex(
+  regionURI: S3URI,
+  numBlocks: number
+): Promise<{ adjacencyData: AdjacencyData; reverseIndex: ReverseIndex }> {
+  const cached = getAdjacencyData(regionURI);
+  const adjacencyData = await cached.data;
+  if (!cached.reverseIndex || cached.numBlocks !== numBlocks) {
+    cached.reverseIndex = buildReverseIndex(adjacencyData.adjacency, numBlocks);
+    cached.numBlocks = numBlocks;
+  }
+  return { adjacencyData, reverseIndex: cached.reverseIndex };
+}
+
+// eslint-disable-next-line
+let cachedBlockIds: { uri: S3URI; data: Promise<readonly string[]> } | undefined;
+
+function getBlockIds(regionURI: S3URI): Promise<readonly string[]> {
+  // eslint-disable-next-line
+  if (!cachedBlockIds || cachedBlockIds.uri !== regionURI) {
+    cachedBlockIds = { uri: regionURI, data: fetchBlockIds(regionURI) };
+  }
+  return cachedBlockIds.data;
 }
 
 async function getDemographics(
@@ -95,7 +146,132 @@ function accumulateBaseIndices(geoUnitHierarchy: GeoUnitHierarchy): number[] {
   return baseIndices;
 }
 
+function exportDistrictsToCsv(
+  blockIds: readonly string[],
+  districtsDefinition: DistrictsDefinition,
+  geoUnitHierarchy: GeoUnitHierarchy
+): string {
+  const rows: string[] = ["BLOCKID,DISTRICT"];
+  function walk(defn: DistrictsDefinition | number, hierarchy: GeoUnitHierarchy | number) {
+    if (typeof hierarchy === "number") {
+      const districtId = typeof defn === "number" ? defn : 0;
+      rows.push(`${blockIds[hierarchy]},${districtId}`);
+    } else {
+      for (let i = 0; i < hierarchy.length; i++) {
+        const subDefn = typeof defn === "number" ? defn : defn[i];
+        walk(subDefn as DistrictsDefinition | number, hierarchy[i]);
+      }
+    }
+  }
+  walk(districtsDefinition, geoUnitHierarchy);
+  return rows.join("\n");
+}
+
+function importCsvToDefinition(
+  blockIds: readonly string[],
+  geoUnitHierarchy: GeoUnitHierarchy,
+  blockToDistrict: { readonly [blockId: string]: number }
+): DistrictsDefinition {
+  // Build reverse lookup: blockId → index
+  const idToIndex = new Map<string, number>();
+  for (let i = 0; i < blockIds.length; i++) {
+    idToIndex.set(blockIds[i], i);
+  }
+
+  // Build flat assignment array
+  const assignment = new Uint8Array(blockIds.length);
+  for (const [blockId, district] of Object.entries(blockToDistrict)) {
+    const idx = idToIndex.get(blockId);
+    if (idx !== undefined) {
+      assignment[idx] = district;
+    }
+  }
+
+  // Walk hierarchy and build definition, simplifying where possible
+  function walk(hierarchy: GeoUnitHierarchy | number): DistrictsDefinition | number {
+    if (typeof hierarchy === "number") {
+      return assignment[hierarchy];
+    }
+    const results: (DistrictsDefinition | number)[] = hierarchy.map(h => walk(h));
+    // Simplify: if all children are the same value, collapse
+    if (results.length !== 1 && results.every(item => item === results[0])) {
+      return results[0];
+    }
+    return results;
+  }
+  return walk(geoUnitHierarchy) as DistrictsDefinition;
+}
+
 const functions = {
+  mergeDistricts: async (
+    staticMetadata: IStaticMetadata,
+    regionURI: S3URI,
+    districtsDefinition: DistrictsDefinition,
+    numberOfDistricts: number
+  ): Promise<DistrictsGeoJSON> => {
+    const data = await fetchRegionData(regionURI, staticMetadata).data;
+    const numBlocks = accumulateBaseIndices(data.geoUnitHierarchy).length;
+    const { adjacencyData, reverseIndex } = await getAdjacencyWithIndex(regionURI, numBlocks);
+    const assignment = buildBlockAssignment(districtsDefinition, data.geoUnitHierarchy, numBlocks);
+    const boundaries = computeDistrictBoundaries(
+      adjacencyData,
+      reverseIndex,
+      assignment,
+      numberOfDistricts
+    );
+
+    // Build per-district block indices for demographics
+    const districtBlockIndices: number[][] = Array.from(
+      { length: numberOfDistricts + 1 },
+      () => []
+    );
+    for (let i = 0; i < numBlocks; i++) {
+      districtBlockIndices[assignment[i]].push(i);
+    }
+
+    return {
+      type: "FeatureCollection",
+      features: boundaries.map((b, i) => ({
+        type: "Feature" as const,
+        id: i,
+        geometry: b.geometry,
+        properties: {
+          compactness: b.compactness,
+          contiguity: b.contiguity,
+          demographics: getDemographicsBase(
+            districtBlockIndices[i],
+            staticMetadata,
+            data.staticDemographics
+          ),
+          voting: data.staticVotingData
+            ? getVotingBase(districtBlockIndices[i], staticMetadata, data.staticVotingData)
+            : {}
+        }
+      }))
+    };
+  },
+  exportCsv: async (
+    staticMetadata: IStaticMetadata,
+    regionURI: S3URI,
+    districtsDefinition: DistrictsDefinition
+  ): Promise<string> => {
+    const [data, blockIds] = await Promise.all([
+      fetchRegionData(regionURI, staticMetadata).data,
+      getBlockIds(regionURI)
+    ]);
+    return exportDistrictsToCsv(blockIds, districtsDefinition, data.geoUnitHierarchy);
+  },
+  importCsv: async (
+    staticMetadata: IStaticMetadata,
+    regionURI: S3URI,
+    blockToDistrict: { readonly [blockId: string]: number }
+  ): Promise<DistrictsDefinition> => {
+    const [data, blockIds] = await Promise.all([
+      fetchRegionData(regionURI, staticMetadata).data,
+      getBlockIds(regionURI)
+    ]);
+    return importCsvToDefinition(blockIds, data.geoUnitHierarchy, blockToDistrict);
+  },
   getTotalSelectedDemographics: async (
     staticMetadata: IStaticMetadata,
     regionURI: S3URI,

@@ -14,9 +14,10 @@ import {
   Post,
   Body
 } from "@nestjs/common";
+import { S3Client } from "@aws-sdk/client-s3";
 import stringify from "csv-stringify/lib/sync";
 
-import { OrganizationSlug, ProjectTemplateId } from "../../../../shared/entities";
+import { IStaticMetadata, OrganizationSlug, ProjectTemplateId } from "../../../../shared/entities";
 
 import { JwtAuthGuard, OptionalJwtAuthGuard } from "../../auth/guards/jwt-auth.guard";
 import { Organization } from "../../organizations/entities/organization.entity";
@@ -24,21 +25,22 @@ import { OrganizationsService } from "../../organizations/services/organizations
 
 import { ProjectTemplate } from "../entities/project-template.entity";
 import { ProjectTemplatesService } from "../services/project-templates.service";
-import { TopologyService } from "../../districts/services/topology.service";
-import { GeoUnitTopology } from "../../districts/entities/geo-unit-topology.entity";
 import { getDemographicLabel } from "../../../../shared/functions";
 import { CreateProjectTemplateDto } from "../entities/create-project-template.dto";
 import { ProjectsService } from "../../projects/services/projects.service";
 import { ReferenceLayersService } from "../../reference-layers/services/reference-layers.service";
+import { fetchCachedJson } from "../../common/functions";
 
-function getIds(
-  topoLayers: { [s3uri: string]: GeoUnitTopology },
+const s3 = new S3Client({});
+
+function getMetadataIds(
+  metadataMap: { [s3uri: string]: IStaticMetadata },
   prop: "demographics" | "voting"
 ): readonly string[] {
   return [
     ...new Set(
-      Object.values(topoLayers).flatMap(layer => {
-        const data = layer && layer.staticMetadata[prop];
+      Object.values(metadataMap).flatMap(metadata => {
+        const data = metadata[prop];
         return data ? data.map(file => file.id) : [];
       })
     )
@@ -51,8 +53,7 @@ export class ProjectTemplatesController {
     private readonly service: ProjectTemplatesService,
     private readonly projectsService: ProjectsService,
     private readonly referenceLayersService: ReferenceLayersService,
-    private readonly orgService: OrganizationsService,
-    private readonly topologyService: TopologyService
+    private readonly orgService: OrganizationsService
   ) {}
 
   async getOrg(organizationSlug: OrganizationSlug): Promise<Organization> {
@@ -116,8 +117,6 @@ export class ProjectTemplatesController {
     );
 
     const refLayers = await this.referenceLayersService.getProjectReferenceLayers(project.id);
-    // We need to wait for reference layers to be copied, but then we don't
-    // actually need to do anything with the result
     await Promise.all(
       refLayers.map(refLayer =>
         this.referenceLayersService.create({
@@ -155,18 +154,16 @@ export class ProjectTemplatesController {
         `User does not have admin privileges for organization: ${org.id}`
       );
     }
-    // The associated 'districts' column may be out-of-date if the RegionConfig has been updated
-    // We don't make an attempt to regenerate those here, and accept that we will return whatever data was
-    // available when the user last updated their project
     const projectRows = await this.service.findAdminOrgProjectsWithDistrictProperties(slug);
     const regionURIs = new Set(projectRows.map(row => row.regionS3URI));
-    const topoLayers: { [s3uri: string]: GeoUnitTopology } = {};
-    // eslint-disable-next-line
-    for (const [s3uri, layerPromise] of Object.entries(this.topologyService.layers() || {})) {
-      const layer = await layerPromise;
-      if (layer && regionURIs.has(s3uri)) {
-        // eslint-disable-next-line
-        topoLayers[s3uri] = layer;
+
+    // Fetch static metadata per region from S3 (no topology needed)
+    const metadataMap: { [s3uri: string]: IStaticMetadata } = {};
+    for (const uri of regionURIs) {
+      try {
+        metadataMap[uri] = await fetchCachedJson<IStaticMetadata>(s3, uri, "static-metadata.json");
+      } catch {
+        // Skip regions where metadata is unavailable
       }
     }
 
@@ -185,15 +182,14 @@ export class ProjectTemplatesController {
       "Plan score link"
     ];
     const districtColumns = ["District number", "Contiguity", "Compactness"];
-    const demographicsColumns = getIds(topoLayers, "demographics");
-    const votingColumns = getIds(topoLayers, "voting");
+    const demographicsColumns = getMetadataIds(metadataMap, "demographics");
+    const votingColumns = getMetadataIds(metadataMap, "voting");
 
     const formatDate = (date: Date) => date.toISOString().split("T")[0];
 
     const rows = projectRows.flatMap(row =>
       row.districtProperties.map((districtProps, idx) => {
-        const topo = topoLayers[row.regionS3URI];
-        if (!topo) {
+        if (!metadataMap[row.regionS3URI]) {
           throw new InternalServerErrorException();
         }
 

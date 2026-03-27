@@ -5,9 +5,6 @@ import { AppModule } from "./app.module";
 import { BadRequestExceptionFilter } from "./common/bad-request-exception.filter";
 import { DEBUG } from "../../shared/constants";
 import * as bodyParser from "body-parser";
-import { DistrictsModule } from "./districts/districts.module";
-import { TopologyService } from "./districts/services/topology.service";
-
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, {
     logger: DEBUG ? ["debug", "verbose", "log", "warn", "error"] : ["log", "warn", "error"]
@@ -24,10 +21,6 @@ async function bootstrap(): Promise<void> {
   app.useGlobalFilters(new BadRequestExceptionFilter());
   app.use(bodyParser.json({ limit: "25mb" }));
   app.use(bodyParser.urlencoded({ limit: "25mb", extended: true }));
-
-  // Start TopoJSON loading
-  const topologyService = app.select(DistrictsModule).get(TopologyService, { strict: true });
-  topologyService.loadLayers().catch(() => app.close());
 
   // Save the output of 'listen' to a variable, which is a Node http.Server
   const server = await app.listen(3005);

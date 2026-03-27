@@ -9,7 +9,7 @@ import {
   ReferenceLayerId,
   UpdateReferenceLayer
 } from "../../shared/entities";
-import { DynamicProjectData, StaticProjectData } from "../types";
+import { DistrictsGeoJSON, DynamicProjectData, StaticProjectData } from "../types";
 import { ResourceFailure } from "../resource";
 
 interface PinnedMetrics {
@@ -91,9 +91,6 @@ export const updateDistrictsDefinition = createAction(
 export const updateDistrictsDefinitionSuccess = createAction(
   "Update districts definition success"
 )<IProject>();
-export const updateDistrictsDefinitionRefetchGeoJsonSuccess = createAction(
-  "Update districts definition refetch geojson success"
-)<DynamicProjectData>();
 
 export const updateDistrictLocks = createAction("Update district locks")<LockedDistricts>();
 export const updateDistrictLocksSuccess = createAction(
@@ -126,6 +123,9 @@ export const exportGeoJsonFailure = createAction("Export project GeoJSON failure
 
 export const exportShp = createAction("Export project Shapefile")<IProject>();
 export const exportShpFailure = createAction("Export project Shapefile failure")<string>();
+
+export const localMergeComplete = createAction("Local merge complete")<DistrictsGeoJSON>();
+export const localMergeFailure = createAction("Local merge failure")();
 
 export const projectSubmit = createAction("Project submit")();
 export const projectSubmitSuccess = createAction("Project submit success")<DynamicProjectData>();

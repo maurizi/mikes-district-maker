@@ -8,6 +8,7 @@ import {
   IStaticMetadata,
   S3URI
 } from "../shared/entities";
+import { AdjacencyData } from "./boundary";
 import { StaticProjectData, WorkerProjectData } from "./types";
 
 const s3Axios = axios.create();
@@ -90,6 +91,26 @@ export async function fetchAllStaticData(path: S3URI): Promise<StaticProjectData
       geoUnitHierarchy,
       staticGeoLevels
     }));
+}
+
+export async function fetchBlockIds(path: S3URI): Promise<readonly string[]> {
+  const response = await s3Axios.get(staticDataUri(path, "block-ids.json"));
+  return response.data;
+}
+
+export async function fetchAdjacencyData(path: S3URI): Promise<AdjacencyData> {
+  const [adjResp, offsetsResp, coordsResp, transformResp] = await Promise.all([
+    s3Axios.get(staticDataUri(path, "adjacency.bin"), { responseType: "arraybuffer" }),
+    s3Axios.get(staticDataUri(path, "arc-offsets.bin"), { responseType: "arraybuffer" }),
+    s3Axios.get(staticDataUri(path, "arc-coords.bin"), { responseType: "arraybuffer" }),
+    s3Axios.get(staticDataUri(path, "transform.json"))
+  ]);
+  return {
+    adjacency: new Int32Array(adjResp.data),
+    arcOffsets: new Uint32Array(offsetsResp.data),
+    arcCoords: coordsResp.data,
+    transform: transformResp.data
+  };
 }
 
 export async function fetchWorkerStaticData(

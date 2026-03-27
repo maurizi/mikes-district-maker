@@ -7,8 +7,6 @@ import { IRegionConfig } from "../../shared/entities";
 import { RegionConfig } from "../src/region-configs/entities/region-config.entity";
 import { RegionConfigsService } from "../src/region-configs/services/region-configs.service";
 import { DistrictsModule } from "../src/districts/districts.module";
-import { TopologyService } from "../src/districts/services/topology.service";
-import { WorkerPoolService } from "../src/districts/services/worker-pool.service";
 
 describe("DistrictsController", () => {
   let app: INestApplication;
@@ -22,10 +20,10 @@ describe("DistrictsController", () => {
     version: new Date("2020-09-09T19:50:10.921Z")
   } as IRegionConfig;
 
-  let regionConfigsService = {
-    findOne: (conditions: unknown) => Promise.resolve(region)
+  const regionConfigsService = {
+    findOne: () => Promise.resolve(region)
   };
-  let regionConfigsRepo = {
+  const regionConfigsRepo = {
     find: () => Promise.resolve([region])
   };
 
@@ -41,15 +39,10 @@ describe("DistrictsController", () => {
 
     app = moduleRef.createNestApplication();
     await app.init();
-    app.select(DistrictsModule).get(TopologyService, { strict: true }).loadLayers();
   });
 
   afterAll(async () => {
     await app.close();
-  });
-
-  afterEach(async () => {
-    await app.select(DistrictsModule).get(WorkerPoolService, { strict: true }).terminatePool();
   });
 
   describe("import plan from block equivalency CSV", () => {

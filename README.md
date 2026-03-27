@@ -8,11 +8,9 @@ DistrictBuilder is web-based, open source software for collaborative redistricti
 
 - [Requirements](#requirements)
 - [Development](#development)
-  - [Host Environments](#host-environments)
-    - [Linux](#linux)
-    - [macOS](#macos)
-  - [Hot Reloading 🔥](#hot-reloading-)
+  - [Getting Started](#getting-started)
   - [Remote Server Proxy](#remote-server-proxy)
+  - [Development Data](#development-data)
   - [Project Organization](#project-organization)
   - [Stack](#stack)
   - [Ports](#ports)
@@ -21,264 +19,129 @@ DistrictBuilder is web-based, open source software for collaborative redistricti
 
 ## Requirements
 
-- [Docker Engine](https://docs.docker.com/install/) 17.12+
-- [Docker Compose](https://docs.docker.com/compose/install/) 1.21+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (includes Docker Engine and Docker Compose v2)
+- An AWS credential profile named `district-builder` for S3 access
 
 ## Development
 
-_Optional:_
-Ensure that you have an AWS credential profile for `district-builder` configured on your host system.
-The server backend will use this in order to access S3 assets if present, and any `manage` commands that use S3 assets will **require** it.
+### Getting Started
 
-### Host Environments
-
-The Docker containers used in development work very well on Linux, but require an additional layer of translation when running on non-Linux hosts. In particular, there are significant file-watching costs, which result in high CPU usage on macOS. On macOS, it is more efficient to run the containers within a Linux VM created with Vagrant.
-
-#### Linux
-
-On Linux, run `scripts/setup` to prepare the development environment:
+Run `scripts/setup` to prepare the development environment:
 
 ```bash
-$ ./scripts/setup
+./scripts/setup
 ```
 
-All other scripts can be run natively from the host, e.g.
+Then bring up all services:
 
 ```bash
-$ ./scripts/update
+./scripts/server
 ```
 
-#### macOS
-
-On macOS, use the `--vagrant` flag to create a Vagrant VM instead:
-
-```bash
-$ ./scripts/setup --vagrant
-```
-
-All other scripts must be run from the Vagrant VM, e.g.
-
-```bash
-$ vagrant ssh
-vagrant@vagrant:/vagrant$ ./scripts/update
-```
-
-or
-
-```bash
-$ vagrant ssh -c 'cd /vagrant && ./scripts/update'
-```
-
-For brevity, this document will use Linux examples throughout. You should run the scripts from the appropriate environment.
-
-_Note:_ It is recommended to configure your editor to auto-format your code via Prettier on save.
+This starts the PostgreSQL/PostGIS database, NestJS backend, and Vite dev server. The frontend is available at [http://localhost:3003](http://localhost:3003) with hot module replacement. The NestJS backend restarts automatically when changes are made.
 
 #### Windows
 
-For Windows, please install [WSL2](https://docs.microsoft.com/en-us/windows/wsl/install) and [Docker Desktop](https://hub.docker.com/editions/community/docker-ce-desktop-windows), and enable the [WSL2-based docker backend](https://docs.docker.com/desktop/windows/wsl/).
-
-Once you've setup WSL and Docker, you can clone and setup this project from within your WSL2 environment following the Linux installation instructions above.
-
-### Hot Reloading 🔥
-
-_Note:_ Environments that use Vagrant require the [Vagrant notification forwarder plugin](https://github.com/mhallin/vagrant-notify-forwarder) for hot reloading. To install, run
-
-```bash
-$ vagrant plugin install vagrant-notify-forwarder
-$ vagrant reload
-```
-
-Run `scripts/server` to start the application:
-
-```bash
- $ ./scripts/server
-```
-
-While `server` is running, the [Create React App](https://github.com/facebook/create-react-app/) frontend will automatically [reload](https://github.com/facebook/create-react-app/#whats-included) when changes are made. Additionally, the [NestJS](https://nestjs.com/) backend will [restart](https://docs.nestjs.com/cli/usages#nest-start) when changes are made.
+For Windows, install [WSL2](https://docs.microsoft.com/en-us/windows/wsl/install) and [Docker Desktop](https://hub.docker.com/editions/community/docker-ce-desktop-windows) with the [WSL2-based Docker backend](https://docs.docker.com/desktop/windows/wsl/), then follow the Linux instructions from within WSL2.
 
 ### Remote Server Proxy
 
-If you want to develop the `client` locally against a `server` running in the AWS staging environment, you can configure a local proxy using the `BASE_URL` environment variable:
+Develop the client against a remote server using the `BASE_URL` environment variable:
 
-```#bash
-BASE_URL=https://app.staging.districtbuilder.org docker-compose up client
+```bash
+BASE_URL=https://app.staging.districtbuilder.org docker compose up client
 ```
 
-This will proxy local all requests directed at `/api` to `https://staging.districtbuilder.org`.
+### PlanScore API Integration
 
-### PlanScore API integration
-
-You will need a PlanScore API token to test the PlanScore integration in development. Please email info@planscore.org to get a token, then run `./scripts/bootstrap` to create a `.env` file in the server directory and populate the `PLAN_SCORE_API_TOKEN` environment variable with your token.
+You will need a PlanScore API token to test the PlanScore integration. Email info@planscore.org for a token, then run `./scripts/bootstrap` to create a `.env` file in the server directory and set the `PLAN_SCORE_API_TOKEN` variable.
 
 ### Development Data
 
-#### Using pre-processed data for development and testing
+#### Using pre-processed data
 
-1. Sign up for an account in your local dev instance of the application at [http://localhost:3003](http://localhost:3003)(if you haven't already done so)
-1. Load testing data with `$ ./scripts/load-dev-data`. This will:
+1. Sign up for an account at [http://localhost:3003](http://localhost:3003)
+2. Load testing data: `./scripts/load-dev-data`
+3. Confirm your email by clicking the activation link printed in the terminal
 
-- Load region configs for Pennsylvania, Michigan, and Dane County WI.
-- Create an organization, accessible at [`http://localhost:3003/o/azavea`](http://localhost:3003/o/azavea)
-- Set the user you just created as the organization administrator
+#### Preparing data from Census sources
 
-3. In order to use any of the organization templates, you will need to confirm your email. You will see a banner asking you to confirm your email; when you click "Resend Email", an email form will appear in your terminal. Copy and paste the activation link within that form in your browser to activate your account.
+The `prepare-dev-data` command automates downloading Census TIGER block shapefiles, demographics, and optionally VEST election data:
 
-#### Processing your own data for custom regions
+```bash
+# Download and prepare Delaware data with 2020 election results
+./scripts/manage prepare-dev-data 10 DE --vest /data/de_2020.zip -o dev-data/de.geojson
 
-To have data to work with, you'll need to do a three step process:
+# Process into tiles and static files
+./scripts/manage process-geojson dev-data/de.geojson \
+    -l block,precinct,county -n 8,4,0 -x 14,12,8 \
+    -d population,white,black,asian,hispanic,other \
+    -v democrat,republican,otherparty \
+    -o dev-data/de-output/
 
-1. Prepare or acquire a GeoJSON with boundaries and demographic data for your state/region (see next section for details on how to format this file)
-1. Process the GeoJSON (this outputs all the static files DistrictBuilder needs to work in a local directory)
-1. Publish the resulting files (upload to S3 for use by the app)
-
-To process PA data, first copy the GeoJSON file into the `src/manage/data` directory, create an output directory (eg. `src/manage/data/output-pa`), and then run this command:
-
-```
-$ ./scripts/manage process-geojson data/PA.geojson -b -o data/output-pa -n 12,4,4 -x 12,12,12
-```
-
-Then:
-
-```
-$ ./scripts/manage publish-region data/output-pa US PA Pennsylvania
+# Publish to S3
+./scripts/manage publish-region dev-data/de-output US DE Delaware
 ```
 
-Once your data is published, you should be able to run the app and create a new project through the UI using that region and begin building districts.
+See the [manage README](src/manage/README.md) for full documentation of all CLI commands.
 
-If instead you'd like to use the processed data to update S3 in-place (and not insert a new region into the database), you may instead run the command:
+#### Processing custom GeoJSON
 
-```
-$ ./scripts/manage update-region data/output-pa s3://previous/location/of/the/published/region
-```
-
-Note: when doing this, you will need to restart your server to see the new data, since it's cached on startup
-
-#### How to format a custom GeoJSON to upload to DistrictBuilder
-
-This section demonstrates how to format a GeoJSON to feed into the `process-geojson` script. DistrictBuilder is flexible and allows you to specify in a state/region one or more base geographic units to use to draw district boundaries in the user interface. The base geographic unit or units can be census boundaries (ie. `county`, `tract`,`blockgroup`, or `block`), voting boundaries (ie. `wards` or `precincts`) or any custom unit for which you have geographic boundaries and demographic data. The following examples demonstrate how to format the GeoJSON that you acquire or create in order to use `process-geojson` to prepare it to upload to DistrictBuilder:
-
-##### Example 1: US Census & VAP Data
-
-```
-{ "type": "FeatureCollection",
-  "features": [
-    { "type": "Feature",
-      "geometry": {
-        "type": "Polygon",
-        "coordinates": ...
-        },
-      "properties": {
-        "block":482012231001050
-        "blockgroup":482012231001
-        "population": 1250,
-        "white": 250,
-        "black": 250,
-        "asian":250,
-        "hispanic":250,
-        "other":250
-        "vap": 1000,
-        "vap_white":200,
-        "vap_black":200,
-        "vap_asian":200,
-        "vap_hispanic":200,
-        "vap_other":200
-        }
-      },
-      ...
-    ]
-  }
-```
-```
-./scripts/manage process-geojson census-example.geojson -d population,white,black,asian,hispanic,other -d vap,vap_white,vap_black,vap_asian,vap_hispanic,vap_other -l block,blockgroup -o data/census-example
-```
-
-##### Example 2: Ward & Precinct Boundaries with Voting Data
-
-```
-{ "type": "FeatureCollection",
-  "features": [
-    { "type": "Feature",
-      "geometry": {
-        "type": "Polygon",
-        "coordinates": ...
-        },
-      "properties": {
-        "precinct":7
-        "ward":3
-        "population": 1000,
-        "white": 200,
-        "black": 200,
-        "asian":200,
-        "hispanic":200,
-        "other":200,
-        "republican:400,
-        "democrat":400,
-        "other_voters":200
-        }
-      },
-      ...
-    ]
-  }
-```
-```
-./scripts/manage precincts.geojson -d population,white,black,asian,hispanic,other -v republican,democrat,other_voters -l precinct,ward -o data/precinct-example
-```
-Visit the [manage README](src/manage/README.md#manage-process-geojson-file) further documentation of the `process-geojson` script.
+You can also prepare your own GeoJSON with boundaries and demographic data. The input GeoJSON needs properties for geographic hierarchy levels (e.g. `block`, `blockgroup`, `county`) and demographic fields (e.g. `population`, `white`, `black`). See the [manage README](src/manage/README.md#manage-process-geojson-file) for details on formatting and processing.
 
 ### Project Organization
 
-In order to allow for code-sharing across the frontend and backend in conjunction with an unejected Create React App (CRA), it was decided that the simplest and least error-prone way forward was to structure the code as such:
-
 ```
 .
-├── package.json (Applies to the CRA frontend)
+├── package.json (Vite frontend)
+├── vite.config.ts
 ├── src
-│   ├── client (Location for all CRA frontend code)
-│   ├── index.tsx (This and another file need to be here for CRA-purposes)
-│   ├── manage (Command-line interface)
-│   │   ├── package.json (Applies to the command-line interface)
-│   ├── server (NestJS backend code)
-│   │   ├── package.json (Applies to the NestJS backend)
-│   └── shared (Code that is used by both the frontend and backend)
+│   ├── client (React frontend)
+│   ├── manage (CLI for data processing — oclif)
+│   │   ├── package.json
+│   ├── server (NestJS backend)
+│   │   ├── package.json
+│   └── shared (Code shared between frontend and backend)
 ```
 
 ### Stack
 
 - [TypeScript](https://www.typescriptlang.org/) for type safety
-- [React](https://reactjs.org/) as a declarative view layer
-- [Redux](https://redux.js.org/) for state management
-- [redux-loop](https://redux-loop.js.org/) for effect management (eg. API calls)
-- [ts.data.json](https://github.com/joanllenas/ts.data.json) for JSON decoding
-- [PostgreSQL](https://www.postgresql.org/) for a relational database
-- [NestJS](https://nestjs.com/) for the backend web server
+- [React 19](https://react.dev/) as a declarative view layer
+- [Redux](https://redux.js.org/) + [redux-loop](https://redux-loop.js.org/) for state and effect management
+- [MapLibre GL](https://maplibre.org/) + [Protomaps](https://protomaps.com/) for map rendering with self-hosted PMTiles basemap
+- [Vite](https://vite.dev/) for frontend builds and dev server
+- [PostgreSQL](https://www.postgresql.org/) + [PostGIS](https://postgis.net/) for the database
+- [NestJS 11](https://nestjs.com/) for the backend web server
 - [TypeORM](https://typeorm.io/) for database queries and migrations
-- [TopoJSON](https://github.com/topojson/topojson) for fast, topologically-aware geospatial operations
+- [tippecanoe](https://github.com/felt/tippecanoe) for generating PMTiles vector tiles
+- [ts.data.json](https://github.com/joanllenas/ts.data.json) for JSON decoding
 
 ### Ports
 
-| Port                          | Service          |
-| ----------------------------- | ---------------- |
-| [3003](http://localhost:3003) | Create React App |
-| [3005](http://localhost:3005) | NestJS           |
+| Port                          | Service |
+| ----------------------------- | ------- |
+| [3003](http://localhost:3003) | Vite    |
+| [3005](http://localhost:3005) | NestJS  |
 
 ## Scripts
 
 | Name            | Description                                                               |
 | --------------- | ------------------------------------------------------------------------- |
-| `cibuild`       | Build application for staging or a release.                               |
-| `cipublish`     | Publish container images to Elastic Container Registry.                   |
-| `dbshell`       | Enter a database shell.                                                   |
-| `infra`         | Execute Terraform subcommands with remote state management.               |
-| `load-dev-data` | Loads development data for testing                                        |
-| `manage`        | Execute commands with the `manage` CLI tool.                              |
-| `migration`     | Execute TypeORM migration CLI commands.                                   |
-| `server`        | Bring up all of the services required for the project to function.        |
-| `setup`         | Setup the project's development environment.                              |
-| `test`          | Run linters and tests.                                                    |
-| `update`        | Build container images, update dependencies, and run database migrations. |
-| `yarn`          | Execute Yarn CLI commands.                                                |
+| `cibuild`       | Build application for staging or a release                                |
+| `cipublish`     | Publish container images to Elastic Container Registry                    |
+| `dbshell`       | Enter a database shell                                                    |
+| `infra`         | Execute Terraform subcommands with remote state management                |
+| `load-dev-data` | Load development data for testing                                         |
+| `manage`        | Execute commands with the `manage` CLI tool                               |
+| `migration`     | Execute TypeORM migration CLI commands                                    |
+| `server`        | Bring up all services required for the project                            |
+| `setup`         | Setup the project's development environment                               |
+| `test`          | Run linters and tests                                                     |
+| `update`        | Build container images, update dependencies, and run database migrations  |
+| `yarn`          | Execute Yarn CLI commands                                                 |
 
 ## Command Line Interface
 
-A command line interface is available for performing data processing operations.
+A command line interface is available for data processing operations.
 See `src/manage/README.md` for more info.

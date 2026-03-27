@@ -140,6 +140,19 @@ export default class PrepareDevData extends Command {
     }
     this.log(`   ${blockDemographics.size} block demographics loaded`);
 
+    // Fetch county names from Census API
+    this.log("\n   Fetching county names...");
+    const countyNamesUrl = `https://api.census.gov/data/2020/dec/pl?get=NAME&for=county:*&in=state:${stateFips}`;
+    const countyNamesResp = await fetch(countyNamesUrl);
+    const countyNamesData: string[][] = await countyNamesResp.json();
+    const countyNames = new Map<string, string>();
+    for (let i = 1; i < countyNamesData.length; i++) {
+      const [name, , countyFp] = countyNamesData[i];
+      // Strip state suffix: "Kent County, Delaware" → "Kent County"
+      countyNames.set(countyFp, name.split(",")[0].trim());
+    }
+    this.log(`   ${countyNames.size} county names loaded`);
+
     // Step 4: Optionally load VEST voting data
     let precinctVoting: Map<string, Record<string, number>> | null = null;
     if (flags.vest) {
@@ -205,6 +218,7 @@ export default class PrepareDevData extends Command {
         block: geoId,
         precinct,
         county: countyFp,
+        county_name: countyNames.get(countyFp) || countyFp,
         ...demo
       };
 

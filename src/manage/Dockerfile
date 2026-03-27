@@ -1,6 +1,6 @@
 FROM node:24-bookworm-slim AS tippecanoe
 
-ENV TIPPECANOE_VERSION="1.36.0"
+ENV TIPPECANOE_VERSION="2.79.0"
 
 RUN set -ex \
   && deps=" \
@@ -14,7 +14,7 @@ RUN set -ex \
 
 WORKDIR /usr/local/src
 
-RUN wget -qO- https://github.com/mapbox/tippecanoe/archive/${TIPPECANOE_VERSION}.tar.gz \
+RUN wget -qO- https://github.com/felt/tippecanoe/archive/${TIPPECANOE_VERSION}.tar.gz \
   | tar xvz -C /usr/local/src
 RUN make -j2 -C /usr/local/src/tippecanoe-${TIPPECANOE_VERSION}
 RUN make -C /usr/local/src/tippecanoe-${TIPPECANOE_VERSION} install

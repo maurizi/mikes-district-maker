@@ -54,16 +54,7 @@ export const DISTRICTS_EVALUATE_LABELS_LAYER_ID = "districts-evaluate-labels";
 export const TOPMOST_GEOLEVEL_EVALUATE_SPLIT_ID = "topmost-geo-evaluate-split";
 // Id for topmost geolevel layer fill in Evaluate
 export const TOPMOST_GEOLEVEL_EVALUATE_FILL_SPLIT_ID = "topmost-geo-evaluate-split-fill";
-// Used only to make districts appear in the correct position in the layer stack
-export const DISTRICTS_PLACEHOLDER_LAYER_ID = "district-placeholder";
-// Used only to make highlights appear in the correct position in the layer stack
-export const HIGHLIGHTS_PLACEHOLDER_LAYER_ID = "highlight-placeholder";
-// Used only to make lines appear in the correct position in the layer stack
-export const LINES_PLACEHOLDER_LAYER_ID = "line-placeholder";
-// Used only to make labels appear in the correct position in the layer stack
-export const LABELS_PLACEHOLDER_LAYER_ID = "label-placeholder";
-// Used only to make district lines appear in the correct position in the layer stack
-export const DISTRICT_LINES_PLACEHOLDER_LAYER_ID = "district-line-placeholder";
+import { FIRST_LABEL_LAYER_ID } from "../../constants/map";
 
 // Delay used to throttle calls to set the current feature(s), in milliseconds
 export const SET_FEATURE_DELAY = 300;
@@ -72,11 +63,13 @@ export const EVALUATE_GRAY_FILL_COLOR = "#D3D3D3";
 export const COUNTY_SPLIT_FILL_COLOR = "#fed8b1";
 
 // Layers in the Mapbox Studio project that we filter to only show the active region.
+// Protomaps label layers to filter by region (show only labels for the selected state).
+// These correspond to Protomaps theme layer IDs.
 export const filteredLabelLayers = [
-  "settlement-major-label",
-  "settlement-minor-label",
-  "settlement-subdivision-label",
-  "poi-label"
+  "places_subplace",
+  "places_locality",
+  "places_locality_circle",
+  "pois"
 ];
 
 export function getCompactnessStops(): ChoroplethSteps {
@@ -185,19 +178,19 @@ export function getGeolevelLinePaintStyle(geoLevel: string) {
   const largeGeolevel: maplibregl.LineLayerSpecification["paint"] = {
     "line-color": "#000",
     "line-opacity": 1,
-    "line-width": ["interpolate", ["linear"], ["zoom"], 6, 1.5, 14, 4.5]
+    "line-width": ["interpolate", ["linear"], ["zoom"], 6, 2.5, 14, 6]
   };
 
   const mediumGeolevel: maplibregl.LineLayerSpecification["paint"] = {
     "line-color": "#000",
-    "line-opacity": ["interpolate", ["linear"], ["zoom"], 6, 0.2, 14, 0.6],
-    "line-width": ["interpolate", ["linear"], ["zoom"], 6, 0.75, 14, 2.25]
+    "line-opacity": ["interpolate", ["linear"], ["zoom"], 6, 0.3, 14, 0.7],
+    "line-width": ["interpolate", ["linear"], ["zoom"], 6, 1.5, 14, 3.5]
   };
 
   const smallGeolevel: maplibregl.LineLayerSpecification["paint"] = {
     "line-color": "#000",
-    "line-opacity": ["interpolate", ["linear"], ["zoom"], 6, 0.1, 14, 0.3],
-    "line-width": ["interpolate", ["linear"], ["zoom"], 6, 0, 14, 1.5]
+    "line-opacity": ["interpolate", ["linear"], ["zoom"], 6, 0.15, 14, 0.4],
+    "line-width": ["interpolate", ["linear"], ["zoom"], 6, 0.5, 14, 2.5]
   };
 
   switch (geoLevel) {
@@ -224,6 +217,8 @@ export function generateMapLayers(
   geojson: DistrictsGeoJSON,
   populationDeviation: number
 ) {
+  // Insert district layers below the first label layer so basemap labels stay on top
+  const beforeLabelId = FIRST_LABEL_LAYER_ID;
   map.addSource(DISTRICTS_SOURCE_ID, {
     type: "geojson",
     data: geojson
@@ -231,7 +226,7 @@ export function generateMapLayers(
 
   map.addSource(GEOLEVELS_SOURCE_ID, {
     type: "vector",
-    tiles: [`${s3ToHttps(path)}tiles/{z}/{x}/{y}.pbf`],
+    url: `pmtiles://${s3ToHttps(path)}tiles.pmtiles`,
     minzoom: minZoom,
     maxzoom: maxZoom
   });
@@ -256,7 +251,7 @@ export function generateMapLayers(
         "fill-antialias": false
       }
     },
-    DISTRICTS_PLACEHOLDER_LAYER_ID
+    beforeLabelId
   );
 
   map.addLayer(
@@ -276,7 +271,7 @@ export function generateMapLayers(
         "fill-opacity": 0.9
       }
     },
-    DISTRICTS_PLACEHOLDER_LAYER_ID
+    beforeLabelId
   );
 
   map.addLayer(
@@ -297,7 +292,7 @@ export function generateMapLayers(
         "fill-opacity": 0.9
       }
     },
-    DISTRICTS_PLACEHOLDER_LAYER_ID
+    beforeLabelId
   );
 
   map.addLayer(
@@ -314,7 +309,7 @@ export function generateMapLayers(
         "fill-opacity": 0.9
       }
     },
-    DISTRICTS_PLACEHOLDER_LAYER_ID
+    beforeLabelId
   );
 
   map.addLayer(
@@ -335,7 +330,7 @@ export function generateMapLayers(
         "fill-opacity": 0.9
       }
     },
-    DISTRICTS_PLACEHOLDER_LAYER_ID
+    beforeLabelId
   );
 
   map.addLayer(
@@ -358,7 +353,7 @@ export function generateMapLayers(
         ]
       }
     },
-    DISTRICT_LINES_PLACEHOLDER_LAYER_ID
+    beforeLabelId
   );
 
   map.addLayer(
@@ -372,7 +367,7 @@ export function generateMapLayers(
         "line-width": ["interpolate", ["linear"], ["zoom"], 6, 2, 14, 5]
       }
     },
-    DISTRICT_LINES_PLACEHOLDER_LAYER_ID
+    beforeLabelId
   );
 
   map.addLayer(
@@ -419,6 +414,25 @@ export function generateMapLayers(
     DISTRICTS_HOVER_OUTLINE_LAYER_ID
   );
 
+  // Create the locked district pattern if it doesn't exist in the sprite sheet
+  if (!map.hasImage("circle-1")) {
+    const size = 16;
+    const data = new Uint8Array(size * size * 4);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const i = (y * size + x) * 4;
+        const cx = x - size / 2;
+        const cy = y - size / 2;
+        const inCircle = cx * cx + cy * cy < 4;
+        data[i] = 0;
+        data[i + 1] = 0;
+        data[i + 2] = 0;
+        data[i + 3] = inCircle ? 80 : 0;
+      }
+    }
+    map.addImage("circle-1", { width: size, height: size, data });
+  }
+
   map.addLayer(
     {
       id: DISTRICTS_LOCK_LAYER_ID,
@@ -430,7 +444,7 @@ export function generateMapLayers(
         "fill-opacity": ["case", ["boolean", ["feature-state", "locked"], false], 1, 0]
       }
     },
-    DISTRICTS_PLACEHOLDER_LAYER_ID
+    beforeLabelId
   );
 
   map.addLayer(
@@ -446,7 +460,7 @@ export function generateMapLayers(
         "line-width": ["interpolate", ["linear"], ["zoom"], 6, 2, 14, 5]
       }
     },
-    LINES_PLACEHOLDER_LAYER_ID
+    beforeLabelId
   );
 
   map.addLayer(
@@ -462,7 +476,7 @@ export function generateMapLayers(
         "fill-antialias": false
       }
     },
-    LINES_PLACEHOLDER_LAYER_ID
+    beforeLabelId
   );
 
   map.addLayer(
@@ -486,7 +500,7 @@ export function generateMapLayers(
         "fill-antialias": false
       }
     },
-    DISTRICTS_PLACEHOLDER_LAYER_ID
+    beforeLabelId
   );
 
   map.addLayer({
@@ -520,7 +534,7 @@ export function generateMapLayers(
         layout: { visibility: "none" },
         paint: getGeolevelLinePaintStyle(level.id)
       },
-      LINES_PLACEHOLDER_LAYER_ID
+      beforeLabelId
     );
   });
 
@@ -537,7 +551,7 @@ export function generateMapLayers(
           "fill-antialias": false
         }
       },
-      HIGHLIGHTS_PLACEHOLDER_LAYER_ID
+      beforeLabelId
     );
   });
 
@@ -570,7 +584,10 @@ export function generateMapLayers(
   // the selected region. Finally, we set the layer to visible. In Mapbox Studio, the
   // layer was set to invisible to avoid a flash where the labels appear before the filter
   // is applied.
+  // Filter label layers to only show labels for the selected region.
+  // Skip layers that don't exist in the current basemap style.
   filteredLabelLayers.forEach(layer => {
+    if (!map.getLayer(layer)) return;
     map.setFilter(layer, [
       "all",
       map.getFilter(layer),

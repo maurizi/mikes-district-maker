@@ -726,7 +726,7 @@ it when necessary (file sizes ~1GB+).
     demographics: readonly string[],
     voting: readonly string[]
   ): GeoLevelInfo[] {
-    const joinedMbtiles = join(dir, "all-geounits.mbtiles");
+    const joinedMbtiles = join(dir, "all-geounits.pmtiles");
     const inputs = geoLevels.map(geoLevel => join(dir, `${geoLevel}.geojson`));
     // Convert all layers to vector tiles in one go, to ensure simplification with
     // detection of shared borders applies to all layers at once
@@ -764,9 +764,9 @@ it when necessary (file sizes ~1GB+).
       simplification: 4,
       simplifyOnlyLowZooms: true
     });
-    const separateMbtiles = geoLevels.map(geoLevel => join(dir, `${geoLevel}.mbtiles`));
+    const separateMbtiles = geoLevels.map(geoLevel => join(dir, `${geoLevel}.pmtiles`));
     const labelsGeojson = geoLevels.map(geoLevel => join(dir, `${geoLevel}-labels.geojson`));
-    const labelsMbtiles = geoLevels.map(geoLevel => join(dir, `${geoLevel}-labels.mbtiles`));
+    const labelsMbtiles = geoLevels.map(geoLevel => join(dir, `${geoLevel}-labels.pmtiles`));
     geoLevels.forEach((geoLevel, idx) => {
       const minimumZoom = minZooms[idx];
       const maximumZoom = maxZooms[idx];
@@ -797,40 +797,22 @@ it when necessary (file sizes ~1GB+).
       });
     });
 
-    const outputDir = join(dir, "tiles");
+    const outputPmtiles = join(dir, "tiles.pmtiles");
     tileJoin([...separateMbtiles, ...labelsMbtiles], {
       force: true,
       noTileCompression: true,
       noTileSizeLimit: true,
-      outputToDirectory: outputDir
+      output: outputPmtiles
     });
 
-    // Read the metadata json file created by tippecanoe, in order to extract geolevel zoom levels.
-    // It is done in this manner, rather than pulling the zoom levels defined in the arguments to
-    // this script, because it's possible to use zoom arguments such as 'g', which will request
-    // tippecanoe to guess an appropriate zoom level. What's written out in the metadata file are
-    // the actual zoom levels that were chosen.
-    const tileMetadata = JSON.parse(readFileSync(join(outputDir, "metadata.json")).toString());
-
-    // There is a `vector_layers` property that has a JSON string of additional layer information,
-    // which needs to be parsed.
-    const vectorLayers = JSON.parse(tileMetadata.json).vector_layers;
-
-    // Put the layer information into a dictionary keyed by id for easier access.
-    // We don't type information for what's in this file, so `any`s are used.
-    // There are several fields defined, but we only care about: id, maxzoom, minzoom
-    const layersById = vectorLayers.reduce((obj: any, item: any) => {
-      obj[item.id] = item;
-      return obj;
-    }, {});
-
-    return geoLevels.map(id => {
-      const layerInfo = layersById[id];
-      return {
-        id: layerInfo.id,
-        maxZoom: layerInfo.maxzoom,
-        minZoom: layerInfo.minzoom
-      };
+    // Build geo level info from the zoom args passed to this function.
+    // Previously this was read from tippecanoe's metadata.json, but with PMTiles
+    // output the metadata is embedded in the file header. Since we specify
+    // explicit zoom levels (not 'g' for guess), we can use the args directly.
+    return geoLevels.map((id, idx) => {
+      const minZoom = parseInt(minZooms[idx]) || 0;
+      const maxZoom = parseInt(maxZooms[idx]) || 14;
+      return { id, minZoom, maxZoom };
     });
   }
 

@@ -1,4 +1,4 @@
-import { writeFileSync } from "fs";
+import { writeFileSync, openSync, writeSync, closeSync } from "fs";
 import { join } from "path";
 import { GeometryCollection, GeometryObject, Polygon, MultiPolygon, Topology } from "topojson-specification";
 
@@ -84,7 +84,15 @@ export function extractAdjacencyData(
   const blockIds = geometries.map(
     (g: GeometryObject<any>) => g.properties?.[baseGeoLevel] as string
   );
-  writeFileSync(join(outputDir, "block-ids.json"), JSON.stringify(blockIds));
+  // Stream block IDs to avoid string length limit
+  const bidFd = openSync(join(outputDir, "block-ids.json"), "w");
+  writeSync(bidFd, "[");
+  for (let i = 0; i < blockIds.length; i++) {
+    if (i > 0) writeSync(bidFd, ",");
+    writeSync(bidFd, JSON.stringify(blockIds[i]));
+  }
+  writeSync(bidFd, "]");
+  closeSync(bidFd);
 
   // Extract properties per geo level for region lookups (replaces topology properties)
   const geoProperties: Record<string, Record<string, unknown>[]> = {};
@@ -96,5 +104,20 @@ export function extractAdjacencyData(
       );
     }
   }
-  writeFileSync(join(outputDir, "geo-properties.json"), JSON.stringify(geoProperties));
+  // Stream geo properties to avoid string length limit
+  const gpFd = openSync(join(outputDir, "geo-properties.json"), "w");
+  writeSync(gpFd, "{");
+  const levelIds = Object.keys(geoProperties);
+  for (let li = 0; li < levelIds.length; li++) {
+    if (li > 0) writeSync(gpFd, ",");
+    writeSync(gpFd, JSON.stringify(levelIds[li]) + ":[");
+    const items = geoProperties[levelIds[li]];
+    for (let i = 0; i < items.length; i++) {
+      if (i > 0) writeSync(gpFd, ",");
+      writeSync(gpFd, JSON.stringify(items[i]));
+    }
+    writeSync(gpFd, "]");
+  }
+  writeSync(gpFd, "}");
+  closeSync(gpFd);
 }

@@ -6,3 +6,7 @@ services:
   client:
     ports:
       - 3003:3003
+
+  manage:
+    volumes:
+      - ./dev-data:/home/node/app/manage/dev-data

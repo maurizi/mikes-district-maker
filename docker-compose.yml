@@ -70,7 +70,7 @@ services:
       - POSTGRES_PASSWORD=districtbuilder
       - POSTGRES_DB=districtbuilder
       - AWS_PROFILE=${AWS_PROFILE:-district-builder}
-      - NODE_OPTIONS=--max-old-space-size=16384
+      - NODE_OPTIONS=--max-old-space-size=24384
     build:
       context: ./src/manage
       dockerfile: Dockerfile

@@ -5836,7 +5836,7 @@ protocol-buffers-schema@^3.3.1:
   resolved "https://registry.yarnpkg.com/protocol-buffers-schema/-/protocol-buffers-schema-3.6.0.tgz#77bc75a48b2ff142c1ad5b5b90c94cd0fa2efd03"
   integrity sha512-TdDRD+/QNdrCGCE7v8340QyuXd4kIWIgapsE2+n/SaGiSSbomYl4TjHlvIoCWRpE7wFt02EpB35VVA2ImcBVqw==
 
-protomaps-themes-base@4.5.0:
+protomaps-themes-base@^4.5.0:
   version "4.5.0"
   resolved "https://registry.yarnpkg.com/protomaps-themes-base/-/protomaps-themes-base-4.5.0.tgz#d08e5739739844b3bc0270eed2412c07b3853cfa"
   integrity sha512-z5A6oXAXNi/CHEIbCfzZ/6uVDgnv3pO4C3LFvomxjUFXwyqWZ7HJdfPoNJSIlsvaQubqsaxCbamEzqBr/W7vkg==

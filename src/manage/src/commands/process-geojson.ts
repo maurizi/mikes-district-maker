@@ -67,9 +67,10 @@ environment variable (as large as needed):
 
 NODE_OPTIONS="--max-old-space-size=14336"
 
-Relatedly, set the -b flag for very large GeoJSON files
+Relatedly, set the -b flag for large GeoJSON files
 that need to be streamed. This is slower, so only use
-it when necessary (file sizes ~1GB+).
+it when necessary (file sizes ~500MB+, due to Node.js
+max string length of ~512MB).
 `;
 
   static flags = {
@@ -152,6 +153,12 @@ it when necessary (file sizes ~1GB+).
       char: "f",
       description: "Filter to only base geounits containing the specified prefix",
       default: ""
+    }),
+
+    maximumTileBytes: Flags.string({
+      char: "t",
+      description: "Maximum tile size in bytes for tippecanoe (default 750000)",
+      default: "750000"
     })
   };
 
@@ -180,6 +187,7 @@ it when necessary (file sizes ~1GB+).
     const demographicIds = demographics.map(([, id]) => id);
     const simplification = parseFloat(flags.simplification);
     const quantization = parseFloat(flags.quantization);
+    const maximumTileBytes = parseInt(flags.maximumTileBytes) || 750000;
 
     if (geoLevels.length !== minZooms.length || geoLevels.length !== maxZooms.length) {
       this.error(
@@ -254,7 +262,7 @@ it when necessary (file sizes ~1GB+).
       }
     }
 
-    this.writeTopoJson(flags.outputDir, topoJsonHierarchy, demographicIds, votingIds);
+    await this.writeTopoJson(flags.outputDir, topoJsonHierarchy, demographicIds, votingIds);
 
     this.addGeoLevelIndices(topoJsonHierarchy, geoLevelIds);
 
@@ -266,7 +274,7 @@ it when necessary (file sizes ~1GB+).
     this.log("Copying source file to output");
     copyFileSync(args.file, join(flags.outputDir, "input.geojson"));
 
-    await this.writeIntermediaryGeoJson(flags.outputDir, topoJsonHierarchy, geoLevelIds);
+    this.writeIntermediaryGeoJson(flags.outputDir, topoJsonHierarchy, geoLevelIds);
 
     const geoLevelHierarchyInfo = this.writeVectorTiles(
       flags.outputDir,
@@ -274,7 +282,8 @@ it when necessary (file sizes ~1GB+).
       minZooms,
       maxZooms,
       demographicIds,
-      votingIds
+      votingIds,
+      maximumTileBytes
     );
 
     const demographicMetaData = this.writeNumericData(
@@ -517,7 +526,7 @@ it when necessary (file sizes ~1GB+).
   }
 
   // Write TopoJSON file to disk
-  writeTopoJson(
+  async writeTopoJson(
     dir: string,
     topology: Topology<Objects<{}>>,
     demographics: readonly string[],
@@ -527,8 +536,13 @@ it when necessary (file sizes ~1GB+).
     this.log("Writing topojson file");
     const path = join(dir, "topo.json");
     const output = createWriteStream(path, { encoding: "utf-8" });
-    output.write(JSON.stringify(filteredTopojson));
-    output.close();
+    await new Promise<void>((resolve, reject) => {
+      const stream = new JsonStreamStringify(filteredTopojson);
+      stream.pipe(output);
+      output.on("finish", resolve);
+      stream.on("error", reject);
+      output.on("error", reject);
+    });
   }
 
   filterTopoJson(
@@ -710,18 +724,21 @@ it when necessary (file sizes ~1GB+).
     dir: string,
     topology: Topology<Objects<{}>>,
     geoLevels: readonly string[]
-  ): Promise<void[]> {
-    const promises = geoLevels.map(geoLevel => {
-      this.log(`Converting topojson to geojson for ${geoLevel}`);
+  ): void {
+    for (const geoLevel of geoLevels) {
+      this.log(`Converting topojson to geojsonseq for ${geoLevel}`);
       const geojson = topo2feature(topology, topology.objects[geoLevel]);
-      const path = join(dir, `${geoLevel}.geojson`);
-      const output = createWriteStream(path, { encoding: "utf8" });
-      return new Promise<void>(resolve =>
-        new JsonStreamStringify(geojson).pipe(output).on("finish", () => resolve(void 0))
-      );
-    });
-    this.log("Streaming geojson to disk");
-    return Promise.all(promises);
+
+      // Write as newline-delimited GeoJSON (geojsonseq) — one feature per line
+      // Enables tippecanoe --read-parallel and geojson-polygon-labels --input-format=geojsonseq
+      const filePath = join(dir, `${geoLevel}.geojson`);
+      const fd = require("fs").openSync(filePath, "w"); // eslint-disable-line
+      for (const feature of (geojson as any).features) {
+        require("fs").writeSync(fd, JSON.stringify(feature) + "\n"); // eslint-disable-line
+      }
+      require("fs").closeSync(fd); // eslint-disable-line
+    }
+    this.log("GeoJSON Sequence files written to disk");
   }
 
   // Convert GeoJSON on disk to Vector Tiles
@@ -731,9 +748,10 @@ it when necessary (file sizes ~1GB+).
     minZooms: readonly string[],
     maxZooms: readonly string[],
     demographics: readonly string[],
-    voting: readonly string[]
+    voting: readonly string[],
+    maximumTileBytes: number = 750000
   ): GeoLevelInfo[] {
-    const joinedMbtiles = join(dir, "all-geounits.pmtiles");
+    const joinedMbtiles = join(dir, "all-geounits.mbtiles");
     const inputs = geoLevels.map(geoLevel => join(dir, `${geoLevel}.geojson`));
     // Convert all layers to vector tiles in one go, to ensure simplification with
     // detection of shared borders applies to all layers at once
@@ -759,27 +777,30 @@ it when necessary (file sizes ~1GB+).
         .filter(entries => entries !== undefined) as any
     );
     tippecanoe(inputs, {
-      detectSharedBorders: true,
+      noSimplificationOfSharedNodes: true,
       featureFilter: JSON.stringify(featureFilter),
       force: true,
+      readParallel: true,
       // The only properties we want are geounit hierarchy indices and optionally the name
       include: [...geoLevels.slice(1).map(gl => `${gl}Idx`), "idx", "name"],
       noTileCompression: true,
       noTinyPolygonReduction: true,
+      maximumTileBytes,
       dropRate: 1,
       output: joinedMbtiles,
       simplification: 4,
       simplifyOnlyLowZooms: true
     });
-    const separateMbtiles = geoLevels.map(geoLevel => join(dir, `${geoLevel}.pmtiles`));
-    const labelsGeojson = geoLevels.map(geoLevel => join(dir, `${geoLevel}-labels.geojson`));
-    const labelsMbtiles = geoLevels.map(geoLevel => join(dir, `${geoLevel}-labels.pmtiles`));
+    // Extract per-layer tiles with strict zoom ranges, then generate labels
+    const separateMbtiles = geoLevels.map(geoLevel => join(dir, `${geoLevel}.mbtiles`));
+    const labelsSeq = geoLevels.map(geoLevel => join(dir, `${geoLevel}-labels.geojson`));
+    const labelsMbtiles = geoLevels.map(geoLevel => join(dir, `${geoLevel}-labels.mbtiles`));
     geoLevels.forEach((geoLevel, idx) => {
       const minimumZoom = minZooms[idx];
       const maximumZoom = maxZooms[idx];
       const input = join(dir, `${geoLevel}.geojson`);
       const output = separateMbtiles[idx];
-      // Use tile-join to pull out individual layers and impose min/max zooms
+      // Extract per-layer with strict zoom ranges
       tileJoin([joinedMbtiles], {
         force: true,
         layer: geoLevel,
@@ -789,12 +810,13 @@ it when necessary (file sizes ~1GB+).
         noTileSizeLimit: true,
         output
       });
-      const labelPath = labelsGeojson[idx];
+      const labelPath = labelsSeq[idx];
       const labelOutput = labelsMbtiles[idx];
-      geojsonPolygonLabels(input, { style: "largest" }, { outputPath: labelPath });
+      geojsonPolygonLabels(input, { collections: "largest", "input-format": "geojsonseq", "output-format": "geojsonseq" }, { outputPath: labelPath });
       tippecanoe(labelPath, {
         include: [...demographics.map(abbrev), ...voting.map(abbrev)],
         force: true,
+        readParallel: true,
         maximumZoom,
         minimumZoom,
         noTileCompression: true,
@@ -804,10 +826,10 @@ it when necessary (file sizes ~1GB+).
       });
     });
 
+    // Join per-layer tiles + labels into final output
     const outputPmtiles = join(dir, "tiles.pmtiles");
     tileJoin([...separateMbtiles, ...labelsMbtiles], {
       force: true,
-      noTileCompression: true,
       noTileSizeLimit: true,
       output: outputPmtiles
     });

@@ -117,7 +117,10 @@ const ProjectScreen = ({
   const { projectId } = useParams();
   const [map, setMap] = useState<maplibregl.Map | undefined>(undefined);
   const isLoggedIn = isUserLoggedIn();
-  const isFirstLoadPending = isLoading && (project === undefined || staticMetadata === undefined);
+  const isFirstLoadPending =
+    project === undefined ||
+    staticMetadata === undefined ||
+    (geojson !== undefined && geojson.features.length === 0);
   const presentDrawingState = districtDrawing.undoHistory.present.state;
 
   const wasSubmittedRef = useRef<boolean | undefined>();

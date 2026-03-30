@@ -51,11 +51,17 @@ else
 
   echo "  [$state_abbr] Running prepare-dev-data..."
   cd "$PROJECT_DIR"
+  SIMPLIFY_ARG=""
+  if [[ -n "$simplify_precincts" && "$simplify_precincts" != "0" ]]; then
+    SIMPLIFY_ARG="--simplifyPrecincts $simplify_precincts"
+  fi
+
   ./scripts/manage prepare-dev-data "$state_fips" "$state_abbr" \
     -v "dev-data/staging/$vest_2020" \
     -p "$precinct_field_2020" \
     -c "dev-data/census-cache/${state_abbr}.geojson" \
     ${ADDITIONAL:+--additionalVest "$ADDITIONAL"} \
+    $SIMPLIFY_ARG \
     -o "$GEOJSON_REL"
 
   echo "  [$state_abbr] Deleting zips..."
@@ -104,12 +110,16 @@ cd "$PROJECT_DIR"
 # Step 3: Publish region
 echo "  [$state_abbr] Publishing region..."
 S3_BUCKET="districtbuilder-dev-238046523378"
+S3_URI="s3://${S3_BUCKET}/regions/US/${state_abbr}/$(date -u +%Y-%m-%dT%H:%M:%S.000Z)/"
 if ! ./scripts/manage publish-region \
   -b "$S3_BUCKET" \
   "dev-data/output/${state_abbr}" US "$state_abbr" "$state_name" 2>&1; then
   echo "  [$state_abbr] Region exists, updating in-place..."
-  S3_URI="s3://${S3_BUCKET}/regions/US/${state_abbr}/$(date -u +%Y-%m-%dT%H:%M:%S.000Z)/"
   ./scripts/manage update-region "dev-data/output/${state_abbr}" "$S3_URI"
+  # update-region only uploads files, so update the DB record too
+  docker compose exec -T database psql -U districtbuilder -c \
+    "UPDATE region_config SET s3_uri = '${S3_URI}', version = '$(date -u +%Y-%m-%dT%H:%M:%S.000Z)' WHERE region_code = '${state_abbr}';" \
+    > /dev/null 2>&1 || echo "  [$state_abbr] WARNING: Could not update DB record"
 fi
 
 # Step 4: Update CSV status (with file lock for concurrent access)

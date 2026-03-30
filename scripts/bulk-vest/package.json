@@ -5,6 +5,7 @@
   "dependencies": {
     "csv-parse": "^5.5.0",
     "csv-stringify": "^6.4.0",
+    "pg": "^8.20.0",
     "playwright": "^1.40.0"
   },
   "devDependencies": {

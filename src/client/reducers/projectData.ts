@@ -186,7 +186,12 @@ const projectDataReducer = (
         {
           ...state,
           projectData: {
-            resource: action.payload
+            resource: {
+              project: action.payload.project,
+              geojson: "resource" in state.projectData
+                ? state.projectData.resource.geojson
+                : action.payload.geojson
+            }
           },
           findIndex: undefined
         },

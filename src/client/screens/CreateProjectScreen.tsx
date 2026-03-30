@@ -419,6 +419,7 @@ const CreateProjectScreen = ({ regionConfigs, user, organization }: StateProps) 
                                     value={chamber.id}
                                     onChange={onDistrictChanged}
                                     aria-describedby="description-districts"
+                                    disabled={chamber.numberOfDistricts === 1}
                                   />
                                   <Flex
                                     as="span"
@@ -426,7 +427,9 @@ const CreateProjectScreen = ({ regionConfigs, user, organization }: StateProps) 
                                   >
                                     <div sx={style.radioHeading}>{chamber.name}</div>
                                     <div sx={style.radioSubHeading}>
-                                      {chamber.numberOfDistricts} districts
+                                      {chamber.numberOfDistricts > 1
+                                        ? `${chamber.numberOfDistricts} districts`
+                                        : "1 district"}
                                     </div>
                                   </Flex>
                                 </Label>

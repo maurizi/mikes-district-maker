@@ -248,6 +248,27 @@ max string length of ~512MB).
       this.error(`Invalid bbox: "${bbox}"`);
     }
 
+    // Alaska's Aleutian Islands cross the anti-meridian, producing a bbox that
+    // spans ~360° of longitude. Detect this and fix by shifting the positive
+    // (western Aleutian) longitudes to their negative equivalents.
+    if (bbox[2] - bbox[0] > 180) {
+      this.log("Detected anti-meridian bbox, normalizing longitudes");
+      // Recompute by scanning all coordinates with positive lons shifted by -360
+      let minLon = Infinity;
+      let maxLon = -Infinity;
+      for (const feature of baseGeoJson.features) {
+        for (const ring of feature.geometry.coordinates) {
+          for (const coord of ring) {
+            const lon = coord[0] > 0 ? coord[0] - 360 : coord[0];
+            if (lon < minLon) minLon = lon;
+            if (lon > maxLon) maxLon = lon;
+          }
+        }
+      }
+      bbox[0] = minLon;
+      bbox[2] = maxLon;
+    }
+
     if (!flags.inputS3Dir) {
       this.log("No inputS3Dir provided, no sorting needed");
     } else {
@@ -256,7 +277,11 @@ max string length of ~512MB).
       ux.action.stop();
 
       this.log("Sorting TopoJSON based on previous version");
-      const errorMessage = this.sortTopoJsonByPrev(topoJsonHierarchy, prevGeoProperties, geoLevelIds);
+      const errorMessage = this.sortTopoJsonByPrev(
+        topoJsonHierarchy,
+        prevGeoProperties,
+        geoLevelIds
+      );
       if (errorMessage !== null) {
         this.error(`Error encountered while sorting TopoJSON: "${errorMessage}"`);
       }
@@ -385,7 +410,14 @@ max string length of ~512MB).
       const prevGeoms: any = (topo.objects[prevGeoLevel] as any).geometries;
 
       this.log(`Grouping geoLevel "${geoLevel}"`);
-      const grouped = groupBy(prevGeoms, f => f.properties[currGeoLevel]);
+      // Use a compound key that includes all parent geolevels to ensure uniqueness.
+      // E.g. when grouping blocks into precincts, key on "county|precinct" so that
+      // precincts with the same ID in different counties don't collide.
+      const parentLevels = geoLevelIds.slice(currIndex + 1);
+      const grouped = groupBy(prevGeoms, f => {
+        const parts = [...parentLevels.map(l => f.properties[l]), f.properties[currGeoLevel]];
+        return parts.join("|");
+      });
 
       this.log(`Merging ${Object.keys(grouped).length} features`);
       const mergedGeoms: any = mapValues(grouped, (geoms: readonly [Feature]) => {
@@ -471,8 +503,8 @@ max string length of ~512MB).
             geoLevel === "blockgroup"
               ? levelFips.substring(5)
               : geoLevel === "block"
-              ? levelFips.substring(11)
-              : levelFips;
+                ? levelFips.substring(11)
+                : levelFips;
           // And then we want the tooltip to display something like "Blockgroup #CCCCCCD"
           // @ts-ignore
           geometry.properties.name = `${
@@ -516,10 +548,12 @@ max string length of ~512MB).
     const bucket = uriComponents[2];
     const keyPrefix = uriComponents.slice(3).join("/");
 
-    const response = await s3Client.send(new GetObjectCommand({
-      Bucket: bucket,
-      Key: `${keyPrefix}geo-properties.json`
-    }));
+    const response = await s3Client.send(
+      new GetObjectCommand({
+        Bucket: bucket,
+        Key: `${keyPrefix}geo-properties.json`
+      })
+    );
 
     const bodyString = await response.Body!.transformToString();
     return JSON.parse(bodyString);
@@ -583,13 +617,13 @@ max string length of ~512MB).
       ? maxVal <= UINT8_MAX
         ? new Uint8Array(data)
         : maxVal <= UINT16_MAX
-        ? new Uint16Array(data)
-        : new Uint32Array(data)
+          ? new Uint16Array(data)
+          : new Uint32Array(data)
       : minVal >= INT8_MIN && maxVal <= INT8_MAX
-      ? new Int8Array(data)
-      : minVal >= INT16_MIN && maxVal <= INT16_MAX
-      ? new Int16Array(data)
-      : new Int32Array(data);
+        ? new Int8Array(data)
+        : minVal >= INT16_MIN && maxVal <= INT16_MAX
+          ? new Int16Array(data)
+          : new Int32Array(data);
   }
 
   // Create demographic or voting static data and write to disk
@@ -754,31 +788,24 @@ max string length of ~512MB).
     const joinedMbtiles = join(dir, "all-geounits.mbtiles");
     const inputs = geoLevels.map(geoLevel => join(dir, `${geoLevel}.geojson`));
     // Convert all layers to vector tiles in one go, to ensure simplification with
-    // detection of shared borders applies to all layers at once
-    //
-    // This will cause tiles to include data beyond its min/max zoom, so we
-    // strip those out in a later step
+    // detection of shared borders applies to all layers at once.
+    // Only apply minZoom filters (when a layer first appears), NOT maxZoom caps.
+    // All layers persist up to the global maximum zoom so they share the same tile
+    // geometry at every zoom level, keeping boundaries perfectly aligned and
+    // enabling natural overzoom for county/precinct layers.
     this.log(`Converting geojson to vectortiles for ${geoLevels.join(", ")}`);
-    // If we know the min/max zooms we can use them here and reduce memory/file
-    // size, for automatic options like 'g' they'll only be used later
     const featureFilter = Object.fromEntries(
       geoLevels
         .map((geoLevel, idx) => {
           const minZoom = Number(minZooms[idx]);
-          const maxZoom = Number(maxZooms[idx]);
-          return isNaN(minZoom) && isNaN(maxZoom)
-            ? undefined
-            : isNaN(minZoom)
-            ? [geoLevel, ["<=", "$zoom", maxZoom]]
-            : isNaN(maxZoom)
-            ? [geoLevel, [">=", "$zoom", minZoom]]
-            : [geoLevel, ["all", [">=", "$zoom", minZoom], ["<=", "$zoom", maxZoom]]];
+          return isNaN(minZoom) ? undefined : [geoLevel, [">=", "$zoom", minZoom]];
         })
         .filter(entries => entries !== undefined) as any
     );
     tippecanoe(inputs, {
-      noSimplificationOfSharedNodes: true,
+      detectSharedBorders: true,
       featureFilter: JSON.stringify(featureFilter),
+      noFeatureLimit: true,
       force: true,
       readParallel: true,
       // The only properties we want are geounit hierarchy indices and optionally the name
@@ -791,20 +818,20 @@ max string length of ~512MB).
       simplification: 4,
       simplifyOnlyLowZooms: true
     });
-    // Extract per-layer tiles with strict zoom ranges, then generate labels
+    // Extract per-layer tiles — minZoom only, no maxZoom cap so all layers
+    // exist up to the global max zoom for alignment and overzoom.
+    const globalMaxZoom = maxZooms[0]; // block layer has the highest maxZoom
     const separateMbtiles = geoLevels.map(geoLevel => join(dir, `${geoLevel}.mbtiles`));
     const labelsSeq = geoLevels.map(geoLevel => join(dir, `${geoLevel}-labels.geojson`));
     const labelsMbtiles = geoLevels.map(geoLevel => join(dir, `${geoLevel}-labels.mbtiles`));
     geoLevels.forEach((geoLevel, idx) => {
       const minimumZoom = minZooms[idx];
-      const maximumZoom = maxZooms[idx];
       const input = join(dir, `${geoLevel}.geojson`);
       const output = separateMbtiles[idx];
-      // Extract per-layer with strict zoom ranges
       tileJoin([joinedMbtiles], {
         force: true,
         layer: geoLevel,
-        maximumZoom,
+        maximumZoom: globalMaxZoom,
         minimumZoom,
         noTileCompression: true,
         noTileSizeLimit: true,
@@ -812,12 +839,16 @@ max string length of ~512MB).
       });
       const labelPath = labelsSeq[idx];
       const labelOutput = labelsMbtiles[idx];
-      geojsonPolygonLabels(input, { collections: "largest", "input-format": "geojsonseq", "output-format": "geojsonseq" }, { outputPath: labelPath });
+      geojsonPolygonLabels(
+        input,
+        { collections: "largest", "input-format": "geojsonseq", "output-format": "geojsonseq" },
+        { outputPath: labelPath }
+      );
       tippecanoe(labelPath, {
         include: [...demographics.map(abbrev), ...voting.map(abbrev)],
         force: true,
         readParallel: true,
-        maximumZoom,
+        maximumZoom: globalMaxZoom,
         minimumZoom,
         noTileCompression: true,
         noTileSizeLimit: true,

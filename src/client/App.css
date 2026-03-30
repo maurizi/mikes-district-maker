@@ -16,8 +16,3 @@
 .maplibregl-canvas {
   outline: none;
 }
-
-.tippy-box {
-  background-color: #141414 !important;
-  border-radius: 2px;
-}

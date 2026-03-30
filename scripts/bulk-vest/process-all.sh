@@ -91,30 +91,34 @@ RUNNING_PIDS=()
 RUNNING_STATES=()
 FAILED_STATES=()
 
+cleanup_finished_jobs() {
+  NEW_PIDS=()
+  NEW_STATES=()
+  for idx in "${!RUNNING_PIDS[@]}"; do
+    if kill -0 "${RUNNING_PIDS[$idx]}" 2>/dev/null; then
+      NEW_PIDS+=("${RUNNING_PIDS[$idx]}")
+      NEW_STATES+=("${RUNNING_STATES[$idx]}")
+    else
+      wait "${RUNNING_PIDS[$idx]}" 2>/dev/null
+      EXIT_CODE=$?
+      if [[ $EXIT_CODE -ne 0 ]]; then
+        echo "FAILED: ${RUNNING_STATES[$idx]} (exit $EXIT_CODE)"
+        FAILED_STATES+=("${RUNNING_STATES[$idx]}")
+      fi
+    fi
+  done
+  RUNNING_PIDS=("${NEW_PIDS[@]}")
+  RUNNING_STATES=("${NEW_STATES[@]}")
+}
+
 for ROW in "${ROWS_TO_PROCESS[@]}"; do
+  # Always clean up finished jobs before checking capacity
+  cleanup_finished_jobs
+
   # Wait if we're at max capacity
   while [[ ${#RUNNING_PIDS[@]} -ge $MAX_PARALLEL ]]; do
-    # Wait for any one job to finish
-    wait -n 2>/dev/null || true
-    # Clean up finished jobs
-    NEW_PIDS=()
-    NEW_STATES=()
-    for idx in "${!RUNNING_PIDS[@]}"; do
-      if kill -0 "${RUNNING_PIDS[$idx]}" 2>/dev/null; then
-        NEW_PIDS+=("${RUNNING_PIDS[$idx]}")
-        NEW_STATES+=("${RUNNING_STATES[$idx]}")
-      else
-        # Check exit status
-        wait "${RUNNING_PIDS[$idx]}" 2>/dev/null
-        EXIT_CODE=$?
-        if [[ $EXIT_CODE -ne 0 ]]; then
-          echo "FAILED: ${RUNNING_STATES[$idx]} (exit $EXIT_CODE)"
-          FAILED_STATES+=("${RUNNING_STATES[$idx]}")
-        fi
-      fi
-    done
-    RUNNING_PIDS=("${NEW_PIDS[@]}")
-    RUNNING_STATES=("${NEW_STATES[@]}")
+    sleep 2
+    cleanup_finished_jobs
   done
 
   # Get state abbr for logging

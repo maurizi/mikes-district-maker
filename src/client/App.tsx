@@ -2,7 +2,7 @@ import React from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Provider, RollbarContext } from "@rollbar/react";
 import Rollbar from "rollbar";
-import { ThemeProvider } from "theme-ui";
+import { ThemeUIProvider } from "theme-ui";
 import { QueryParamProvider } from "use-query-params";
 import { ReactRouter6Adapter } from "use-query-params/adapters/react-router-6";
 
@@ -84,10 +84,10 @@ const AppRoutes = () => (
 
 const App = () => (
   <Provider config={rollbarConfig}>
-    <ThemeProvider theme={theme}>
+    <ThemeUIProvider theme={theme}>
       <Toast />
       <AppRoutes />
-    </ThemeProvider>
+    </ThemeUIProvider>
   </Provider>
 );
 

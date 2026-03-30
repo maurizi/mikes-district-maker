@@ -954,7 +954,10 @@ const SidebarRows = ({
         const popDeviationThreshold =
           (project.populationDeviation / 100) * popPerRep * numberOfReps;
 
-        return feature.properties.populationDeviation !== undefined ? (
+        const targetPopulation = districtId !== 0 ? popPerRep * (project.numberOfMembers[districtId - 1] || 0) : 0;
+        const deviation = feature.properties.demographics.population - targetPopulation;
+
+        return (
           <SidebarRow
             district={feature}
             selected={selected}
@@ -965,7 +968,7 @@ const SidebarRows = ({
             expandedProjectMetrics={expandedProjectMetrics}
             demographics={feature.properties.demographics}
             demographicsGroups={demographicsGroups}
-            deviation={feature.properties.populationDeviation}
+            deviation={deviation}
             key={districtId}
             isDistrictLocked={lockedDistricts[districtId - 1]}
             isDistrictHovered={districtId === hoveredDistrictId}
@@ -976,7 +979,7 @@ const SidebarRows = ({
             popDeviationThreshold={popDeviationThreshold}
             populationKey={populationKey}
           />
-        ) : null;
+        );
       })}
     </React.Fragment>
   );

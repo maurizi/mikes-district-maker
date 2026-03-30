@@ -148,14 +148,31 @@ export class DistrictsController {
       fetchCachedJson<GeoUnitHierarchy>(s3, regionConfig.s3URI, "geounit-hierarchy.json")
     ]);
 
-    // Find unmatched records
+    // Build a map from base block ID to its split variants (e.g. "42001..." -> ["42001...-1", "42001...-2"])
     const allBlockIds: Set<string> = new Set(blockIds);
-    const invalidRecords = records.filter((record, i) => {
-      if (!allBlockIds.has(record[0]) && !flaggedRows[i]) {
-        setFlag(record, i, "BLOCKID", "Invalid block ID");
-        return true;
+    const splitBlockMap: Map<string, string[]> = new Map();
+    for (const id of blockIds) {
+      const dashIdx = id.indexOf("-");
+      if (dashIdx !== -1) {
+        const baseId = id.substring(0, dashIdx);
+        const existing = splitBlockMap.get(baseId);
+        if (existing) {
+          // eslint-disable-next-line functional/immutable-data
+          existing.push(id);
+        } else {
+          splitBlockMap.set(baseId, [id]);
+        }
       }
-      return false;
+    }
+
+    // Find unmatched records, expanding split blocks
+    const invalidRecords = records.filter((record, i) => {
+      if (flaggedRows[i]) return false;
+      if (allBlockIds.has(record[0])) return false;
+      // Check if this block was split during processing
+      if (splitBlockMap.has(record[0])) return false;
+      setFlag(record, i, "BLOCKID", "Invalid block ID");
+      return true;
     });
 
     // This is a heuristic more than an exact detection method, but it seems sufficient from my testing
@@ -165,9 +182,21 @@ export class DistrictsController {
       };
     }
 
-    const blockToDistricts = Object.fromEntries(
-      unflaggedRows.map(([block, district]) => [block, Number(district)])
-    );
+    // Build block-to-district mapping, expanding split blocks so all sub-blocks
+    // get the same district assignment as their parent
+    const blockToDistricts: { [blockId: string]: number } = {};
+    for (const [block, district] of unflaggedRows) {
+      const d = Number(district);
+      if (allBlockIds.has(block)) {
+        blockToDistricts[block] = d;
+      }
+      const splits = splitBlockMap.get(block);
+      if (splits) {
+        for (const splitId of splits) {
+          blockToDistricts[splitId] = d;
+        }
+      }
+    }
     const districtsDefinition = importCsvToDefinition(blockIds, geoUnitHierarchy, blockToDistricts);
 
     const maxDistrictId = Object.values(blockToDistricts).reduce((a, b) => Math.max(a, b), 0);

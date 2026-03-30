@@ -37,7 +37,7 @@ const style: Record<string, ThemeUIStyleObject> = {
     height: "auto",
     borderRadius: "small",
     boxShadow: "small",
-    width: "200px",
+    width: "210px",
     overflow: "hidden",
     pointerEvents: "none",
     p: 2,

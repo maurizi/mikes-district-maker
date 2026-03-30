@@ -390,11 +390,14 @@ const DistrictsMap = ({
       return;
     }
 
+    // Constrain panning to the region bbox with padding so users can't wander off
+    const bboxPad = 10;
     const map = new maplibregl.Map({
       container: mapRef.current,
       style: MAP_STYLE,
       bounds: [b0, b1, b2, b3],
       fitBoundsOptions: { padding: 75 },
+      maxBounds: [b0 - bboxPad, b1 - bboxPad, b2 + bboxPad, b3 + bboxPad],
       minZoom: minZoom,
       maxZoom: overZoom
     });
@@ -427,6 +430,8 @@ const DistrictsMap = ({
       );
 
       setMap(map);
+      // Expose map for automated visual inspection (visual-inspect.ts)
+      (window as any).__dbMap = map;
 
       map.resize();
     };

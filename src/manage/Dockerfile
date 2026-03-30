@@ -30,10 +30,12 @@ RUN set -ex \
   libsqlite3-dev \
   procps \
   python3 \
+  python3-pip \
   make \
   g++ \
   " \
-  && apt-get update && apt-get install -yq $deps --no-install-recommends
+  && apt-get update && apt-get install -yq $deps --no-install-recommends \
+  && pip3 install --break-system-packages shapely
 
 COPY package.json /home/node/app/manage
 COPY yarn.lock /home/node/app/manage

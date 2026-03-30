@@ -224,6 +224,9 @@ export function generateMapLayers(
     data: geojson
   });
 
+  // Single source for all geolevels — keeps shared arcs aligned across layers.
+  // All layers exist at all zoom levels (from their minZoom up to the global max)
+  // so overzoom works naturally and boundaries stay perfectly aligned.
   map.addSource(GEOLEVELS_SOURCE_ID, {
     type: "vector",
     url: `pmtiles://${s3ToHttps(path)}tiles.pmtiles`,
@@ -591,7 +594,7 @@ export function generateMapLayers(
     map.setFilter(layer, [
       "all",
       map.getFilter(layer),
-      ["match", ["get", "iso_3166_2"], [`US-${regionCode}`], true, false]
+      ["==", "iso_3166_2", `US-${regionCode}`]
     ] as maplibregl.FilterSpecification);
     map.setLayoutProperty(layer, "visibility", "visible");
   });

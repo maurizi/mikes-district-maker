@@ -13,7 +13,6 @@ import {
   IStaticMetadata,
   IUser,
   ProjectId,
-  RegionLookupProperties,
   TypedArrays
 } from "../../shared/entities";
 
@@ -59,7 +58,6 @@ interface StateProps {
   readonly staticGeoLevels: TypedArrays;
   readonly projectNotFound?: boolean;
   readonly findMenuOpen: boolean;
-  readonly regionProperties: Resource<readonly RegionLookupProperties[]>;
   readonly evaluateMode: boolean;
   readonly evaluateMetric: EvaluateMetricWithValue | undefined;
   readonly geoUnitHierarchy?: GeoUnitHierarchy;
@@ -100,7 +98,6 @@ const ProjectScreen = ({
   staticGeoLevels,
   evaluateMode,
   evaluateMetric,
-  regionProperties,
   projectNotFound,
   findMenuOpen,
   geoUnitHierarchy,
@@ -224,7 +221,6 @@ const ProjectScreen = ({
             geojson={geojson}
             metric={evaluateMetric}
             project={project}
-            regionProperties={regionProperties}
             staticMetadata={staticMetadata}
             isArchived={isArchived}
           />
@@ -332,7 +328,6 @@ function mapStateToProps(state: State): StateProps {
     limitSelectionToCounty: state.projectOptions.limitSelectionToCounty,
     districtDrawing: state.project,
     referenceLayers: state.project.referenceLayers,
-    regionProperties: state.regionConfig.regionProperties,
     isLoading:
       ("isPending" in state.project.projectData && state.project.projectData.isPending) ||
       ("isPending" in state.project.staticData && state.project.staticData.isPending),

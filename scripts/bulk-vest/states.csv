@@ -8,7 +8,7 @@ CO,08,Colorado,co_2020.zip,PRECINCT,co_2018.zip,PRECINCT,co_2016.zip,PRECINCT,0.
 CT,09,Connecticut,ct_2020.zip,NAME20,ct_2018.zip,NAME20,ct_2016.zip,NAME20,0.0000000025,1e5,"10,4,0","14,12,8",500000,true,published,0,
 DC,11,District of Columbia,dc_2020.zip,GEOID,dc_2018.zip,NAME,dc_2016.zip,NAME,0.0000000025,1e5,"10,4,0","14,12,8",500000,true,published,0,
 DE,10,Delaware,de_2020.zip,PRECINCT,de_2018.zip,PRECINCT,de_2016.zip,PRECINCT,0.0000000025,1e5,"10,4,0","14,12,8",500000,true,published,0,
-FL,12,Florida,fl_2020.zip,PRECINCT,fl_2018.zip,PRECINCT,fl_2016.zip,PRECINCT,0.0000002,1e4,"11,5,1","14,12,8",650000,true,pending,0.0003,extra years: 2012=fl_2012.zip; 2014=fl_2014.zip
+FL,12,Florida,fl_2020.zip,PRECINCT,fl_2018.zip,PRECINCT,fl_2016.zip,PRECINCT,0.0000002,1e4,"11,5,1","14,12,8",650000,true,published,0.0003,extra years: 2012=fl_2012.zip; 2014=fl_2014.zip
 GA,13,Georgia,ga_2020.zip,PRECINCT_I,ga_2018.zip,PRECINCT_I,ga_2016.zip,PRECINCT_I,0.00000002,1e5,"11,4,0","14,12,8",500000,true,published,0,
 HI,15,Hawaii,hi_2020.zip,PRECINCT,hi_2018.zip,PRECINCT,hi_2016.zip,PRECINCT,0.000000005,1e5,"10,4,0","14,12,8",500000,true,published,0,
 IA,19,Iowa,ia_2020.zip,DISTRICT,ia_2018.zip,DISTRICT,ia_2016.zip,DISTRICT,0.00000001,1e4,"11,4,0","14,12,8",500000,true,published,0,
@@ -18,31 +18,31 @@ IN,18,Indiana,in_2020.zip,VTDST20,in_2018.zip,P18,in_2016.zip,P16,0.00000001,1e4
 KS,20,Kansas,ks_2020.zip,VTDST,ks_2018.zip,VTDST,ks_2016.zip,NAMELSAD,0.00000001,1e4,"11,4,0","14,12,8",500000,true,published,0,extra years: 2012=ks_2012.zip
 KY,21,Kentucky,ky_2020.zip,VTDST20,,,ky_2016.zip,VTDST16,0.00000001,1e4,"11,4,0","14,12,8",500000,true,published,0.00001,extra years: 2019=ky_2019.zip
 LA,22,Louisiana,la_2020.zip,VTDST,la_2018.zip,VTDST10,la_2016.zip,VTDST10,0.00000008,1e4,"11,4,1","14,12,8",650000,true,pending,0.00001,extra years: 2019=la_2019.zip
-MA,25,Massachusetts,ma_2020.zip,PRECINCT,ma_2018.zip,PRECINCT,ma_2016.zip,PRECINCT,0.0000003,1e4,"11,4,0","14,12,8",700000,true,pending,0.0001,
-MD,24,Maryland,md_2020.zip,NAME,md_2018.zip,NAME,md_2016.zip,NAME,0.000001,1e4,"11,4,0","14,12,8",750000,true,pending,0.0001,
+MA,25,Massachusetts,ma_2020.zip,PRECINCT,ma_2018.zip,PRECINCT,ma_2016.zip,PRECINCT,0.0000003,1e4,"11,4,0","14,12,8",700000,true,published,0.0001,
+MD,24,Maryland,md_2020.zip,NAME,md_2018.zip,NAME,md_2016.zip,NAME,0.000002,1e4,"11,4,0","14,12,8",760000,true,pending,0.0003,
 ME,23,Maine,me_2020.zip,NAME,me_2018.zip,NAME,me_2016.zip,NAME,0.000000005,1e5,"10,4,0","14,12,8",500000,true,published,0,
 MI,26,Michigan,mi_2020.zip,PRECINCT,mi_2018.zip,PRECINCT,mi_2016.zip,PRECINCT,0.00000001,1e6,"11,4,0","14,12,8",500000,true,published,0,
 MN,27,Minnesota,mn_2020.zip,VTDID,mn_2018.zip,VTDID,mn_2016.zip,VTDID,0.00000001,1e4,"11,4,0","14,12,8",500000,true,published,0,
-MO,29,Missouri,mo_2020.zip,NAME,mo_2018.zip,NAME,mo_2016.zip,NAME,0.0000005,1e4,"11,5,1","14,12,8",700000,true,pending,0.0005,
+MO,29,Missouri,mo_2020.zip,NAME,mo_2018.zip,NAME,mo_2016.zip,NAME,0.0000005,1e4,"11,5,1","14,12,8",700000,true,published,0.0005,
 MS,28,Mississippi,ms_2020.zip,VTDST20,ms_2018.zip,VTDST18,ms_2016.zip,VTDST16,0.000000005,1e5,"10,4,0","14,12,8",500000,true,published,0,extra years: 2019=ms_2019.zip
 MT,30,Montana,mt_2020.zip,SOSPRECINC,mt_2018.zip,SOSPRECINC,mt_2016.zip,SOSPRECINC,0.0000000025,1e5,"10,4,0","14,12,8",500000,true,published,0,
 NC,37,North Carolina,nc_2020.zip,PREC_ID,nc_2018.zip,PREC_ID,nc_2016.zip,PREC_ID,0.00000001,1e6,"11,4,0","14,12,8",500000,true,published,0,
 ND,38,North Dakota,nd_2020.zip,PRECINCT,nd_2018.zip,PRECINCT,nd_2016.zip,PRECINCT,0.0000000025,1e5,"10,4,0","14,12,8",500000,true,published,0,
 NE,31,Nebraska,ne_2020.zip,NAME,ne_2018.zip,NAMELSAD,ne_2016.zip,NAMELSAD,0.000000005,1e5,"10,4,0","14,12,8",500000,true,published,0,
 NH,33,New Hampshire,nh_2020.zip,VTDST20,nh_2018.zip,VTDST20,nh_2016.zip,VTDST20,0.0000000025,1e5,"10,4,0","14,12,8",500000,true,published,0,
-NJ,34,New Jersey,nj_2020.zip,MUNINAME,nj_2018.zip,DISTRICT,nj_2016.zip,DISTRICT,0.0000005,1e4,"11,4,1","14,12,8",750000,true,pending,0.001,extra years: 2017=nj_2017.zip
+NJ,34,New Jersey,nj_2020.zip,MUNINAME,nj_2018.zip,DISTRICT,nj_2016.zip,DISTRICT,0.0000005,1e4,"11,4,1","14,12,8",750000,true,published,0.001,extra years: 2017=nj_2017.zip
 NM,35,New Mexico,nm_2020.zip,VTDST,nm_2018.zip,VTDST,nm_2016.zip,VTDST,0.00000001,1e4,"10,4,0","14,12,8",500000,true,published,0,
 NV,32,Nevada,nv_2020.zip,VTDST,nv_2018.zip,VTDST,nv_2016.zip,VTDST,0.000000005,1e5,"11,4,0","14,12,8",500000,true,published,0,
 NY,36,New York,ny_2020.zip,PRECINCT,ny_2018.zip,PRECINCT,ny_2016.zip,PRECINCT,0.00000008,1e4,"11,5,0","14,12,8",750000,true,pending,0.008,
 OH,39,Ohio,oh_2020.zip,PRECINCT20,oh_2018.zip,PRECINCT18,oh_2016.zip,PRECINCT16,0.00000003,1e5,"11,4,0","14,12,8",550000,true,published,0,
 OK,40,Oklahoma,ok_2020.zip,GEOID,ok_2018.zip,PRECINCT,ok_2016.zip,PRECINCT,0.00000003,1e4,"11,4,0","14,12,8",550000,true,published,0,
-OR,41,Oregon,or_2020.zip,PRECINCT,or_2018.zip,PRECINCT,or_2016.zip,PRECINCT,0.0000001,1e4,"11,5,1","14,12,8",600000,true,pending,0.00001,
-PA,42,Pennsylvania,pa_2020.zip,PRECINCT,pa_2018.zip,PRECINCT,pa_2016.zip,PRECINCT,0.0000002,1e4,"11,5,0","14,12,8",700000,true,pending,0.00005,
+OR,41,Oregon,or_2020.zip,PRECINCT,or_2018.zip,PRECINCT,or_2016.zip,PRECINCT,0.0000001,1e4,"11,5,1","14,12,8",600000,true,published,0.00001,
+PA,42,Pennsylvania,pa_2020.zip,PRECINCT,pa_2018.zip,PRECINCT,pa_2016.zip,PRECINCT,0.0000003,1e4,"11,5,0","14,12,8",750000,true,pending,0.0001,
 RI,44,Rhode Island,ri_2020.zip,VTDST20,ri_2018.zip,VTDST20,ri_2016.zip,VTDST20,0.00000001,1e4,"11,4,0","14,12,8",500000,true,published,0,
 SC,45,South Carolina,sc_2020.zip,PCODE,sc_2018.zip,PCODE,sc_2016.zip,PCODE,0.000000005,1e5,"10,4,0","14,12,8",500000,true,published,0,
 SD,46,South Dakota,sd_2020.zip,VTDST,sd_2018.zip,VTDST,sd_2016.zip,VTDST,0.0000000025,1e5,"10,4,0","14,12,8",500000,true,published,0,
 TN,47,Tennessee,tn_2020.zip,VTD,tn_2018.zip,VTD,tn_2016.zip,VTD,0.00000001,1e6,"11,4,0","14,12,8",500000,true,published,0,
-TX,48,Texas,tx_2020.zip,PCTKEY,tx_2018.zip,PCTKEY,tx_2016.zip,PCTKEY,0.0000002,1e4,"11,4,3","14,12,8",750000,true,pending,0.005,
+TX,48,Texas,tx_2020.zip,PCTKEY,tx_2018.zip,PCTKEY,tx_2016.zip,PCTKEY,0.0000002,1e4,"11,4,0","14,12,8",750000,true,pending,0.005,
 UT,49,Utah,ut_2020.zip,PRECINCT,ut_2018.zip,PRECINCT,ut_2016.zip,PRECINCT,0.00000001,1e5,"11,4,0","14,12,8",550000,true,published,0,
 VA,51,Virginia,va_2020.zip,PRECINCT,va_2018.zip,PRECINCT,va_2016.zip,PRECINCT,0.00000001,1e5,"11,4,0","14,12,8",500000,true,published,0,extra years: 2017=va_2017.zip
 VT,50,Vermont,vt_2020.zip,NAME20,vt_2018.zip,NAME20,vt_2016.zip,NAME20,0.0000000025,1e5,"10,4,0","14,12,8",500000,true,published,0,

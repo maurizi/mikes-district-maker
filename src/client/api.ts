@@ -242,20 +242,7 @@ export async function fetchRegionConfigs(): Promise<readonly IRegionConfig[]> {
   });
 }
 
-export async function fetchRegionProperties(
-  region: RegionConfigId,
-  geoLevel: string,
-  fields: readonly string[]
-): Promise<readonly Record<string, unknown>[]> {
-  return new Promise((resolve, reject) => {
-    apiAxios
-      .get(`/api/region-configs/${region}/properties/${geoLevel}?fields=${fields.join("&fields=")}`)
-      .then(response => {
-        resolve(response.data);
-      })
-      .catch(error => reject(error.message));
-  });
-}
+
 
 export async function patchProject(
   id: ProjectId,
@@ -543,10 +530,8 @@ export async function removeUserFromOrganization(
   });
 }
 
-// Retrieves total population for the region by fetching metadata & querying topojson properties
+// Retrieves total population for the region from static metadata
 export async function fetchTotalPopulation(region: IRegionConfig) {
   const staticMetadata = await fetchStaticMetadata(region.s3URI);
-  const topLevel = staticMetadata.geoLevels[staticMetadata.geoLevels.length - 1].id;
-  const records = await fetchRegionProperties(region.id, topLevel, ["population"]);
-  return records.reduce((total, record) => total + Number(record["population"]), 0);
+  return staticMetadata.totalPopulation;
 }

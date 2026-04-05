@@ -335,6 +335,8 @@ max string length of ~512MB).
 
     this.writeStaticMetadata(
       flags.outputDir,
+      topoJsonHierarchy,
+      geoLevelIds[geoLevelIds.length - 1],
       demographicMetaData,
       geoLevelMetaData,
       votingMetaData,
@@ -694,6 +696,8 @@ max string length of ~512MB).
   // Write static metadata file to disk
   writeStaticMetadata(
     dir: string,
+    topology: Topology<Objects<{}>>,
+    topLevelId: string,
     demographicMetadata: IStaticFile[],
     geoLevelMetadata: IStaticFile[],
     votingMetadata: IStaticFile[],
@@ -702,13 +706,25 @@ max string length of ~512MB).
     demographicsGroups: readonly DemographicsGroup[]
   ): void {
     this.log("Writing static metadata file");
+
+    const topLevel = topology.objects[topLevelId] as GeometryCollection;
+    const topLevelNames = topLevel.geometries.map(
+      (g: GeometryObject<any>) => (g.properties?.name as string) || ""
+    );
+    const totalPopulation = topLevel.geometries.reduce(
+      (sum: number, g: GeometryObject<any>) => sum + (Number(g.properties?.population) || 0),
+      0
+    );
+
     const staticMetadata: IStaticMetadata = {
       demographics: demographicMetadata,
       geoLevels: geoLevelMetadata,
       voting: votingMetadata,
       bbox,
       geoLevelHierarchy,
-      demographicsGroups
+      demographicsGroups,
+      totalPopulation,
+      topLevelNames
     };
 
     writeFileSync(join(dir, "static-metadata.json"), JSON.stringify(staticMetadata));
@@ -765,12 +781,27 @@ max string length of ~512MB).
 
       // Write as newline-delimited GeoJSON (geojsonseq) — one feature per line
       // Enables tippecanoe --read-parallel and geojson-polygon-labels --input-format=geojsonseq
-      const filePath = join(dir, `${geoLevel}.geojson`);
-      const fd = require("fs").openSync(filePath, "w"); // eslint-disable-line
+      const filePath1 = join(dir, `${geoLevel}.geojson`);
+      const filePath2 = join(dir, `${geoLevel}-stripped.geojson`);
+      const fd1 = require("fs").openSync(filePath1, "w"); // eslint-disable-line
+      const fd2 = require("fs").openSync(filePath2, "w"); // eslint-disable-line
       for (const feature of (geojson as any).features) {
-        require("fs").writeSync(fd, JSON.stringify(feature) + "\n"); // eslint-disable-line
+        require("fs").writeSync(fd1, JSON.stringify(feature) + "\n"); // eslint-disable-line
+        // The only properties we want are geounit hierarchy indices and optionally the name
+        const stripped = {
+          ...feature,
+          properties: {
+            idx: feature.properties.idx,
+            name: feature.properties.name
+          }
+        };
+        for (const gl of geoLevels.slice(1)) {
+          stripped.properties[`${gl}Idx`] = feature.properties[`${gl}Idx`];
+        }
+        require("fs").writeSync(fd2, JSON.stringify(stripped) + "\n"); // eslint-disable-line
       }
-      require("fs").closeSync(fd); // eslint-disable-line
+      require("fs").closeSync(fd1); // eslint-disable-line
+      require("fs").closeSync(fd2); // eslint-disable-line
     }
     this.log("GeoJSON Sequence files written to disk");
   }
@@ -786,7 +817,7 @@ max string length of ~512MB).
     maximumTileBytes: number = 750000
   ): GeoLevelInfo[] {
     const joinedMbtiles = join(dir, "all-geounits.mbtiles");
-    const inputs = geoLevels.map(geoLevel => join(dir, `${geoLevel}.geojson`));
+    const inputs = geoLevels.map(geoLevel => join(dir, `${geoLevel}-stripped.geojson`));
     // Convert all layers to vector tiles in one go, to ensure simplification with
     // detection of shared borders applies to all layers at once.
     // Only apply minZoom filters (when a layer first appears), NOT maxZoom caps.
@@ -808,8 +839,6 @@ max string length of ~512MB).
       noFeatureLimit: true,
       force: true,
       readParallel: true,
-      // The only properties we want are geounit hierarchy indices and optionally the name
-      include: [...geoLevels.slice(1).map(gl => `${gl}Idx`), "idx", "name"],
       noTileCompression: true,
       noTinyPolygonReduction: true,
       maximumTileBytes,

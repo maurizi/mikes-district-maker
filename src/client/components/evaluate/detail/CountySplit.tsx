@@ -1,8 +1,6 @@
 import { Box, Flex, ThemeUIStyleObject, Heading } from "theme-ui";
-import { IProject, IStaticMetadata, RegionLookupProperties } from "../../../../shared/entities";
-import { useState, useEffect } from "react";
+import { IProject, IStaticMetadata } from "../../../../shared/entities";
 import { getLabelLookup } from "../../map/labels";
-import { Resource } from "../../../resource";
 import { EvaluateMetricWithValue } from "../../../types";
 import { geoLevelLabel, geoLevelLabelSingular } from "../../../functions";
 
@@ -72,30 +70,18 @@ const style: Record<string, ThemeUIStyleObject> = {
   }
 };
 
-type CountyLookup = ReadonlyArray<string | undefined>;
-
 const CountySplitMetricDetail = ({
   metric,
   project,
   staticMetadata,
-  regionProperties,
   geoLevel
 }: {
   readonly metric: EvaluateMetricWithValue;
   readonly project?: IProject;
   readonly geoLevel: string;
-  readonly regionProperties: Resource<readonly RegionLookupProperties[]>;
   readonly staticMetadata?: IStaticMetadata;
 }) => {
-  const [countyLookup, setCountyLookup] = useState<CountyLookup | undefined>(undefined);
-
-  useEffect(() => {
-    if ("resource" in regionProperties && !countyLookup) {
-      setCountyLookup(
-        regionProperties.resource.map(c => (typeof c.name === "string" ? c.name : undefined))
-      );
-    }
-  }, [regionProperties, countyLookup]);
+  const countyLookup = staticMetadata?.topLevelNames;
 
   return (
     <Box>

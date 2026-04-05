@@ -1,31 +1,24 @@
 import { Cmd, Loop, loop } from "redux-loop";
 import { getType } from "typesafe-actions";
 
-import { Action, LoopAction } from "../actions";
+import { LoopAction } from "../actions";
 import {
   regionConfigsFetch,
   regionConfigsFetchFailure,
-  regionConfigsFetchSuccess,
-  regionPropertiesFetch,
-  regionPropertiesFetchFailure,
-  regionPropertiesFetchSuccess
+  regionConfigsFetchSuccess
 } from "../actions/regionConfig";
 
-import { IRegionConfig, RegionLookupProperties } from "../../shared/entities";
-import { fetchRegionConfigs, fetchRegionProperties } from "../api";
+import { IRegionConfig } from "../../shared/entities";
+import { fetchRegionConfigs } from "../api";
 import { showResourceFailedToast } from "../functions";
 import { Resource } from "../resource";
 
 export interface RegionConfigState {
   readonly regionConfigs: Resource<readonly IRegionConfig[]>;
-  readonly regionProperties: Resource<readonly RegionLookupProperties[]>;
-  readonly currentRegion: string | undefined;
 }
 
 export const initialState = {
-  regionConfigs: { isPending: false },
-  regionProperties: { isPending: false },
-  currentRegion: undefined
+  regionConfigs: { isPending: false }
 };
 
 const regionConfigReducer = (
@@ -55,36 +48,6 @@ const regionConfigReducer = (
         {
           ...state,
           regionConfigs: {
-            errorMessage: action.payload
-          }
-        },
-        Cmd.run(showResourceFailedToast)
-      );
-    case getType(regionPropertiesFetch):
-      return loop(
-        {
-          ...state,
-          currentRegion: action.payload.regionConfigId,
-          regionProperties: { isPending: true }
-        },
-        Cmd.run(fetchRegionProperties, {
-          successActionCreator: regionPropertiesFetchSuccess,
-          failActionCreator: regionPropertiesFetchFailure,
-          args: [action.payload.regionConfigId, action.payload.geoLevel, ["name"]] as Parameters<
-            typeof fetchRegionProperties
-          >
-        })
-      );
-    case getType(regionPropertiesFetchSuccess):
-      return {
-        ...state,
-        regionProperties: { resource: action.payload }
-      };
-    case getType(regionPropertiesFetchFailure):
-      return loop(
-        {
-          ...state,
-          regionProperties: {
             errorMessage: action.payload
           }
         },

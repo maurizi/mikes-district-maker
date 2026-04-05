@@ -1,5 +1,5 @@
 import { Box, Button, Flex, ThemeUIStyleObject, Heading, Text, Select } from "theme-ui";
-import { IProject, IStaticMetadata, RegionLookupProperties } from "../../../shared/entities";
+import { IProject, IStaticMetadata } from "../../../shared/entities";
 import Icon from "../Icon";
 import { DistrictsGeoJSON, ElectionYear, EvaluateMetricWithValue, PviBucket } from "../../types";
 import store from "../../store";
@@ -8,7 +8,6 @@ import ContiguityMetricDetail from "./detail/Contiguity";
 import CompactnessMetricDetail from "./detail/Compactness";
 import CountySplitMetricDetail from "./detail/CountySplit";
 import EqualPopulationMetricDetail from "./detail/EqualPopulation";
-import { Resource } from "../../resource";
 import CompetitivenessMetricDetail from "./detail/Competitiveness";
 import MajorityRaceMetricDetail from "./detail/MajorityRace";
 
@@ -32,7 +31,6 @@ const ProjectEvaluateMetricDetail = ({
   geojson,
   metric,
   project,
-  regionProperties,
   geoLevel,
   electionYear,
   pviBuckets,
@@ -42,7 +40,6 @@ const ProjectEvaluateMetricDetail = ({
   readonly geojson?: DistrictsGeoJSON;
   readonly metric: EvaluateMetricWithValue;
   readonly project?: IProject;
-  readonly regionProperties: Resource<readonly RegionLookupProperties[]>;
   readonly geoLevel: string;
   readonly electionYear: ElectionYear | undefined;
   readonly pviBuckets: readonly (PviBucket | undefined)[] | undefined;
@@ -116,7 +113,6 @@ const ProjectEvaluateMetricDetail = ({
               project={project}
               metric={metric}
               geoLevel={geoLevel}
-              regionProperties={regionProperties}
               staticMetadata={staticMetadata}
             />
           ) : metric && "type" in metric && metric.key === "compactness" ? (

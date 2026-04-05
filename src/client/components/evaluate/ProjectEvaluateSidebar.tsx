@@ -1,6 +1,6 @@
 import { ThemeUIStyleObject, Container, Box } from "theme-ui";
 
-import { IProject, IStaticMetadata, RegionLookupProperties } from "../../../shared/entities";
+import { IProject, IStaticMetadata } from "../../../shared/entities";
 import { DistrictsGeoJSON, EvaluateMetricWithValue, ElectionYear, PviBucket } from "../../types";
 import store from "../../store";
 import {
@@ -8,16 +8,13 @@ import {
   isMajorityMinority,
   getPopulationPerRepresentative
 } from "../../functions";
-import { regionPropertiesFetch, regionPropertiesFetchSuccess } from "../../actions/regionConfig";
 import ProjectEvaluateMetricDetail from "./ProjectEvaluateMetricDetail";
 import ProjectEvaluateSummary from "./ProjectEvaluateSummary";
 import { useState, useEffect } from "react";
-import { Resource } from "../../resource";
 import { selectEvaluationMetric } from "../../actions/districtDrawing";
 
 import { geoLevelLabelSingular, calculatePVI } from "../../functions";
 import { getPviBuckets, getPviSteps } from "../map";
-import { archivedCountyNames } from "../../constants/archivedCountyNames";
 
 const style: Record<string, ThemeUIStyleObject> = {
   sidebar: {
@@ -35,14 +32,12 @@ const ProjectEvaluateSidebar = ({
   geojson,
   metric,
   project,
-  regionProperties,
   staticMetadata,
   isArchived
 }: {
   readonly geojson?: DistrictsGeoJSON;
   readonly metric: EvaluateMetricWithValue | undefined;
   readonly project?: IProject;
-  readonly regionProperties: Resource<readonly RegionLookupProperties[]>;
   readonly staticMetadata?: IStaticMetadata;
   readonly isArchived: boolean;
 }) => {
@@ -64,18 +59,6 @@ const ProjectEvaluateSidebar = ({
 
   const geoLevel =
     staticMetadata?.geoLevelHierarchy[staticMetadata.geoLevelHierarchy.length - 1].id;
-
-  useEffect(() => {
-    if (project && project.regionConfig.regionCode && geoLevel) {
-      !isArchived
-        ? store.dispatch(
-            regionPropertiesFetch({ regionConfigId: project.regionConfig.id, geoLevel: geoLevel })
-          )
-        : store.dispatch(
-            regionPropertiesFetchSuccess(archivedCountyNames[`${project.regionConfig.regionCode}`])
-          );
-    }
-  }, [project, geoLevel]);
 
   const numEqualPopDistricts =
     geojson &&
@@ -264,7 +247,7 @@ const ProjectEvaluateSidebar = ({
           requiredMetrics={requiredMetrics}
           optionalMetrics={optionalMetrics}
         />
-      ) : geoLevel && regionProperties ? (
+      ) : geoLevel ? (
         <ProjectEvaluateMetricDetail
           geojson={geojson}
           metric={metric}
@@ -273,7 +256,6 @@ const ProjectEvaluateSidebar = ({
           setElectionYear={setEvaluateElectionYear}
           geoLevel={geoLevel}
           pviBuckets={pviBuckets}
-          regionProperties={regionProperties}
           staticMetadata={staticMetadata}
         />
       ) : (

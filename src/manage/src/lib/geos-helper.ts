@@ -1,13 +1,55 @@
 /**
- * GEOS-wasm helper for fast spatial operations.
- * Wraps the low-level C API with proper memory management.
+ * Native GEOS helper via koffi FFI bindings to libgeos_c.
+ * No WASM memory limits — uses the system's native GEOS library.
  */
-// @ts-ignore — geos-wasm types have issues with some TS configs
-import initGeos from "geos-wasm";
-import { Feature, Polygon, MultiPolygon } from "geojson";
+import koffi from "koffi";
+import { Polygon, MultiPolygon } from "geojson";
 
-type GeosModule = Awaited<ReturnType<typeof initGeos>>;
-type GeomPtr = number;
+// Opaque pointer types
+const GEOSGeometry = koffi.opaque("GEOSGeometry");
+const GEOSGeometryPtr = koffi.pointer(GEOSGeometry);
+const GEOSPreparedGeometry = koffi.opaque("GEOSPreparedGeometry");
+const GEOSPreparedGeometryPtr = koffi.pointer(GEOSPreparedGeometry);
+const GEOSWKTReader = koffi.opaque("GEOSWKTReader");
+const GEOSWKTReaderPtr = koffi.pointer(GEOSWKTReader);
+const GEOSWKTWriter = koffi.opaque("GEOSWKTWriter");
+const GEOSWKTWriterPtr = koffi.pointer(GEOSWKTWriter);
+
+function geojsonToWktScaled(geom: Polygon | MultiPolygon, scale: number): string {
+  if (geom.type === "Polygon") {
+    const rings = geom.coordinates
+      .map(ring => "(" + ring.map(p => `${Math.round(p[0] * scale)} ${Math.round(p[1] * scale)}`).join(", ") + ")")
+      .join(", ");
+    return `POLYGON (${rings})`;
+  }
+  if (geom.type === "MultiPolygon") {
+    const polys = geom.coordinates
+      .map(
+        poly =>
+          "(" +
+          poly
+            .map(
+              ring =>
+                "(" + ring.map(p => `${Math.round(p[0] * scale)} ${Math.round(p[1] * scale)}`).join(", ") + ")"
+            )
+            .join(", ") +
+          ")"
+      )
+      .join(", ");
+    return `MULTIPOLYGON (${polys})`;
+  }
+  throw new Error(`Unsupported geometry type: ${(geom as any).type}`);
+}
+
+function wktToGeoJSONScaled(wkt: string, scale: number): Polygon | MultiPolygon | null {
+  const result = wktToGeoJSON(wkt);
+  if (!result) return null;
+  function unscaleCoords(coords: any): any {
+    if (typeof coords[0] === "number") return [coords[0] / scale, coords[1] / scale];
+    return coords.map(unscaleCoords);
+  }
+  return { ...result, coordinates: unscaleCoords(result.coordinates) } as any;
+}
 
 function geojsonToWkt(geom: Polygon | MultiPolygon): string {
   if (geom.type === "Polygon") {
@@ -35,365 +77,6 @@ function geojsonToWkt(geom: Polygon | MultiPolygon): string {
   throw new Error(`Unsupported geometry type: ${(geom as any).type}`);
 }
 
-export class GeosHelper {
-  private geos!: GeosModule;
-  private reader!: number;
-  private writer!: number;
-
-  private jsonReader!: number;
-  private jsonWriter!: number;
-
-  async init(): Promise<void> {
-    // geos-wasm exports a default function that returns a promise
-    const mod = require("geos-wasm"); // eslint-disable-line
-    const initFn = mod.default || mod;
-    this.geos = await initFn();
-    this.reader = this.geos.GEOSWKTReader_create();
-    this.writer = this.geos.GEOSWKTWriter_create();
-    this.jsonReader = this.geos.GEOSGeoJSONReader_create();
-    this.jsonWriter = this.geos.GEOSGeoJSONWriter_create();
-  }
-
-  destroy(): void {
-    this.geos.GEOSWKTReader_destroy(this.reader);
-    this.geos.GEOSWKTWriter_destroy(this.writer);
-    this.geos.GEOSGeoJSONReader_destroy(this.jsonReader);
-    this.geos.GEOSGeoJSONWriter_destroy(this.jsonWriter);
-  }
-
-  private allocString(str: string): number {
-    const size = str.length + 1;
-    const ptr = this.geos.Module._malloc(size);
-    this.geos.Module.stringToUTF8(str, ptr, size);
-    return ptr;
-  }
-
-  /** Convert a GeoJSON geometry to a GEOS geometry pointer */
-  fromGeoJSON(geom: Polygon | MultiPolygon): GeomPtr {
-    const json = JSON.stringify(geom);
-    const strPtr = this.allocString(json);
-    const geomPtr = this.geos.GEOSGeoJSONReader_readGeometry(this.jsonReader, strPtr);
-    this.geos.Module._free(strPtr);
-    if (!geomPtr) {
-      // Fallback to WKT
-      const wkt = geojsonToWkt(geom);
-      const wktPtr = this.allocString(wkt);
-      const wktGeom = this.geos.GEOSWKTReader_read(this.reader, wktPtr);
-      this.geos.Module._free(wktPtr);
-      if (!wktGeom) throw new Error("Failed to parse geometry");
-      return wktGeom;
-    }
-    return geomPtr;
-  }
-
-  /** Convert a GeoJSON Feature to a GEOS geometry pointer */
-  featureToGeom(feature: Feature): GeomPtr {
-    return this.fromGeoJSON(feature.geometry as Polygon | MultiPolygon);
-  }
-
-  /** Create a point geometry */
-  createPoint(x: number, y: number): GeomPtr {
-    const wkt = `POINT (${x} ${y})`;
-    const strPtr = this.allocString(wkt);
-    const geomPtr = this.geos.GEOSWKTReader_read(this.reader, strPtr);
-    this.geos.Module._free(strPtr);
-    return geomPtr;
-  }
-
-  /** Prepare a geometry for fast repeated spatial queries */
-  prepare(geom: GeomPtr): GeomPtr {
-    return this.geos.GEOSPrepare(geom);
-  }
-
-  /** Check if prepared geometry contains another geometry */
-  preparedContains(prepared: GeomPtr, other: GeomPtr): boolean {
-    return this.geos.GEOSPreparedContains(prepared, other) === 1;
-  }
-
-  /** Check if geometry A contains geometry B */
-  contains(a: GeomPtr, b: GeomPtr): boolean {
-    return this.geos.GEOSContains(a, b) === 1;
-  }
-
-  /** Compute intersection using precision-aware overlay.
-   *  Inputs should already be on a consistent precision grid. */
-  intersection(a: GeomPtr, b: GeomPtr): GeomPtr | null {
-    const result = (this.geos as any).GEOSIntersectionPrec(a, b, 1e-6);
-    if (!result) return null;
-    if (this.geos.GEOSisEmpty(result) === 1) {
-      this.geos.GEOSGeom_destroy(result);
-      return null;
-    }
-    return result;
-  }
-
-  /** Fill nested rings in a polygon. Census blocks can have "holes" that are
-   *  actually filled by more of the same block (island-in-lake-in-block).
-   *  We convert each hole ring into a standalone polygon and union everything
-   *  to collapse the nested geometry. */
-  fillNestedRings(geom: GeomPtr): GeomPtr {
-    // Only applies to polygons with holes
-    const typeId = this.geos.GEOSGeomTypeId(geom);
-    if (typeId !== 3) return geom; // 3 = Polygon
-
-    const exterior = this.geos.GEOSGetExteriorRing(geom);
-    const numHoles = this.geos.GEOSGetNumInteriorRings(geom);
-    if (numHoles === 0) return geom;
-
-    // Create a polygon from just the exterior ring (no holes)
-    const extClone = this.geos.GEOSGeom_clone(exterior);
-    const extPoly = this.geos.GEOSGeom_createPolygon(extClone, 0, 0);
-
-    // Create polygons from each hole ring (treating them as exteriors)
-    let result = extPoly;
-    for (let i = 0; i < numHoles; i++) {
-      const holeRing = this.geos.GEOSGetInteriorRingN(geom, i);
-      // Reverse the ring to make it an exterior ring
-      const reversed = this.geos.GEOSReverse(holeRing);
-      const holePoly = this.geos.GEOSGeom_createPolygon(
-        this.geos.GEOSGeom_clone(reversed), 0, 0
-      );
-      this.geos.GEOSGeom_destroy(reversed);
-      // Union with running result
-      const merged = this.geos.GEOSUnion(result, holePoly);
-      this.geos.GEOSGeom_destroy(holePoly);
-      if (merged) {
-        this.geos.GEOSGeom_destroy(result);
-        result = merged;
-      }
-    }
-    return result;
-  }
-
-  /** Compute difference of two geometries (a minus b) */
-  difference(a: GeomPtr, b: GeomPtr): GeomPtr | null {
-    // Try precision-aware overlay first, fall back to classic
-    let result = null;
-    try {
-      result = (this.geos as any).GEOSDifferencePrec(a, b, 1e-6);
-    } catch { /* fall through */ }
-    if (!result) {
-      result = this.geos.GEOSDifference(a, b);
-    }
-    if (!result) return null;
-    if (this.geos.GEOSisEmpty(result) === 1) {
-      this.geos.GEOSGeom_destroy(result);
-      return null;
-    }
-    return result;
-  }
-
-  /** Clone a geometry */
-  clone(geom: GeomPtr): GeomPtr {
-    return this.geos.GEOSGeom_clone(geom);
-  }
-
-  /** Union two geometries */
-  union(a: GeomPtr, b: GeomPtr): GeomPtr | null {
-    const result = this.geos.GEOSUnion(a, b);
-    if (!result) return null;
-    if (this.geos.GEOSisEmpty(result) === 1) {
-      this.geos.GEOSGeom_destroy(result);
-      return null;
-    }
-    return result;
-  }
-
-  /** Check if geometry is empty */
-  isEmpty(geom: GeomPtr): boolean {
-    return this.geos.GEOSisEmpty(geom) === 1;
-  }
-
-  /** Reduce geometry to a fixed precision grid */
-  setPrecision(geom: GeomPtr, gridSize: number): GeomPtr {
-    return this.geos.GEOSGeom_setPrecision(geom, gridSize, 0);
-  }
-
-  /** Get area of a geometry */
-  area(geom: GeomPtr): number {
-    const ptr = this.geos.Module._malloc(8);
-    this.geos.GEOSArea(geom, ptr);
-    const val = this.geos.Module.getValue(ptr, "double");
-    this.geos.Module._free(ptr);
-    return val;
-  }
-
-  /** Buffer a geometry by a distance */
-  buffer(geom: GeomPtr, distance: number): GeomPtr {
-    return this.geos.GEOSBuffer(geom, distance, 8);
-  }
-
-  /** Get the minimum width (thinnest dimension) of a geometry */
-  minimumWidth(geom: GeomPtr): number {
-    const mw = this.geos.GEOSMinimumWidth(geom);
-    if (!mw) return 0;
-    const ptr = this.geos.Module._malloc(8);
-    this.geos.GEOSLength(mw, ptr);
-    const len = this.geos.Module.getValue(ptr, "double");
-    this.geos.Module._free(ptr);
-    this.geos.GEOSGeom_destroy(mw);
-    return len;
-  }
-
-  /** Check if geometry is valid */
-  isValid(geom: GeomPtr): boolean {
-    return this.geos.GEOSisValid(geom) === 1;
-  }
-
-  /** Make geometry valid (buffer by 0) */
-  makeValid(geom: GeomPtr): GeomPtr {
-    return this.geos.GEOSBuffer(geom, 0, 8);
-  }
-
-  /** Convert GEOS geometry to GeoJSON (any type) */
-  toGeoJSONAny(geom: GeomPtr): any | null {
-    const strPtr = (this.geos as any).GEOSGeoJSONWriter_writeGeometry(this.jsonWriter, geom, 0);
-    if (!strPtr) return null;
-    const json = this.geos.Module.UTF8ToString(strPtr);
-    this.geos.GEOSFree(strPtr);
-    try {
-      return JSON.parse(json);
-    } catch {
-      return null;
-    }
-  }
-
-  /** Convert GEOS geometry back to GeoJSON using native GeoJSON writer
-   *  to preserve exact coordinate precision (no WKT round-trip). */
-  toGeoJSON(geom: GeomPtr): Polygon | MultiPolygon | null {
-    const strPtr = (this.geos as any).GEOSGeoJSONWriter_writeGeometry(this.jsonWriter, geom, 0);
-    if (!strPtr) return null;
-    const json = this.geos.Module.UTF8ToString(strPtr);
-    this.geos.GEOSFree(strPtr);
-    try {
-      const parsed = JSON.parse(json);
-      if (parsed.type === "Polygon" || parsed.type === "MultiPolygon") return parsed;
-      if (parsed.type === "GeometryCollection") return null;
-      return null;
-    } catch {
-      return null;
-    }
-  }
-
-  /** Extract boundary of a geometry as a linestring/multilinestring */
-  boundary(geom: GeomPtr): GeomPtr {
-    const result = this.geos.GEOSBoundary(geom);
-    if (!result) throw new Error("GEOSBoundary failed");
-    return result;
-  }
-
-  /** Create a geometry collection from an array of geometries.
-   *  Type constants: 5=MultiLineString, 7=GeometryCollection.
-   *  The collection takes ownership of the input geometries — do not free them separately. */
-  createCollection(type: number, geoms: GeomPtr[]): GeomPtr {
-    const n = geoms.length;
-    const arrayPtr = this.geos.Module._malloc(n * 4);
-    for (let i = 0; i < n; i++) {
-      (this.geos.Module as any).setValue(arrayPtr + i * 4, geoms[i], "i32");
-    }
-    const result = (this.geos as any).GEOSGeom_createCollection(type, arrayPtr, n);
-    this.geos.Module._free(arrayPtr);
-    if (!result) throw new Error("GEOSGeom_createCollection failed");
-    return result;
-  }
-
-  /** Compute unary union of a geometry (typically a collection).
-   *  For linestrings, this nodes them at all intersection points. */
-  unaryUnion(geom: GeomPtr): GeomPtr {
-    const result = this.geos.GEOSUnaryUnion(geom);
-    if (!result) throw new Error("GEOSUnaryUnion failed");
-    return result;
-  }
-
-  /** Polygonize a set of linestring geometries.
-   *  Returns a GeometryCollection of polygons reconstructed from the noded edges. */
-  polygonize(geoms: GeomPtr[]): GeomPtr {
-    const n = geoms.length;
-    const arrayPtr = this.geos.Module._malloc(n * 4);
-    for (let i = 0; i < n; i++) {
-      (this.geos.Module as any).setValue(arrayPtr + i * 4, geoms[i], "i32");
-    }
-    const result = (this.geos as any).GEOSPolygonize(arrayPtr, n);
-    this.geos.Module._free(arrayPtr);
-    if (!result) throw new Error("GEOSPolygonize failed");
-    return result;
-  }
-
-  /** Get centroid coordinates of a geometry */
-  centroid(geom: GeomPtr): { x: number; y: number } {
-    const centroidGeom = this.geos.GEOSGetCentroid(geom);
-    if (!centroidGeom) throw new Error("GEOSGetCentroid failed");
-    const coords = this.extractPointCoords(centroidGeom);
-    this.geos.GEOSGeom_destroy(centroidGeom);
-    return coords;
-  }
-
-  /** Get a point guaranteed to be inside the geometry's interior (not on boundary) */
-  pointOnSurface(geom: GeomPtr): { x: number; y: number } {
-    const pt = (this.geos as any).GEOSPointOnSurface(geom);
-    if (!pt) throw new Error("GEOSPointOnSurface failed");
-    const coords = this.extractPointCoords(pt);
-    this.geos.GEOSGeom_destroy(pt);
-    return coords;
-  }
-
-  private extractPointCoords(pointGeom: GeomPtr): { x: number; y: number } {
-    const cs = this.geos.GEOSGeom_getCoordSeq(pointGeom);
-    const xPtr = this.geos.Module._malloc(8);
-    const yPtr = this.geos.Module._malloc(8);
-    this.geos.GEOSCoordSeq_getX(cs, 0, xPtr);
-    this.geos.GEOSCoordSeq_getY(cs, 0, yPtr);
-    const x = this.geos.Module.getValue(xPtr, "double");
-    const y = this.geos.Module.getValue(yPtr, "double");
-    this.geos.Module._free(xPtr);
-    this.geos.Module._free(yPtr);
-    return { x, y };
-  }
-
-  /** Get number of geometries in a collection */
-  getNumGeometries(geom: GeomPtr): number {
-    return this.geos.GEOSGetNumGeometries(geom);
-  }
-
-  /** Get the nth geometry from a collection.
-   *  Returns a BORROWED pointer — do NOT free it. */
-  getGeometryN(geom: GeomPtr, n: number): GeomPtr {
-    return this.geos.GEOSGetGeometryN(geom, n);
-  }
-
-  private origNoticeHandler: number = 0;
-  private origErrorHandler: number = 0;
-
-  /** Suppress GEOS notice/error messages (self-intersection warnings etc.) */
-  suppressWarnings(): void {
-    const ctx = (this.geos as any)._ctx;
-    const noopPtr = (this.geos.Module as any).addFunction(() => {}, "vii");
-    this.origNoticeHandler = this.geos.GEOSContext_setNoticeHandler_r(ctx, noopPtr);
-    this.origErrorHandler = this.geos.GEOSContext_setErrorHandler_r(ctx, noopPtr);
-  }
-
-  /** Restore GEOS message handlers */
-  restoreWarnings(): void {
-    const ctx = (this.geos as any)._ctx;
-    if (this.origNoticeHandler) {
-      this.geos.GEOSContext_setNoticeHandler_r(ctx, this.origNoticeHandler);
-    }
-    if (this.origErrorHandler) {
-      this.geos.GEOSContext_setErrorHandler_r(ctx, this.origErrorHandler);
-    }
-  }
-
-  /** Free a geometry pointer */
-  free(geom: GeomPtr): void {
-    this.geos.GEOSGeom_destroy(geom);
-  }
-
-  /** Free a prepared geometry pointer */
-  freePrepared(prep: GeomPtr): void {
-    this.geos.GEOSPreparedGeom_destroy(prep);
-  }
-}
-
 function wktToGeoJSON(wkt: string): Polygon | MultiPolygon | null {
   wkt = wkt.trim();
   if (wkt.startsWith("POLYGON")) {
@@ -402,7 +85,6 @@ function wktToGeoJSON(wkt: string): Polygon | MultiPolygon | null {
   }
   if (wkt.startsWith("MULTIPOLYGON")) {
     const inner = wkt.substring(wkt.indexOf("(((") + 1, wkt.lastIndexOf("))") + 1);
-    // Split on ")),((" to get individual polygons
     const polyStrs = inner.split(/\)\s*,\s*\(/);
     const coordinates = polyStrs.map(ps => {
       const cleaned = ps.replace(/^\(+/, "(").replace(/\)+$/, ")");
@@ -410,12 +92,10 @@ function wktToGeoJSON(wkt: string): Polygon | MultiPolygon | null {
     });
     return { type: "MultiPolygon", coordinates };
   }
-  // For other types (GeometryCollection from intersection), return null
   return null;
 }
 
 function parseWktPolygon(s: string): number[][][] {
-  // Input: "((x y, x y, ...), (x y, ...))"
   const rings: number[][][] = [];
   const ringStrs = s.match(/\([^()]+\)/g) || [];
   for (const ringStr of ringStrs) {
@@ -430,4 +110,388 @@ function parseWktPolygon(s: string): number[][][] {
     rings.push(coords);
   }
   return rings;
+}
+
+export class GeosHelper {
+  private lib: koffi.IKoffiLib;
+  private reader: any;
+  private writer: any;
+
+  // Bound GEOS functions
+  private _initGEOS: any;
+  private _WKTReader_create: any;
+  private _WKTReader_read: any;
+  private _WKTReader_destroy: any;
+  private _WKTWriter_create: any;
+  private _WKTWriter_write: any;
+  private _WKTWriter_destroy: any;
+  private _Prepare: any;
+  private _PreparedContains: any;
+  private _PreparedGeom_destroy: any;
+  private _Contains: any;
+  private _Intersection: any;
+  private _Area: any;
+  private _Buffer: any;
+  private _isValid: any;
+  private _isEmpty: any;
+  private _Geom_destroy: any;
+  private _Free: any;
+  private _MinimumWidth: any;
+  private _Length: any;
+  private _Boundary: any;
+  private _Union: any;
+  private _Node: any;
+  private _Polygonize: any;
+  private _GetNumGeometries: any;
+  private _GetGeometryN: any;
+  private _PointOnSurface: any;
+  private _UnaryUnion: any;
+  private _CreateCollection: any;
+  private _Intersects: any;
+  private _Difference: any;
+  private _SymDifference: any;
+  private _SetPrecision: any;
+  private _Snap: any;
+  private _finishGEOS: any;
+
+  constructor() {
+    this.lib = koffi.load("libgeos_c.so");
+
+    // Initialize GEOS with null message handlers (suppress stderr)
+    const noticeFn = koffi.pointer("void");
+    const errorFn = koffi.pointer("void");
+    this._initGEOS = this.lib.func("initGEOS", "void", [noticeFn, errorFn]);
+    this._finishGEOS = this.lib.func("finishGEOS", "void", []);
+
+    // WKT Reader
+    this._WKTReader_create = this.lib.func("GEOSWKTReader_create", GEOSWKTReaderPtr, []);
+    this._WKTReader_read = this.lib.func("GEOSWKTReader_read", GEOSGeometryPtr, [GEOSWKTReaderPtr, "str"]);
+    this._WKTReader_destroy = this.lib.func("GEOSWKTReader_destroy", "void", [GEOSWKTReaderPtr]);
+
+    // WKT Writer
+    this._WKTWriter_create = this.lib.func("GEOSWKTWriter_create", GEOSWKTWriterPtr, []);
+    this._WKTWriter_write = this.lib.func("GEOSWKTWriter_write", "str", [GEOSWKTWriterPtr, GEOSGeometryPtr]);
+    this._WKTWriter_destroy = this.lib.func("GEOSWKTWriter_destroy", "void", [GEOSWKTWriterPtr]);
+
+    // Prepared geometry
+    this._Prepare = this.lib.func("GEOSPrepare", GEOSPreparedGeometryPtr, [GEOSGeometryPtr]);
+    this._PreparedContains = this.lib.func("GEOSPreparedContains", "int", [GEOSPreparedGeometryPtr, GEOSGeometryPtr]);
+    this._PreparedGeom_destroy = this.lib.func("GEOSPreparedGeom_destroy", "void", [GEOSPreparedGeometryPtr]);
+
+    // Spatial operations
+    this._Contains = this.lib.func("GEOSContains", "int", [GEOSGeometryPtr, GEOSGeometryPtr]);
+    this._Intersection = this.lib.func("GEOSIntersection", GEOSGeometryPtr, [GEOSGeometryPtr, GEOSGeometryPtr]);
+    this._Area = this.lib.func("GEOSArea", "int", [GEOSGeometryPtr, koffi.out(koffi.pointer("double"))]);
+    this._Buffer = this.lib.func("GEOSBuffer", GEOSGeometryPtr, [GEOSGeometryPtr, "double", "int"]);
+    this._isValid = this.lib.func("GEOSisValid", "int", [GEOSGeometryPtr]);
+    this._isEmpty = this.lib.func("GEOSisEmpty", "int", [GEOSGeometryPtr]);
+    this._Geom_destroy = this.lib.func("GEOSGeom_destroy", "void", [GEOSGeometryPtr]);
+    this._Free = this.lib.func("GEOSFree", "void", [koffi.pointer("void")]);
+    this._MinimumWidth = this.lib.func("GEOSMinimumWidth", GEOSGeometryPtr, [GEOSGeometryPtr]);
+    this._Length = this.lib.func("GEOSLength", "int", [GEOSGeometryPtr, koffi.out(koffi.pointer("double"))]);
+
+    // Noding + polygonize operations
+    this._Boundary = this.lib.func("GEOSBoundary", GEOSGeometryPtr, [GEOSGeometryPtr]);
+    this._Union = this.lib.func("GEOSUnion", GEOSGeometryPtr, [GEOSGeometryPtr, GEOSGeometryPtr]);
+    this._Node = this.lib.func("GEOSNode", GEOSGeometryPtr, [GEOSGeometryPtr]);
+    this._UnaryUnion = this.lib.func("GEOSUnaryUnion", GEOSGeometryPtr, [GEOSGeometryPtr]);
+    this._Polygonize = this.lib.func("GEOSPolygonize", GEOSGeometryPtr, [koffi.pointer(GEOSGeometryPtr), "uint"]);
+    this._GetNumGeometries = this.lib.func("GEOSGetNumGeometries", "int", [GEOSGeometryPtr]);
+    this._GetGeometryN = this.lib.func("GEOSGetGeometryN", GEOSGeometryPtr, [GEOSGeometryPtr, "int"]);
+    this._PointOnSurface = this.lib.func("GEOSPointOnSurface", GEOSGeometryPtr, [GEOSGeometryPtr]);
+    this._Intersects = this.lib.func("GEOSIntersects", "int", [GEOSGeometryPtr, GEOSGeometryPtr]);
+    this._Difference = this.lib.func("GEOSDifference", GEOSGeometryPtr, [GEOSGeometryPtr, GEOSGeometryPtr]);
+    this._SymDifference = this.lib.func("GEOSSymDifference", GEOSGeometryPtr, [GEOSGeometryPtr, GEOSGeometryPtr]);
+    // GEOSGeom_setPrecision(geom, gridSize, flags) — snaps coords to grid
+    // flags: 0 = default (may produce invalid geometry), 1 = NO_TOPO (keep topology)
+    this._SetPrecision = this.lib.func("GEOSGeom_setPrecision", GEOSGeometryPtr, [GEOSGeometryPtr, "double", "int"]);
+    // GEOSSnap(input, snapTo, tolerance) — snap vertices of input to snapTo
+    this._Snap = this.lib.func("GEOSSnap", GEOSGeometryPtr, [GEOSGeometryPtr, GEOSGeometryPtr, "double"]);
+    // type 7 = GEOS_GEOMETRYCOLLECTION
+    this._CreateCollection = this.lib.func("GEOSGeom_createCollection", GEOSGeometryPtr, ["int", koffi.pointer(GEOSGeometryPtr), "uint"]);
+  }
+
+  /** Create a geometry collection from an array of geometries.
+   *  WARNING: The collection takes ownership of the input geometries — do NOT free them separately. */
+  createCollection(geoms: any[]): any {
+    return this._CreateCollection(7, geoms, geoms.length);
+  }
+
+  /** Cascaded union of all geometries (much faster than incremental union) */
+  unaryUnion(geom: any): any {
+    return this._UnaryUnion(geom);
+  }
+
+  async init(): Promise<void> {
+    this._initGEOS(null, null);
+    this.reader = this._WKTReader_create();
+    this.writer = this._WKTWriter_create();
+  }
+
+  /** Reset reader/writer for reuse after freeing all geometries */
+  reset(): void {
+    this._WKTReader_destroy(this.reader);
+    this._WKTWriter_destroy(this.writer);
+    this.reader = this._WKTReader_create();
+    this.writer = this._WKTWriter_create();
+  }
+
+  destroy(): void {
+    this._WKTReader_destroy(this.reader);
+    this._WKTWriter_destroy(this.writer);
+  }
+
+  /** Convert a GeoJSON geometry to a GEOS geometry pointer */
+  fromGeoJSON(geom: Polygon | MultiPolygon): any {
+    const wkt = geojsonToWkt(geom);
+    const geomPtr = this._WKTReader_read(this.reader, wkt);
+    if (!geomPtr) {
+      throw new Error("Failed to parse geometry");
+    }
+    return geomPtr;
+  }
+
+  /** Convert a GeoJSON geometry to GEOS, scaling coordinates to integers */
+  fromGeoJSONScaled(geom: Polygon | MultiPolygon, scale: number): any {
+    const wkt = geojsonToWktScaled(geom, scale);
+    const geomPtr = this._WKTReader_read(this.reader, wkt);
+    if (!geomPtr) {
+      throw new Error("Failed to parse scaled geometry");
+    }
+    return geomPtr;
+  }
+
+  /** Convert GEOS geometry back to GeoJSON, unscaling from integers */
+  toGeoJSONScaled(geom: any, scale: number): Polygon | MultiPolygon | null {
+    const wkt = this._WKTWriter_write(this.writer, geom);
+    if (!wkt) return null;
+    return wktToGeoJSONScaled(wkt, scale);
+  }
+
+  /** Convert a GeoJSON Feature to a GEOS geometry pointer */
+  featureToGeom(feature: { geometry: Polygon | MultiPolygon }): any {
+    return this.fromGeoJSON(feature.geometry);
+  }
+
+  /** Create a point geometry */
+  createPoint(x: number, y: number): any {
+    const wkt = `POINT (${x} ${y})`;
+    return this._WKTReader_read(this.reader, wkt);
+  }
+
+  /** Prepare a geometry for fast repeated spatial queries */
+  prepare(geom: any): any {
+    return this._Prepare(geom);
+  }
+
+  /** Check if prepared geometry contains another geometry */
+  preparedContains(prepared: any, other: any): boolean {
+    return this._PreparedContains(prepared, other) === 1;
+  }
+
+  /** Check if geometry A contains geometry B */
+  contains(a: any, b: any): boolean {
+    return this._Contains(a, b) === 1;
+  }
+
+  /** Compute intersection of two geometries */
+  intersection(a: any, b: any): any | null {
+    const result = this._Intersection(a, b);
+    if (!result) return null;
+    if (this._isEmpty(result) === 1) {
+      this._Geom_destroy(result);
+      return null;
+    }
+    return result;
+  }
+
+  /** Get area of a geometry */
+  area(geom: any): number {
+    const out = [0];
+    this._Area(geom, out);
+    return out[0];
+  }
+
+  /** Buffer a geometry by a distance */
+  buffer(geom: any, distance: number): any {
+    return this._Buffer(geom, distance, 8);
+  }
+
+  /** Get the minimum width (thinnest dimension) of a geometry */
+  minimumWidth(geom: any): number {
+    const mw = this._MinimumWidth(geom);
+    if (!mw) return 0;
+    const out = [0];
+    this._Length(mw, out);
+    const len = out[0];
+    this._Geom_destroy(mw);
+    return len;
+  }
+
+  /** Check if geometry is valid */
+  isValid(geom: any): boolean {
+    return this._isValid(geom) === 1;
+  }
+
+  /** Make geometry valid (buffer by 0) */
+  makeValid(geom: any): any {
+    return this._Buffer(geom, 0, 8);
+  }
+
+  /** Convert GEOS geometry to WKT string */
+  toWkt(geom: any): string | null {
+    return this._WKTWriter_write(this.writer, geom) || null;
+  }
+
+  /** Convert GEOS geometry back to GeoJSON */
+  toGeoJSON(geom: any): Polygon | MultiPolygon | null {
+    const wkt = this._WKTWriter_write(this.writer, geom);
+    if (!wkt) return null;
+    return wktToGeoJSON(wkt);
+  }
+
+  /** Check if two geometries intersect */
+  intersects(a: any, b: any): boolean {
+    return this._Intersects(a, b) === 1;
+  }
+
+  /** Get boundary of a geometry */
+  boundary(geom: any): any {
+    return this._Boundary(geom);
+  }
+
+  /** Union two geometries */
+  union(a: any, b: any): any {
+    return this._Union(a, b);
+  }
+
+  /** Difference: A minus B */
+  difference(a: any, b: any): any {
+    return this._Difference(a, b);
+  }
+
+  /** Symmetric difference: (A minus B) union (B minus A) */
+  symDifference(a: any, b: any): any {
+    return this._SymDifference(a, b);
+  }
+
+  /** Snap vertices of input geometry to vertices of snapTo geometry within tolerance.
+   *  Returns a new geometry; caller must free it. */
+  snap(input: any, snapTo: any, tolerance: number): any {
+    return this._Snap(input, snapTo, tolerance);
+  }
+
+  /** Snap geometry coordinates to a precision grid.
+   *  gridSize is the cell size (e.g., 1e-7 ≈ 1cm for lat/lon).
+   *  Returns a new geometry; caller must free it. */
+  setPrecision(geom: any, gridSize: number): any {
+    return this._SetPrecision(geom, gridSize, 0);
+  }
+
+  /** Node a geometry (split lines at intersections) */
+  node(geom: any): any {
+    return this._Node(geom);
+  }
+
+  /** Get a representative point guaranteed to be inside the geometry */
+  pointOnSurface(geom: any): any {
+    return this._PointOnSurface(geom);
+  }
+
+  /** Ensure a geometry is valid, fixing if needed */
+  private ensureValid(geom: any): any {
+    if (this._isValid(geom) === 1) return geom;
+    const fixed = this._Buffer(geom, 0, 8);
+    this._Geom_destroy(geom);
+    return fixed;
+  }
+
+  /**
+   * Node block + precinct boundaries and polygonize to get clean faces.
+   * Returns array of { geom, precinctIdx } for faces inside the block.
+   * Caller is responsible for freeing the returned geom pointers.
+   */
+  nodeAndSplit(
+    blockGeom: any,
+    precinctGeoms: { geom: any; idx: number }[]
+  ): { geom: any; area: number; precinctIdx: number }[] {
+    // Use original block boundary (not buffered) so noded edges share exact
+    // coordinates with adjacent non-split blocks
+    let combined = this._Boundary(blockGeom);
+
+    for (const p of precinctGeoms) {
+      // Validate precinct geometry (external data may be invalid) but not the block
+      const validPrec = this.ensureValid(this._Buffer(p.geom, 0, 8));
+      const bnd = this._Boundary(validPrec);
+      this._Geom_destroy(validPrec);
+      const merged = this._Union(combined, bnd);
+      this._Geom_destroy(combined);
+      this._Geom_destroy(bnd);
+      combined = merged;
+    }
+
+    // Node to split at all intersections (UnaryUnion is more robust than GEOSNode
+    // which can segfault on certain invalid geometries)
+    const noded = this._UnaryUnion(combined);
+    this._Geom_destroy(combined);
+
+    // Polygonize
+    const geomArray = [noded];
+    const collection = this._Polygonize(geomArray, 1);
+    this._Geom_destroy(noded);
+
+    const numFaces = this._GetNumGeometries(collection);
+    const results: { geom: any; area: number; precinctIdx: number }[] = [];
+
+    for (let i = 0; i < numFaces; i++) {
+      // GetGeometryN returns a borrowed pointer — we need to clone it
+      // Actually, the collection owns these, so we read WKT and re-parse
+      const face = this._GetGeometryN(collection, i);
+
+      // Check if face is inside the block
+      const rp = this._PointOnSurface(face);
+      if (!rp) continue;
+
+      const inBlock = this._Contains(blockGeom, rp) === 1;
+      if (!inBlock) {
+        this._Geom_destroy(rp);
+        continue;
+      }
+
+      // Find which precinct contains this face
+      let precinctIdx = -1;
+      for (const p of precinctGeoms) {
+        if (this._Contains(p.geom, rp) === 1) {
+          precinctIdx = p.idx;
+          break;
+        }
+      }
+      this._Geom_destroy(rp);
+
+      if (precinctIdx === -1) continue;
+
+      const areaOut = [0];
+      this._Area(face, areaOut);
+      if (areaOut[0] <= 0) continue;
+
+      // Clone the face geometry (GetGeometryN returns a borrowed ref)
+      const wkt = this._WKTWriter_write(this.writer, face);
+      const cloned = this._WKTReader_read(this.reader, wkt);
+
+      results.push({ geom: cloned, area: areaOut[0], precinctIdx });
+    }
+
+    this._Geom_destroy(collection);
+    return results;
+  }
+
+  /** Free a geometry pointer */
+  free(geom: any): void {
+    this._Geom_destroy(geom);
+  }
+
+  /** Free a prepared geometry pointer */
+  freePrepared(prep: any): void {
+    this._PreparedGeom_destroy(prep);
+  }
 }

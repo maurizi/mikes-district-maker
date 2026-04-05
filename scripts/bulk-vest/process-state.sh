@@ -144,12 +144,12 @@ with open('$CSV_FILE', 'w', newline='') as f:
 rmdir "$LOCK_FILE" 2>/dev/null
 
 # Step 5: Cleanup
-echo "  [$state_abbr] Cleaning up..."
-if [[ -n "$state_abbr" ]]; then
-  rm -rf "$DEV_DATA/output/${state_abbr}"
-  rm -f "$GEOJSON_HOST"
-else
-  echo "  WARNING: state_abbr is empty, skipping cleanup to avoid deleting everything"
-fi
+# echo "  [$state_abbr] Cleaning up..."
+# if [[ -n "$state_abbr" ]]; then
+#   rm -rf "$DEV_DATA/output/${state_abbr}"
+#   rm -f "$GEOJSON_HOST"
+# else
+#   echo "  WARNING: state_abbr is empty, skipping cleanup to avoid deleting everything"
+# fi
 
 echo "  [$state_abbr] Done!"

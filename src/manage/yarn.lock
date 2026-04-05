@@ -4711,11 +4711,6 @@ geojson-stream@^0.1.0:
     JSONStream "^1.0.0"
     through "^2.3.4"
 
-geos-wasm@^3.1.1:
-  version "3.1.1"
-  resolved "https://registry.npmjs.org/geos-wasm/-/geos-wasm-3.1.1.tgz"
-  integrity sha512-igWIBE9Ua2f2dw+MjaF3ogwUB45tLSTVdCYBpsHa9fenmtgyfaspjDhWTBhEaftZxATdEPaSwS707ELFYVvm9w==
-
 get-caller-file@^2.0.5:
   version "2.0.5"
   resolved "https://registry.npmjs.org/get-caller-file/-/get-caller-file-2.0.5.tgz"
@@ -6099,6 +6094,11 @@ knex@0.21.19:
     tarn "^3.0.1"
     tildify "2.0.0"
     v8flags "^3.2.0"
+
+koffi@^2.15.5:
+  version "2.15.5"
+  resolved "https://registry.yarnpkg.com/koffi/-/koffi-2.15.5.tgz#683659757b24069f12fbbafd7a390c2848a33fa7"
+  integrity sha512-4/35/oOpnH9tzrpWAC3ObjAERBSe0Q0Dh2NP1eBBPRGpohEj4vFw2+7tej9W9MTExvk0vtF0PjMqIGG4rf6feQ==
 
 leven@^3.1.0:
   version "3.1.0"

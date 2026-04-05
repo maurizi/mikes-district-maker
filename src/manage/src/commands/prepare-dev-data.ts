@@ -17,15 +17,11 @@ import RBush from "rbush";
 import * as proj4Module from "proj4";
 const proj4 = (proj4Module as any).default || proj4Module;
 import { GeosHelper } from "../lib/geos-helper";
-import { FeatureCollection, MultiPolygon, Polygon } from "geojson";
 
 // Simple bbox from GeoJSON coordinates (no library needed)
 function featureBbox(f: GeoJSON.Feature): [number, number, number, number] {
   const coords = (f.geometry as any).coordinates;
-  let minX = Infinity,
-    minY = Infinity,
-    maxX = -Infinity,
-    maxY = -Infinity;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   function walk(c: any) {
     if (typeof c[0] === "number") {
       if (c[0] < minX) minX = c[0];
@@ -40,8 +36,26 @@ function featureBbox(f: GeoJSON.Feature): [number, number, number, number] {
   return [minX, minY, maxX, maxY];
 }
 
+// Simple centroid from GeoJSON coordinates
+function featureCentroid(f: GeoJSON.Feature): [number, number] {
+  const coords = (f.geometry as any).coordinates;
+  let sumX = 0, sumY = 0, count = 0;
+  function walk(c: any) {
+    if (typeof c[0] === "number") {
+      sumX += c[0]; sumY += c[1]; count++;
+    } else {
+      for (const sub of c) walk(sub);
+    }
+  }
+  walk(coords);
+  return [sumX / count, sumY / count];
+}
+
 // Reproject a GeoJSON feature's coordinates from source CRS to WGS84
-function reprojectFeature(feature: GeoJSON.Feature, projDef: string): GeoJSON.Feature {
+function reprojectFeature(
+  feature: GeoJSON.Feature,
+  projDef: string
+): GeoJSON.Feature {
   // Check if already geographic (NAD83 or WGS84)
   if (projDef.startsWith("GEOGCS") && !projDef.includes("PROJCS")) {
     return feature; // Already in geographic coordinates
@@ -66,6 +80,129 @@ function reprojectFeature(feature: GeoJSON.Feature, projDef: string): GeoJSON.Fe
     } as any
   };
 }
+import {
+  Feature,
+  FeatureCollection,
+  MultiPolygon,
+  Polygon
+} from "geojson";
+
+// Normalize an edge key so both directions map to the same key
+function edgeKey(x1: number, y1: number, x2: number, y2: number): string {
+  if (x1 < x2 || (x1 === x2 && y1 < y2)) return `${x1},${y1}|${x2},${y2}`;
+  return `${x2},${y2}|${x1},${y1}`;
+}
+
+// Check if point P lies on segment A-B (within tolerance), and if so return
+// the parametric t value (0..1) for sorting multiple points on the same edge
+function pointOnSegmentT(
+  px: number, py: number,
+  ax: number, ay: number,
+  bx: number, by: number,
+  tol: number = 1e-8
+): number | null {
+  const dx = bx - ax, dy = by - ay;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return null;
+  const t = ((px - ax) * dx + (py - ay) * dy) / lenSq;
+  if (t < tol || t > 1 - tol) return null; // Exclude endpoints
+  const projX = ax + t * dx, projY = ay + t * dy;
+  const dist = Math.sqrt((px - projX) ** 2 + (py - projY) ** 2);
+  return dist < tol ? t : null;
+}
+
+// Find intersection points: vertices of sub-block geometry that lie on the
+// original block boundary but aren't original block vertices.
+// Returns a map of edge keys to arrays of { point, t } to insert.
+function findIntersectionPoints(
+  subGeom: Polygon | MultiPolygon,
+  blockGeom: Polygon | MultiPolygon
+): Map<string, { point: number[]; t: number }[]> {
+  // Collect original block boundary vertices for fast lookup
+  const blockVertSet = new Set<string>();
+  const blockRings: number[][][] = blockGeom.type === "Polygon"
+    ? [blockGeom.coordinates[0]]
+    : blockGeom.coordinates.map(p => p[0]);
+  for (const ring of blockRings) {
+    for (const pt of ring) blockVertSet.add(`${pt[0]},${pt[1]}`);
+  }
+
+  // Collect sub-block vertices that aren't original block vertices
+  const subRings: number[][][] = subGeom.type === "Polygon"
+    ? [subGeom.coordinates[0]]
+    : subGeom.coordinates.flatMap(p => [p[0]]);
+  const candidates: number[][] = [];
+  for (const ring of subRings) {
+    for (const pt of ring) {
+      if (!blockVertSet.has(`${pt[0]},${pt[1]}`)) candidates.push(pt);
+    }
+  }
+
+  // For each candidate, check if it lies on a block boundary edge
+  const result = new Map<string, { point: number[]; t: number }[]>();
+  for (const pt of candidates) {
+    for (const ring of blockRings) {
+      for (let i = 0; i < ring.length - 1; i++) {
+        const t = pointOnSegmentT(pt[0], pt[1], ring[i][0], ring[i][1], ring[i + 1][0], ring[i + 1][1]);
+        if (t !== null) {
+          const key = edgeKey(ring[i][0], ring[i][1], ring[i + 1][0], ring[i + 1][1]);
+          if (!result.has(key)) result.set(key, []);
+          // Avoid duplicates
+          const existing = result.get(key)!;
+          if (!existing.some(e => Math.abs(e.t - t) < 1e-10)) {
+            existing.push({ point: pt, t });
+          }
+          break;
+        }
+      }
+    }
+  }
+  return result;
+}
+
+// Insert intersection points into a GeoJSON geometry's boundary edges.
+// For each edge that has intersection points, insert them in parametric order.
+function insertPointsIntoGeometry(
+  geom: Polygon | MultiPolygon,
+  edgePoints: Map<string, { point: number[]; t: number }[]>
+): Polygon | MultiPolygon {
+  if (edgePoints.size === 0) return geom;
+
+  function processRing(ring: number[][]): number[][] {
+    const result: number[][] = [];
+    for (let i = 0; i < ring.length - 1; i++) {
+      result.push(ring[i]);
+      const key = edgeKey(ring[i][0], ring[i][1], ring[i + 1][0], ring[i + 1][1]);
+      const inserts = edgePoints.get(key);
+      if (inserts) {
+        // Compute t relative to this edge direction (may be reversed from key)
+        const ax = ring[i][0], ay = ring[i][1];
+        const bx = ring[i + 1][0], by = ring[i + 1][1];
+        const dx = bx - ax, dy = by - ay;
+        const lenSq = dx * dx + dy * dy;
+        const withT = inserts.map(ins => {
+          const t = lenSq > 0
+            ? ((ins.point[0] - ax) * dx + (ins.point[1] - ay) * dy) / lenSq
+            : 0;
+          return { point: ins.point, t };
+        });
+        withT.sort((a, b) => a.t - b.t);
+        for (const ins of withT) result.push(ins.point);
+      }
+    }
+    // Close ring
+    result.push([...result[0]]);
+    return result;
+  }
+
+  if (geom.type === "Polygon") {
+    return { type: "Polygon", coordinates: geom.coordinates.map(processRing) };
+  }
+  return {
+    type: "MultiPolygon",
+    coordinates: geom.coordinates.map(poly => poly.map(processRing))
+  };
+}
 
 async function extractZipToDir(zipBuffer: Buffer, dir: string): Promise<void> {
   mkdirSync(dir, { recursive: true });
@@ -73,26 +210,10 @@ async function extractZipToDir(zipBuffer: Buffer, dir: string): Promise<void> {
   await zip.extract({ path: dir });
 }
 
-async function readShapefile(shpPath: string, dbfPath?: string): Promise<GeoJSON.Feature[]> {
-  // Fix null-padded DBF fields: some VEST shapefiles use \0 padding instead of
-  // space padding for numeric fields. The shapefile library reads \0 as null.
-  // Fix by replacing \0 with space in the DBF file before reading.
-  const actualDbfPath = dbfPath || shpPath.replace(/\.shp$/i, ".dbf");
-  if (existsSync(actualDbfPath)) {
-    const dbfBuf = Buffer.from(readFileSync(actualDbfPath));
-    const headerSize = dbfBuf.readUInt16LE(8);
-    let fixed = false;
-    for (let i = headerSize + 1; i < dbfBuf.length; i++) {
-      if (dbfBuf[i] === 0x00) {
-        dbfBuf[i] = 0x20; // replace null with space
-        fixed = true;
-      }
-    }
-    if (fixed) {
-      writeFileSync(actualDbfPath, dbfBuf);
-    }
-  }
-
+async function readShapefile(
+  shpPath: string,
+  dbfPath?: string
+): Promise<GeoJSON.Feature[]> {
   const features: GeoJSON.Feature[] = [];
   const source = await shapefile.open(shpPath, dbfPath || null);
   // eslint-disable-next-line no-constant-condition
@@ -122,11 +243,13 @@ interface RTreeItem {
 
 // Extract vote columns grouped by office code, also detect election year
 // Column format: G20PRERTRU — {electionType}{YY}{office3}{party1}{name3}
-function extractVotingData(props: Record<string, any>): {
-  byOffice: Record<string, { democrat: number; republican: number; other: number }>;
-  electionYear: string;
-} {
-  const byOffice: Record<string, { democrat: number; republican: number; other: number }> = {};
+function extractVotingData(
+  props: Record<string, any>
+): { byOffice: Record<string, { democrat: number; republican: number; other: number }>; electionYear: string } {
+  const byOffice: Record<
+    string,
+    { democrat: number; republican: number; other: number }
+  > = {};
   let electionYear = "";
 
   for (const [key, value] of Object.entries(props)) {
@@ -137,7 +260,8 @@ function extractVotingData(props: Record<string, any>): {
     const year = match[1];
     const office = match[2];
     const partyCode = match[3];
-    const votes = typeof value === "number" ? value : parseInt(String(value)) || 0;
+    const votes =
+      typeof value === "number" ? value : parseInt(String(value)) || 0;
 
     if (!electionYear) electionYear = year;
 
@@ -199,18 +323,14 @@ export default class PrepareDevData extends Command {
     }),
     censusCache: Flags.string({
       char: "c",
-      description: "Path to cache Census blocks+demographics GeoJSON (skips download if exists)"
+      description:
+        "Path to cache Census blocks+demographics GeoJSON (skips download if exists)"
     }),
     additionalVest: Flags.string({
       char: "a",
       description:
         "Additional VEST zips for other election years, comma-separated as precinctField:path pairs",
       default: ""
-    }),
-    simplifyPrecincts: Flags.string({
-      description:
-        "Simplify VEST precinct geometry before noding (tolerance in degrees, e.g. 0.0001)",
-      default: "0"
     })
   };
 
@@ -252,8 +372,7 @@ export default class PrepareDevData extends Command {
       this.log("\n1. Loading Census data from cache...");
       // Read features line by line (geojsonseq) to avoid string length limit
       blockFeatures = [];
-      const rl = require("readline").createInterface({
-        // eslint-disable-line
+      const rl = require("readline").createInterface({ // eslint-disable-line
         input: createReadStream(cacheFeaturesPath),
         crlfDelay: Infinity
       });
@@ -263,17 +382,18 @@ export default class PrepareDevData extends Command {
       // Demographics and county names are small enough for JSON.parse
       blockDemographics = new Map(Object.entries(JSON.parse(readFileSync(cacheDemoPath, "utf-8"))));
       countyNames = new Map(Object.entries(JSON.parse(readFileSync(cacheCountyPath, "utf-8"))));
-      this.log(
-        `   ${blockFeatures.length} blocks, ${blockDemographics.size} demographics loaded from cache`
-      );
+      this.log(`   ${blockFeatures.length} blocks, ${blockDemographics.size} demographics loaded from cache`);
     } else {
       // Download Census block shapefile
       this.log("\n1a. Downloading Census 2020 block shapefile...");
       const tigerUrl = `https://www2.census.gov/geo/tiger/TIGER2020/TABBLOCK20/tl_2020_${stateFips}_tabblock20.zip`;
       const tigerResp = await fetch(tigerUrl);
-      if (!tigerResp.ok) throw new Error(`Failed to download TIGER data: ${tigerResp.status}`);
+      if (!tigerResp.ok)
+        throw new Error(`Failed to download TIGER data: ${tigerResp.status}`);
       const tigerBuffer = Buffer.from(await tigerResp.arrayBuffer());
-      this.log(`   Downloaded ${(tigerBuffer.length / 1024 / 1024).toFixed(1)}MB`);
+      this.log(
+        `   Downloaded ${(tigerBuffer.length / 1024 / 1024).toFixed(1)}MB`
+      );
 
       const tigerDir = join(tmp, "tiger");
       await extractZipToDir(tigerBuffer, tigerDir);
@@ -286,27 +406,16 @@ export default class PrepareDevData extends Command {
       this.log("\n1b. Fetching demographics from Census API...");
       const censusUrl = `https://api.census.gov/data/2020/dec/pl?get=P1_001N,P1_003N,P1_004N,P1_006N,P2_002N,P3_001N,P3_003N,P3_004N,P3_006N,P4_002N&for=block:*&in=state:${stateFips}&in=county:*&in=tract:*`;
       const censusResp = await fetch(censusUrl);
-      if (!censusResp.ok) throw new Error(`Census API failed: ${censusResp.status}`);
+      if (!censusResp.ok)
+        throw new Error(`Census API failed: ${censusResp.status}`);
       const censusData: string[][] = await censusResp.json();
 
       blockDemographics = new Map();
       for (let i = 1; i < censusData.length; i++) {
-        const [
-          pop,
-          white,
-          black,
-          asian,
-          hispanic,
-          vap,
-          vapWhite,
-          vapBlack,
-          vapAsian,
-          vapHispanic,
-          state,
-          county,
-          tract,
-          block
-        ] = censusData[i];
+        const [pop, white, black, asian, hispanic,
+               vap, vapWhite, vapBlack, vapAsian, vapHispanic,
+               state, county, tract, block] =
+          censusData[i];
         const geoId = `${state}${county}${tract}${block}`;
         const popN = parseInt(pop) || 0;
         const whiteN = parseInt(white) || 0;
@@ -396,7 +505,10 @@ export default class PrepareDevData extends Command {
       number,
       {
         precinctId: string;
-        votes: Record<string, { democrat: number; republican: number; other: number }>;
+        votes: Record<
+          string,
+          { democrat: number; republican: number; other: number }
+        >;
       }
     >();
     const officesFound = new Set<string>();
@@ -410,321 +522,439 @@ export default class PrepareDevData extends Command {
       for (const office of Object.keys(byOffice)) officesFound.add(office);
       precinctVoting.set(i, { precinctId, votes: byOffice });
     }
-    this.log(`   Election year: 20${detectedYear}`);
-    this.log(`   Offices found: ${Array.from(officesFound).sort().join(", ")}`);
-
-    // ── Step 3: Build precinct spatial index (for fallback lookups) ──
-    this.log("\n3. Building precinct spatial index...");
-    const precinctBboxes: [number, number, number, number][] = [];
-    for (let i = 0; i < vestFeatures.length; i++) {
-      precinctBboxes.push(vestFeatures[i].geometry ? featureBbox(vestFeatures[i]) : [0, 0, 0, 0]);
-    }
-
-    // R-tree for fallback precinct assignment (blocks with no face match)
-    const tree = new RBush<RTreeItem>();
-    const rTreeItems: RTreeItem[] = [];
-    for (let i = 0; i < vestFeatures.length; i++) {
-      const [minX, minY, maxX, maxY] = precinctBboxes[i];
-      if (minX === 0 && maxX === 0) continue;
-      rTreeItems.push({ minX, minY, maxX, maxY, index: i });
-    }
-    tree.load(rTreeItems);
-    this.log(`   ${rTreeItems.length} precincts indexed`);
-
-    // ── Step 4: Spatial join — noding + polygonize via native GEOS (shapely) ──
-    this.log("\n4. Spatial join (native GEOS via shapely)...");
-
-    // Phase 4a: Write block and precinct polygons for Python processing
-    const blocksNdjson = join(tmp, "blocks.ndjson");
-    const precinctsNdjson = join(tmp, "precincts.ndjson");
-    const facesNdjson = join(tmp, "faces.ndjson");
-
-    this.log("   Writing block polygons...");
-    const blocksFd = require("fs").openSync(blocksNdjson, "w"); // eslint-disable-line
-    for (let bi = 0; bi < blockFeatures.length; bi++) {
-      const geom = blockFeatures[bi].geometry;
-      require("fs").writeSync(blocksFd, (geom ? JSON.stringify(geom) : "") + "\n"); // eslint-disable-line
-    }
-    require("fs").closeSync(blocksFd); // eslint-disable-line
-
-    this.log("   Writing precinct polygons...");
-    const precinctsFd = require("fs").openSync(precinctsNdjson, "w"); // eslint-disable-line
-    for (let pi = 0; pi < vestFeatures.length; pi++) {
-      const geom = vestFeatures[pi].geometry;
-      require("fs").writeSync(precinctsFd, (geom ? JSON.stringify(geom) : "") + "\n"); // eslint-disable-line
-    }
-    require("fs").closeSync(precinctsFd); // eslint-disable-line
     this.log(
-      `   ${blockFeatures.length} blocks + ${vestFeatures.length} precincts written`
+      `   Election year: 20${detectedYear}`
+    );
+    this.log(
+      `   Offices found: ${Array.from(officesFound).sort().join(", ")}`
     );
 
-    // Phase 4b: Run Python script for noding + polygonize + face assignment
-    this.log("   Running noding + polygonize + assignment...");
-    const manageRoot = join(__dirname, "..", "..", "..", "..");
-    const pyScript = join(manageRoot, "src", "lib", "node-and-polygonize.py");
-    const { execSync } = require("child_process"); // eslint-disable-line
-    const simplifyArg = parseFloat(flags.simplifyPrecincts) > 0
-      ? ` --simplify-precincts ${flags.simplifyPrecincts}`
-      : "";
-    execSync(`python3 ${pyScript} ${blocksNdjson} ${precinctsNdjson} ${facesNdjson}${simplifyArg}`, {
-      stdio: ["pipe", "pipe", "inherit"],
-      maxBuffer: 10 * 1024 * 1024
-    });
+    // ── Step 3: Node everything ──
+    // Union ALL block + precinct boundaries, polygonize, assign faces.
+    // This ensures every edge is shared exactly, eliminating artifacts when
+    // topojson later merges blocks into precincts/counties.
+    //
+    // All coordinates are scaled to integers (×1e7) before GEOS operations
+    // to eliminate floating-point drift that creates sliver spike artifacts.
+    // Scaled back to WGS84 for output.
+    this.log("\n3. Noding all boundaries...");
+    const geosHelper = new GeosHelper();
+    await geosHelper.init();
+    const COORD_SCALE = 1e7; // 1e-7 degrees ≈ 1cm precision
 
-    // Phase 4c: Read face assignments from Python output
-    this.log("   Loading face assignments...");
-    interface FaceAssignment {
-      geom: Polygon | MultiPolygon;
-      area: number;
-      blockIdx: number;
-      precinctIdx: number;
-    }
-    const facesByBlock = new Map<number, FaceAssignment[]>();
-    let assignedFaces = 0;
-
-    const faceRl = require("readline").createInterface({ // eslint-disable-line
-      input: createReadStream(facesNdjson),
-      crlfDelay: Infinity
-    });
-    for await (const line of faceRl) {
-      if (!(line as string).trim()) continue;
+    // Extract block boundaries, keeping only the boundaries (not full polygons)
+    // to reduce memory. Full polygon geoms are rebuilt later for containment tests.
+    this.log("   Extracting block boundaries...");
+    const allBoundaries: any[] = [];
+    const validBlocks = new Set<number>(); // track which blocks had valid geometry
+    for (let bi = 0; bi < blockFeatures.length; bi++) {
+      if (bi % 5000 === 0 && bi > 0) this.log(`   ${bi}/${blockFeatures.length} blocks...`);
+      const geom = blockFeatures[bi].geometry;
+      if (!geom) continue;
       try {
-        const row = JSON.parse(line as string);
-        const fa: FaceAssignment = {
-          geom: row.geom,
-          area: row.area,
-          blockIdx: row.blockIdx,
-          precinctIdx: row.precinctIdx
-        };
-        if (!facesByBlock.has(fa.blockIdx)) facesByBlock.set(fa.blockIdx, []);
-        facesByBlock.get(fa.blockIdx)!.push(fa);
-        assignedFaces++;
-      } catch {
-        /* skip invalid */
+        let g = geosHelper.fromGeoJSONScaled(geom as Polygon | MultiPolygon, COORD_SCALE);
+        if (!geosHelper.isValid(g)) {
+          const fixed = geosHelper.makeValid(g);
+          geosHelper.free(g);
+          g = fixed;
+        }
+        const boundary = geosHelper.boundary(g);
+        geosHelper.free(g); // Free polygon — only keep boundary
+        allBoundaries.push(boundary);
+        validBlocks.add(bi);
+      } catch { /* skip */ }
+    }
+
+    // Build R-tree over blocks for spatial lookup (uses original GeoJSON bboxes)
+    const snapTree = new RBush<RTreeItem>();
+    const snapTreeItems: RTreeItem[] = [];
+    for (const bi of validBlocks) {
+      const [minX, minY, maxX, maxY] = featureBbox(blockFeatures[bi]);
+      snapTreeItems.push({ minX, minY, maxX, maxY, index: bi });
+    }
+    snapTree.load(snapTreeItems);
+
+    // Snap tolerance in scaled space: 100 units = 100/1e7 degrees ≈ 1m
+    const SNAP_TOLERANCE = 100;
+
+    // Pre-extract block boundary WKT strings for snapping (avoids re-extracting
+    // boundaries from freed polygon geoms in the snap loop)
+    this.log("   Caching block boundary WKT for snapping...");
+    const blockBoundaryWkt: (string | null)[] = new Array(blockFeatures.length).fill(null);
+    // allBoundaries are in order of validBlocks iteration (Set preserves insertion order)
+    {
+      let idx = 0;
+      for (const bi of validBlocks) {
+        blockBoundaryWkt[bi] = geosHelper.toWkt(allBoundaries[idx]);
+        idx++;
       }
     }
-    this.log(`   ${assignedFaces} faces assigned to ${facesByBlock.size} blocks`);
 
-    // Phase 4d: Build output features from face assignments
-    this.log("   Building output features...");
-    const outputFeatures: GeoJSON.Feature[] = [];
+    this.log("   Extracting precinct boundaries (snapping to nearby block vertices)...");
+    const precinctGeoms: any[] = [];
+    for (let pi = 0; pi < vestFeatures.length; pi++) {
+      if (pi % 100 === 0 && pi > 0) this.log(`   ${pi}/${vestFeatures.length} precincts...`);
+      const geom = vestFeatures[pi].geometry;
+      if (!geom) { precinctGeoms.push(null); continue; }
+      try {
+        let g = geosHelper.fromGeoJSONScaled(geom as Polygon | MultiPolygon, COORD_SCALE);
+        if (!geosHelper.isValid(g)) {
+          const fixed = geosHelper.makeValid(g);
+          geosHelper.free(g);
+          g = fixed;
+        }
+        // Find nearby blocks via R-tree and build a local snap target
+        const [pMinX, pMinY, pMaxX, pMaxY] = featureBbox(vestFeatures[pi]);
+        const nearby = snapTree.search({
+          minX: pMinX - 0.001, minY: pMinY - 0.001,
+          maxX: pMaxX + 0.001, maxY: pMaxY + 0.001
+        });
+        if (nearby.length > 0) {
+          // Build snap target from cached boundary WKT (no re-extraction)
+          const nearbyBoundaries = [];
+          for (const n of nearby) {
+            const wkt = blockBoundaryWkt[n.index];
+            if (wkt) {
+              nearbyBoundaries.push((geosHelper as any)._WKTReader_read((geosHelper as any).reader, wkt));
+            }
+          }
+          if (nearbyBoundaries.length > 0) {
+            const snapTarget = geosHelper.createCollection(nearbyBoundaries);
+            // createCollection takes ownership of nearbyBoundaries
+            const snapped = geosHelper.snap(g, snapTarget, SNAP_TOLERANCE);
+            geosHelper.free(g);
+            geosHelper.free(snapTarget);
+            g = snapped;
+            if (!geosHelper.isValid(g)) {
+              const fixed = geosHelper.makeValid(g);
+              geosHelper.free(g);
+              g = fixed;
+            }
+          }
+        }
+        precinctGeoms.push(g);
+        allBoundaries.push(geosHelper.boundary(g));
+      } catch {
+        precinctGeoms.push(null);
+      }
+    }
+
+    this.log(`   Noding ${allBoundaries.length} boundaries (cascaded union)...`);
+    const boundaryCollection = geosHelper.createCollection(allBoundaries);
+    // Note: createCollection takes ownership of allBoundaries — don't free them
+    const noded = geosHelper.unaryUnion(boundaryCollection);
+    geosHelper.free(boundaryCollection);
+
+    this.log("   Polygonizing...");
+    const geomArray = [noded];
+    const collection = (geosHelper as any)._Polygonize(geomArray, 1);
+    geosHelper.free(noded);
+    const numFaces = (geosHelper as any)._GetNumGeometries(collection);
+    this.log(`   ${numFaces} faces created`);
+
+    // Free cached WKT strings — no longer needed after snapping
+    blockBoundaryWkt.length = 0;
+
+    // ── Step 4: Assign faces to blocks + precincts ──
+    this.log("\n4. Assigning faces...");
+    // Rebuild block polygon geoms for containment tests (were freed to save memory during noding)
+    this.log("   Rebuilding block geometries for containment...");
+    const blockGeoms: any[] = new Array(blockFeatures.length).fill(null);
+    for (const bi of validBlocks) {
+      const geom = blockFeatures[bi].geometry;
+      if (!geom) continue;
+      try {
+        let g = geosHelper.fromGeoJSONScaled(geom as Polygon | MultiPolygon, COORD_SCALE);
+        if (!geosHelper.isValid(g)) {
+          const fixed = geosHelper.makeValid(g);
+          geosHelper.free(g);
+          g = fixed;
+        }
+        blockGeoms[bi] = g;
+      } catch { /* skip */ }
+    }
+
+    // Build spatial index over blocks for fast face assignment
+    const blockTree = new RBush<RTreeItem>();
+    const blockRTreeItems: RTreeItem[] = [];
+    for (const bi of validBlocks) {
+      if (!blockGeoms[bi]) continue;
+      const [minX, minY, maxX, maxY] = featureBbox(blockFeatures[bi]);
+      blockRTreeItems.push({ minX, minY, maxX, maxY, index: bi });
+    }
+    blockTree.load(blockRTreeItems);
+
+    const precinctTree = new RBush<RTreeItem>();
+    const precinctRTreeItems: RTreeItem[] = [];
+    for (let pi = 0; pi < vestFeatures.length; pi++) {
+      if (!precinctGeoms[pi]) continue;
+      const [minX, minY, maxX, maxY] = featureBbox(vestFeatures[pi]);
+      precinctRTreeItems.push({ minX, minY, maxX, maxY, index: pi });
+    }
+    precinctTree.load(precinctRTreeItems);
+
+    // Assign each face to a block and precinct
+    type FaceInfo = { geom: any; area: number; blockIdx: number; precinctIdx: number };
+    const facesByBlock = new Map<number, FaceInfo[]>();
+    let assigned = 0;
+    let unassigned = 0;
+
+    for (let fi = 0; fi < numFaces; fi++) {
+      if (fi % 50000 === 0 && fi > 0) this.log(`   ${fi}/${numFaces} faces...`);
+      const face = (geosHelper as any)._GetGeometryN(collection, fi);
+
+      const areaOut = [0];
+      (geosHelper as any)._Area(face, areaOut);
+      if (areaOut[0] <= 0) continue;
+
+      const rp = geosHelper.pointOnSurface(face);
+      if (!rp) continue;
+
+      // Find block via R-tree + containment
+      // RP is in scaled space; R-tree is in WGS84 space — unscale for search
+      let blockIdx = -1;
+      const rpWkt = geosHelper.toWkt(rp);
+      // Extract coordinates from WKT like "POINT (x y)"
+      const rpMatch = rpWkt?.match(/-?\d+\.?\d*/g);
+      if (rpMatch && rpMatch.length >= 2) {
+        const rpxScaled = parseFloat(rpMatch[0]);
+        const rpyScaled = parseFloat(rpMatch[1]);
+        const rpx = rpxScaled / COORD_SCALE;
+        const rpy = rpyScaled / COORD_SCALE;
+        const blockCands = blockTree.search({
+          minX: rpx - 0.001, minY: rpy - 0.001,
+          maxX: rpx + 0.001, maxY: rpy + 0.001
+        });
+        for (const bc of blockCands) {
+          if ((geosHelper as any)._Contains(blockGeoms[bc.index], rp) === 1) {
+            blockIdx = bc.index;
+            break;
+          }
+        }
+      }
+
+      // Find precinct via R-tree + containment
+      let precinctIdx = -1;
+      if (rpMatch && rpMatch.length >= 2) {
+        const rpxScaled = parseFloat(rpMatch[0]);
+        const rpyScaled = parseFloat(rpMatch[1]);
+        const rpx = rpxScaled / COORD_SCALE;
+        const rpy = rpyScaled / COORD_SCALE;
+        const precCands = precinctTree.search({
+          minX: rpx - 0.001, minY: rpy - 0.001,
+          maxX: rpx + 0.001, maxY: rpy + 0.001
+        });
+        for (const pc of precCands) {
+          if ((geosHelper as any)._Contains(precinctGeoms[pc.index], rp) === 1) {
+            precinctIdx = pc.index;
+            break;
+          }
+        }
+      }
+
+      geosHelper.free(rp);
+
+      if (blockIdx === -1 || precinctIdx === -1) {
+        unassigned++;
+        continue;
+      }
+
+      // Clone face
+      const wkt = geosHelper.toWkt(face);
+      const cloned = (geosHelper as any)._WKTReader_read(
+        (geosHelper as any).reader, wkt
+      );
+
+      if (!facesByBlock.has(blockIdx)) facesByBlock.set(blockIdx, []);
+      facesByBlock.get(blockIdx)!.push({
+        geom: cloned, area: areaOut[0], blockIdx, precinctIdx
+      });
+      assigned++;
+    }
+
+    geosHelper.free(collection);
+    this.log(`   Assigned: ${assigned}, Unassigned: ${unassigned}`);
+
+    // ── Build output features from faces ──
+    // Write geometry to temp file as we go — never accumulate full features in memory.
+    const outputPath = flags.output.replace("~", process.env.HOME || "");
+    mkdirSync(dirname(outputPath), { recursive: true });
+    const geomTempPath = outputPath + ".geomseq";
+    const geomFd = require("fs").openSync(geomTempPath, "w"); // eslint-disable-line
+    const featureProps: Record<string, any>[] = [];
+
+    this.log("\n   Building output features...");
     let singlePrecinct = 0;
     let splitBlocks = 0;
     let noMatch = 0;
     let totalSubBlocks = 0;
+    const demoKeys = ["population", "white", "black", "asian", "hispanic", "other",
+      "vap", "vap_white", "vap_black", "vap_asian", "vap_hispanic", "vap_other"];
 
-    const demoKeys = [
-      "population",
-      "white",
-      "black",
-      "asian",
-      "hispanic",
-      "other",
-      "vap",
-      "vap_white",
-      "vap_black",
-      "vap_asian",
-      "vap_hispanic",
-      "vap_other"
-    ];
-
-    // Helper: collect face GeoJSONs into a single geometry without GEOS
-    function collectFaceGeometry(
-      faces: FaceAssignment[]
-    ): Polygon | MultiPolygon {
-      const polys: number[][][][] = [];
-      for (const fa of faces) {
-        if (fa.geom.type === "Polygon") polys.push(fa.geom.coordinates);
-        else if (fa.geom.type === "MultiPolygon")
-          for (const p of fa.geom.coordinates) polys.push(p);
-      }
-      if (polys.length === 1) return { type: "Polygon", coordinates: polys[0] };
-      return { type: "MultiPolygon", coordinates: polys };
-    }
-
-    for (const [blockIdx, blockFaces] of facesByBlock) {
-      const blockFeature = blockFeatures[blockIdx];
+    for (let bi = 0; bi < blockFeatures.length; bi++) {
+      const blockFeature = blockFeatures[bi];
       const blockProps = blockFeature.properties as Record<string, any>;
       const geoId = blockProps.GEOID20 as string;
       const countyFp = blockProps.COUNTYFP20 as string;
-      const demo = blockDemographics.get(geoId) || {
-        population: 0,
-        white: 0,
-        black: 0,
-        asian: 0,
-        hispanic: 0,
-        other: 0,
-        vap: 0,
-        vap_white: 0,
-        vap_black: 0,
-        vap_asian: 0,
-        vap_hispanic: 0,
-        vap_other: 0
-      };
+      const demo = blockDemographics.get(geoId);
+      if (!demo) continue;
 
-      // Check if all faces belong to the same precinct
-      const uniquePrecincts = new Set(blockFaces.map(f => f.precinctIdx));
-
-      if (uniquePrecincts.size === 1) {
-        singlePrecinct++;
-        const pData = precinctVoting.get(blockFaces[0].precinctIdx)!;
-        outputFeatures.push({
-          type: "Feature",
-          geometry: blockFaces.length === 1
-            ? blockFaces[0].geom
-            : collectFaceGeometry(blockFaces),
-          properties: buildBlockProps(
-            geoId,
-            pData.precinctId,
-            countyFp,
-            countyNames,
-            demo,
-            pData.votes,
-            officesFound,
-            detectedYear
-          )
-        });
+      const faces = facesByBlock.get(bi);
+      if (!faces || faces.length === 0) {
+        noMatch++;
         continue;
       }
 
-      // Block straddles multiple precincts — apply sliver filtering
-      const blockArea = blockFaces.reduce((s, f) => s + f.area, 0);
+      // Group by precinct
+      const byPrecinct = new Map<number, FaceInfo[]>();
+      for (const f of faces) {
+        if (!byPrecinct.has(f.precinctIdx)) byPrecinct.set(f.precinctIdx, []);
+        byPrecinct.get(f.precinctIdx)!.push(f);
+      }
+
+      if (byPrecinct.size === 1) {
+        // Single precinct — use noded geometry (not original) so arcs are shared
+        const pi = faces[0].precinctIdx;
+        const pData = precinctVoting.get(pi)!;
+        let merged = faces[0].geom;
+        for (let fi = 1; fi < faces.length; fi++) {
+          const u = geosHelper.union(merged, faces[fi].geom);
+          geosHelper.free(merged);
+          geosHelper.free(faces[fi].geom);
+          merged = u;
+        }
+        const geoJSON = geosHelper.toGeoJSONScaled(merged, COORD_SCALE);
+        geosHelper.free(merged);
+        singlePrecinct++;
+        {
+          const props = buildBlockProps(geoId, pData.precinctId, countyFp, countyNames, demo, pData.votes, officesFound, detectedYear);
+          require("fs").writeSync(geomFd, JSON.stringify(geoJSON || blockFeature.geometry) + "\n"); // eslint-disable-line
+          featureProps.push(props);
+        }
+        continue;
+      }
+
+      // Multiple precincts — split
+      const blockArea = faces.reduce((s, f) => s + f.area, 0);
       const MIN_AREA_RATIO = demo.population === 0 ? 0.05 : 0.005;
 
-      const viable = blockFaces.filter(f => f.area / blockArea >= MIN_AREA_RATIO);
-      const slivers = blockFaces.filter(f => f.area / blockArea < MIN_AREA_RATIO);
+      const precinctAreas = new Map<number, number>();
+      for (const [pi, pFaces] of byPrecinct) {
+        precinctAreas.set(pi, pFaces.reduce((s, f) => s + f.area, 0));
+      }
 
-      if (viable.length <= 1) {
+      const viablePrecincts: number[] = [];
+      const sliverPrecincts: number[] = [];
+      for (const [pi, area] of precinctAreas) {
+        if (blockArea > 0 && area / blockArea >= MIN_AREA_RATIO) {
+          viablePrecincts.push(pi);
+        } else {
+          sliverPrecincts.push(pi);
+        }
+      }
+
+      if (viablePrecincts.length <= 1) {
+        const bestPi = viablePrecincts.length === 1
+          ? viablePrecincts[0]
+          : [...precinctAreas.entries()].reduce((a, b) => a[1] > b[1] ? a : b)[0];
+        const pData = precinctVoting.get(bestPi)!;
+        let merged = faces[0].geom;
+        for (let fi = 1; fi < faces.length; fi++) {
+          const u = geosHelper.union(merged, faces[fi].geom);
+          geosHelper.free(merged);
+          geosHelper.free(faces[fi].geom);
+          merged = u;
+        }
+        const geoJSON = geosHelper.toGeoJSONScaled(merged, COORD_SCALE);
+        geosHelper.free(merged);
         singlePrecinct++;
-        const dominant =
-          viable.length === 1
-            ? viable[0]
-            : blockFaces.reduce((a, b) => (a.area > b.area ? a : b));
-        const pData = precinctVoting.get(dominant.precinctIdx)!;
-        outputFeatures.push({
-          type: "Feature",
-          geometry: collectFaceGeometry(blockFaces),
-          properties: buildBlockProps(
-            geoId,
-            pData.precinctId,
-            countyFp,
-            countyNames,
-            demo,
-            pData.votes,
-            officesFound,
-            detectedYear
-          )
-        });
+        {
+          const props = buildBlockProps(geoId, pData.precinctId, countyFp, countyNames, demo, pData.votes, officesFound, detectedYear);
+          require("fs").writeSync(geomFd, JSON.stringify(geoJSON || blockFeature.geometry) + "\n"); // eslint-disable-line
+          featureProps.push(props);
+        }
         continue;
       }
 
       // Multiple viable sub-blocks
       splitBlocks++;
-
-      let largestViableIdx = 0;
-      for (let i = 1; i < viable.length; i++) {
-        if (viable[i].area > viable[largestViableIdx].area) largestViableIdx = i;
-      }
-
-      const areaRatios = viable.map(f => f.area);
-      const sliverArea = slivers.reduce((s, f) => s + f.area, 0);
-      areaRatios[largestViableIdx] += sliverArea;
+      const areaRatios = viablePrecincts.map(pi => precinctAreas.get(pi)!);
+      const sliverArea = sliverPrecincts.reduce((s, pi) => s + (precinctAreas.get(pi) || 0), 0);
+      const largestIdx = areaRatios.indexOf(Math.max(...areaRatios));
+      areaRatios[largestIdx] += sliverArea;
 
       const apportioned: Record<string, number[]> = {};
       for (const key of demoKeys) {
         apportioned[key] = apportion(demo[key], areaRatios);
       }
 
-      for (let si = 0; si < viable.length; si++) {
+      for (let si = 0; si < viablePrecincts.length; si++) {
         totalSubBlocks++;
         const subBlockId = `${geoId}-${si + 1}`;
-        const face = viable[si];
-        const pData = precinctVoting.get(face.precinctIdx)!;
-
-        // Include slivers in largest viable face to avoid gaps
-        const faceGeoJSON =
-          si === largestViableIdx && slivers.length > 0
-            ? collectFaceGeometry([face, ...slivers])
-            : face.geom;
+        const pi = viablePrecincts[si];
+        const pData = precinctVoting.get(pi)!;
 
         const subDemo: Record<string, number> = {};
         for (const key of demoKeys) {
           subDemo[key] = apportioned[key][si];
         }
 
-        outputFeatures.push({
-          type: "Feature",
-          geometry: faceGeoJSON,
-          properties: buildBlockProps(
-            subBlockId,
-            pData.precinctId,
-            countyFp,
-            countyNames,
-            subDemo,
-            pData.votes,
-            officesFound,
-            detectedYear
-          )
-        });
+        const pFaces = byPrecinct.get(pi)!;
+        const facesToMerge = si === largestIdx
+          ? [...pFaces, ...sliverPrecincts.flatMap(sp => byPrecinct.get(sp) || [])]
+          : pFaces;
+
+        let subGeom = facesToMerge[0].geom;
+        for (let fi = 1; fi < facesToMerge.length; fi++) {
+          const u = geosHelper.union(subGeom, facesToMerge[fi].geom);
+          subGeom = u;
+        }
+        const subGeoJSON = geosHelper.toGeoJSONScaled(subGeom, COORD_SCALE);
+        if (facesToMerge.length > 1) geosHelper.free(subGeom);
+
+        {
+          const props = buildBlockProps(subBlockId, pData.precinctId, countyFp, countyNames, subDemo, pData.votes, officesFound, detectedYear);
+          require("fs").writeSync(geomFd, JSON.stringify(subGeoJSON || blockFeature.geometry) + "\n"); // eslint-disable-line
+          featureProps.push(props);
+        }
+      }
+
+      // Free remaining face geoms
+      for (const f of faces) {
+        try { geosHelper.free(f.geom); } catch { /* already freed */ }
       }
     }
 
-    // Handle blocks with no face assignments
-    for (let bi = 0; bi < blockFeatures.length; bi++) {
-      if (facesByBlock.has(bi)) continue;
-      noMatch++;
-      const blockFeature = blockFeatures[bi];
-      const blockProps = blockFeature.properties as Record<string, any>;
-      const geoId = blockProps.GEOID20 as string;
-      const countyFp = blockProps.COUNTYFP20 as string;
-      const demo = blockDemographics.get(geoId) || {
-        population: 0,
-        white: 0,
-        black: 0,
-        asian: 0,
-        hispanic: 0,
-        other: 0,
-        vap: 0,
-        vap_white: 0,
-        vap_black: 0,
-        vap_asian: 0,
-        vap_hispanic: 0,
-        vap_other: 0
-      };
-      const [bMinX, bMinY, bMaxX, bMaxY] = featureBbox(blockFeature);
-      const bcx = (bMinX + bMaxX) / 2;
-      const bcy = (bMinY + bMaxY) / 2;
-      const wider = tree.search({
-        minX: bcx - 0.1,
-        minY: bcy - 0.1,
-        maxX: bcx + 0.1,
-        maxY: bcy + 0.1
-      });
-      if (wider.length > 0) {
-        const pData = precinctVoting.get(wider[0].index)!;
-        outputFeatures.push({
-          type: "Feature",
-          geometry: blockFeature.geometry,
-          properties: buildBlockProps(
-            geoId,
-            pData.precinctId,
-            countyFp,
-            countyNames,
-            demo,
-            pData.votes,
-            officesFound,
-            detectedYear
-          )
-        });
-      }
-    }
+    // Close geometry temp file and clean up GEOS geometries (but keep helper alive
+    // for addVotingYear — creating a second GeosHelper causes segfaults from
+    // re-registering FFI types)
+    require("fs").closeSync(geomFd); // eslint-disable-line
+    for (const g of blockGeoms) if (g) geosHelper.free(g);
+    for (const g of precinctGeoms) if (g) geosHelper.free(g);
+    blockFeatures.length = 0;
+    vestFeatures.length = 0;
+    blockDemographics.clear();
+    precinctVoting.clear();
+
+    // Force glibc to return freed native memory to the OS.
+    // Without this, glibc holds onto ~30GB of freed GEOS heap pages.
+    try {
+      const libc = require("koffi").load("libc.so.6"); // eslint-disable-line
+      const mallocTrim = libc.func("malloc_trim", "int", ["int"]);
+      mallocTrim(0);
+    } catch { /* non-critical */ }
+
 
     this.log(`\n   Spatial join complete:`);
     this.log(`     Single precinct: ${singlePrecinct}`);
     this.log(`     Split blocks:    ${splitBlocks} (${totalSubBlocks} sub-blocks)`);
-    this.log(`     No match:        ${noMatch} (assigned via fallback)`);
-    this.log(`     Total features:  ${outputFeatures.length}`);
+    this.log(`     No match:        ${noMatch}`);
+    this.log(`     Total features:  ${featureProps.length}`);
+
     // ── Step 5: Process additional election years ──
+    // addVotingYear now works with the properties array (no geometry needed
+    // for the reconciliation step). Geometry is read from disk on-demand
+    // for the spatial join.
     if (flags.additionalVest) {
       const additionalPairs = flags.additionalVest
         .split(",")
@@ -736,49 +966,61 @@ export default class PrepareDevData extends Command {
 
       for (const { precinctField: addPrecinctField, path: addVestPath } of additionalPairs) {
         await this.addVotingYear(
-          outputFeatures,
+          featureProps,
+          geomTempPath,
           addVestPath.replace("~", process.env.HOME || ""),
           addPrecinctField,
-          tmp
+          tmp,
+          geosHelper
         );
       }
     }
 
-    // ── Step 6: Write output ──
-    const output: FeatureCollection = {
-      type: "FeatureCollection",
-      features: outputFeatures
-    };
+    geosHelper.destroy();
 
-    const outputPath = flags.output.replace("~", process.env.HOME || "");
-    mkdirSync(dirname(outputPath), { recursive: true });
-
-    // Stream JSON to disk to avoid Node's max string length limit for large states
-    this.log(`\nWriting ${outputFeatures.length} features to ${outputPath}...`);
-    await new Promise<void>((resolve, reject) => {
-      const stream = new JsonStreamStringify(output);
-      const fileStream = createWriteStream(outputPath);
-      stream.pipe(fileStream);
-      fileStream.on("finish", resolve);
-      stream.on("error", reject);
-      fileStream.on("error", reject);
+    // ── Step 6: Reassemble and write final output ──
+    this.log(`\nWriting ${featureProps.length} features to ${outputPath}...`);
+    const outStream = createWriteStream(outputPath);
+    outStream.write('{"type":"FeatureCollection","features":[\n');
+    const geomRL = require("readline").createInterface({ // eslint-disable-line
+      input: createReadStream(geomTempPath),
+      crlfDelay: Infinity
     });
+    let featureIdx = 0;
+    for await (const line of geomRL) {
+      if (!line.trim()) { featureIdx++; continue; }
+      const geometry = JSON.parse(line);
+      const feature = { type: "Feature", geometry, properties: featureProps[featureIdx] };
+      if (featureIdx > 0) outStream.write(",\n");
+      outStream.write(JSON.stringify(feature));
+      featureIdx++;
+    }
+    outStream.write("\n]}");
+    await new Promise<void>((resolve, reject) => {
+      outStream.on("finish", resolve);
+      outStream.on("error", reject);
+      outStream.end();
+    });
+    // Clean up temp file
+    require("fs").unlinkSync(geomTempPath); // eslint-disable-line
     const { statSync: statSyncFn } = require("fs"); // eslint-disable-line
     const fileSizeMB = (statSyncFn(outputPath).size / 1024 / 1024).toFixed(1);
     this.log(`Wrote ${fileSizeMB}MB`);
 
-    const totalPop = outputFeatures.reduce(
-      (sum, f) => sum + ((f.properties as any).population || 0),
+    const totalPop = featureProps.reduce(
+      (sum, p) => sum + (p.population || 0),
       0
     );
-    const counties = new Set(outputFeatures.map(f => (f.properties as any).county));
-    const precincts = new Set(outputFeatures.map(f => (f.properties as any).precinct));
+    const counties = new Set(featureProps.map(p => p.county));
+    const precincts = new Set(featureProps.map(p => p.precinct));
     this.log(`\nSummary:`);
     this.log(`  Population: ${totalPop.toLocaleString()}`);
     this.log(`  Counties: ${counties.size}`);
     this.log(`  Precincts: ${precincts.size}`);
-    this.log(`  Features: ${outputFeatures.length}`);
-    this.log(`  Offices: ${Array.from(officesFound).sort().join(", ")}`);
+    this.log(`  Features: ${featureProps.length}`);
+    this.log(
+      `  Offices: ${Array.from(officesFound).sort().join(", ")}`
+    );
   }
 
   /**
@@ -787,10 +1029,12 @@ export default class PrepareDevData extends Command {
    * blending per-capita voting rates by area overlap for straddling blocks.
    */
   async addVotingYear(
-    outputFeatures: GeoJSON.Feature[],
+    featureProps: Record<string, any>[],
+    geomTempPath: string,
     vestZipPath: string,
     precinctField: string,
-    tmpDir: string
+    tmpDir: string,
+    geosHelper: GeosHelper
   ): Promise<void> {
     this.log(`\n── Adding voting year from ${vestZipPath} ──`);
 
@@ -814,13 +1058,10 @@ export default class PrepareDevData extends Command {
     }
 
     // Extract voting data and detect year
-    const precinctData = new Map<
-      number,
-      {
-        votes: Record<string, { democrat: number; republican: number; other: number }>;
-        totalVotes: Record<string, number>;
-      }
-    >();
+    const precinctData = new Map<number, {
+      votes: Record<string, { democrat: number; republican: number; other: number }>;
+      totalVotes: Record<string, number>;
+    }>();
     const officesFound = new Set<string>();
     let electionYear = "";
 
@@ -837,60 +1078,32 @@ export default class PrepareDevData extends Command {
     }
     this.log(`   Year: 20${electionYear}, offices: ${Array.from(officesFound).sort().join(", ")}`);
 
-    // Initialize GEOS and prepare precinct geometries
-    // Suppress GEOS stderr warnings during bulk geometry validation
-    // (VEST shapefiles commonly have self-intersections that makeValid fixes)
-    const geosHelper = new GeosHelper();
-    await geosHelper.init();
-
+    // Prepare precinct geometries using shared GEOS helper
     const precinctGeoms: (number | null)[] = [];
     const preparedPrecincts: (number | null)[] = [];
     const precinctBboxes: [number, number, number, number][] = [];
-    let geosWarnings = 0;
-    geosHelper.suppressWarnings();
 
     for (let i = 0; i < vestFeatures.length; i++) {
       const geom = vestFeatures[i].geometry;
-      if (!geom) {
-        precinctGeoms.push(null);
-        preparedPrecincts.push(null);
-        precinctBboxes.push([0, 0, 0, 0]);
-        continue;
-      }
+      if (!geom) { precinctGeoms.push(null); preparedPrecincts.push(null); precinctBboxes.push([0, 0, 0, 0]); continue; }
       try {
         let g = geosHelper.fromGeoJSON(geom as Polygon | MultiPolygon);
-        if (!geosHelper.isValid(g)) {
-          geosWarnings++;
-          const f = geosHelper.makeValid(g);
-          geosHelper.free(g);
-          g = f;
-        }
+        if (!geosHelper.isValid(g)) { const f = geosHelper.makeValid(g); geosHelper.free(g); g = f; }
         precinctGeoms.push(g);
-        preparedPrecincts.push(geosHelper.prepare(geosHelper.buffer(g, 0.0001)));
+        const buffered = geosHelper.buffer(g, 0.0001);
+        preparedPrecincts.push(geosHelper.prepare(buffered));
+        // Don't free buffered — prepared geometry holds a reference to it
         precinctBboxes.push(featureBbox(vestFeatures[i]));
-      } catch {
-        precinctGeoms.push(null);
-        preparedPrecincts.push(null);
-        precinctBboxes.push([0, 0, 0, 0]);
-      }
+      } catch { precinctGeoms.push(null); preparedPrecincts.push(null); precinctBboxes.push([0, 0, 0, 0]); }
     }
 
-    if (geosWarnings > 0) {
-      this.log(`   ${geosWarnings} invalid precinct geometries fixed`);
-    }
-
-    // Build grid index
+    // Build grid index over precincts using precinct bboxes for grid extent
     const GRID_SIZE = 200;
-    let gsMinX = Infinity,
-      gsMinY = Infinity,
-      gsMaxX = -Infinity,
-      gsMaxY = -Infinity;
-    for (const f of outputFeatures) {
-      const [a, b, c, d] = featureBbox(f);
-      if (a < gsMinX) gsMinX = a;
-      if (b < gsMinY) gsMinY = b;
-      if (c > gsMaxX) gsMaxX = c;
-      if (d > gsMaxY) gsMaxY = d;
+    let gsMinX = Infinity, gsMinY = Infinity, gsMaxX = -Infinity, gsMaxY = -Infinity;
+    for (const [pMinX, pMinY, pMaxX, pMaxY] of precinctBboxes) {
+      if (pMinX === 0 && pMaxX === 0) continue;
+      if (pMinX < gsMinX) gsMinX = pMinX; if (pMinY < gsMinY) gsMinY = pMinY;
+      if (pMaxX > gsMaxX) gsMaxX = pMaxX; if (pMaxY > gsMaxY) gsMaxY = pMaxY;
     }
     const gW = (gsMaxX - gsMinX) / GRID_SIZE;
     const gH = (gsMaxY - gsMinY) / GRID_SIZE;
@@ -904,33 +1117,57 @@ export default class PrepareDevData extends Command {
       const x1 = Math.max(0, Math.min(GRID_SIZE - 1, Math.floor((pMaxX - gsMinX) / gW)));
       const y1 = Math.max(0, Math.min(GRID_SIZE - 1, Math.floor((pMaxY - gsMinY) / gH)));
       for (let gy = y0; gy <= y1; gy++)
-        for (let gx = x0; gx <= x1; gx++) grid[gy * GRID_SIZE + gx].push(pi);
+        for (let gx = x0; gx <= x1; gx++)
+          grid[gy * GRID_SIZE + gx].push(pi);
     }
 
-    // Join: for each output feature, assign voting data from this year
-    this.log(`   Joining ${outputFeatures.length} features...`);
+    // Join: stream geometry from disk, one feature at a time.
+    // No pre-scan of geometry needed — bbox is computed inline per feature.
+    this.log(`   Joining ${featureProps.length} features...`);
     const yy = electionYear;
-    let single = 0,
-      blended = 0,
-      noMatchCount = 0;
+    let single = 0, blended = 0, noMatchCount = 0;
 
     // Track for reconciliation: precinctIdx → office → [{featureIdx, weight}]
-    const precinctAssigned = new Map<
-      number,
-      Map<string, { featureIdx: number; weight: number }[]>
-    >();
+    const precinctAssigned = new Map<number, Map<string, { featureIdx: number; weight: number }[]>>();
 
-    for (let fi = 0; fi < outputFeatures.length; fi++) {
+    // Read geometry file line-by-line synchronously using a buffered reader.
+    // Can't use readFileSync (string too long for TX) or async readline
+    // (breaks in nested async contexts).
+    const geomFdRead = require("fs").openSync(geomTempPath, "r"); // eslint-disable-line
+    const LINE_BUF_SIZE = 256 * 1024; // 256KB per read chunk
+    const lineBuf = Buffer.alloc(LINE_BUF_SIZE);
+    let remainder = "";
+
+    function readNextLine(): string {
+      while (true) {
+        const nlIdx = remainder.indexOf("\n");
+        if (nlIdx !== -1) {
+          const line = remainder.substring(0, nlIdx);
+          remainder = remainder.substring(nlIdx + 1);
+          return line;
+        }
+        const bytesRead = require("fs").readSync(geomFdRead, lineBuf, 0, LINE_BUF_SIZE); // eslint-disable-line
+        if (bytesRead === 0) {
+          const last = remainder;
+          remainder = "";
+          return last;
+        }
+        remainder += lineBuf.toString("utf-8", 0, bytesRead);
+      }
+    }
+
+    for (let fi = 0; fi < featureProps.length; fi++) {
       if (fi % 50000 === 0 && fi > 0) {
-        this.log(`   Progress: ${fi}/${outputFeatures.length}`);
+        this.log(`   Progress: ${fi}/${featureProps.length}`);
       }
 
-      const feat = outputFeatures[fi];
-      const props = feat.properties as Record<string, any>;
+      const currentGeomLine = readNextLine();
+      const props = featureProps[fi];
       const pop = props.population || 0;
 
-      // Find candidates via grid
-      const [bMinX, bMinY, bMaxX, bMaxY] = featureBbox(feat);
+      // Parse geometry once — used for bbox, GEOS conversion, and candidate search
+      const currentGeom = JSON.parse(currentGeomLine) as Polygon | MultiPolygon;
+      const [bMinX, bMinY, bMaxX, bMaxY] = featureBbox({ geometry: currentGeom } as any);
       const bcx = (bMinX + bMaxX) / 2;
       const bcy = (bMinY + bMaxY) / 2;
       const gxi = Math.max(0, Math.min(GRID_SIZE - 1, Math.floor((bcx - gsMinX) / gW)));
@@ -956,10 +1193,10 @@ export default class PrepareDevData extends Command {
         continue;
       }
 
-      // Convert feature to GEOS
-      let featGeom: number;
+      // Convert to GEOS for spatial tests
+      let featGeom: any;
       try {
-        featGeom = geosHelper.fromGeoJSON(feat.geometry as Polygon | MultiPolygon);
+        featGeom = geosHelper.fromGeoJSON(currentGeom);
         if (!geosHelper.isValid(featGeom)) {
           const fixed = geosHelper.makeValid(featGeom);
           geosHelper.free(featGeom);
@@ -986,9 +1223,7 @@ export default class PrepareDevData extends Command {
             containingPi = pi;
             break;
           }
-        } catch {
-          /* skip */
-        }
+        } catch { /* skip */ }
       }
 
       if (containingPi !== null) {
@@ -1032,9 +1267,7 @@ export default class PrepareDevData extends Command {
             geosHelper.free(inter);
             if (a > 0) intersections.push({ pi, area: a });
           }
-        } catch {
-          /* skip */
-        }
+        } catch { /* skip */ }
       }
       geosHelper.free(featGeom);
 
@@ -1053,9 +1286,7 @@ export default class PrepareDevData extends Command {
       const totalArea = intersections.reduce((s, i) => s + i.area, 0);
 
       for (const office of Array.from(officesFound)) {
-        let bDem = 0,
-          bRep = 0,
-          bOther = 0;
+        let bDem = 0, bRep = 0, bOther = 0;
         const prefix = office === "PRE" ? "" : `${office}_`;
         for (const int of intersections) {
           const pd = precinctData.get(int.pi)!;
@@ -1085,11 +1316,10 @@ export default class PrepareDevData extends Command {
       }
     }
 
-    // Clean up GEOS
+    require("fs").closeSync(geomFdRead); // eslint-disable-line
+    // Clean up GEOS objects (but not the helper — shared across voting years)
     for (const p of preparedPrecincts) if (p) geosHelper.freePrepared(p);
     for (const g of precinctGeoms) if (g) geosHelper.free(g);
-    geosHelper.restoreWarnings();
-    geosHelper.destroy();
 
     this.log(`   Join: ${single} single, ${blended} blended, ${noMatchCount} no match`);
 
@@ -1104,10 +1334,8 @@ export default class PrepareDevData extends Command {
         for (const party of ["democrat", "republican", "other"] as const) {
           const fieldName = `${prefix}${party}${yy}`;
           const expected = v[party];
-          const actual = assignments.reduce(
-            (sum, a) => sum + ((outputFeatures[a.featureIdx].properties as any)[fieldName] || 0),
-            0
-          );
+          const actual = assignments.reduce((sum, a) =>
+            sum + ((featureProps[a.featureIdx])[fieldName] || 0), 0);
           const diff = expected - actual;
           if (diff === 0) continue;
           reconciled++;
@@ -1115,8 +1343,7 @@ export default class PrepareDevData extends Command {
           const adjustments = apportion(Math.abs(diff), weights);
           const sign = diff > 0 ? 1 : -1;
           for (let i = 0; i < assignments.length; i++) {
-            (outputFeatures[assignments[i].featureIdx].properties as any)[fieldName] +=
-              sign * adjustments[i];
+            (featureProps[assignments[i].featureIdx])[fieldName] += sign * adjustments[i];
           }
         }
       }
@@ -1135,14 +1362,9 @@ function buildBlockProps(
   officesFound: Set<string>,
   electionYear: string
 ): Record<string, any> {
-  // Prefix precinct ID with county FIPS to ensure uniqueness across counties.
-  // VEST precinct IDs can collide across county boundaries (e.g. "10-08" in
-  // both Kent and New Castle counties).
-  const uniquePrecinctId = `${countyFp}-${precinctId}`;
-  const uniqueBlockId = `${uniquePrecinctId}-${blockId}`;
   const props: Record<string, any> = {
-    block: uniqueBlockId,
-    precinct: uniquePrecinctId,
+    block: blockId,
+    precinct: `${countyFp}-${precinctId}`,
     county: countyFp,
     county_name: countyNames.get(countyFp) || countyFp,
     ...demo

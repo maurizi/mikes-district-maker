@@ -781,8 +781,8 @@ max string length of ~512MB).
 
       // Write as newline-delimited GeoJSON (geojsonseq) — one feature per line
       // Enables tippecanoe --read-parallel and geojson-polygon-labels --input-format=geojsonseq
-      const filePath1 = join(dir, `${geoLevel}.geojson`);
-      const filePath2 = join(dir, `${geoLevel}-stripped.geojson`);
+      const filePath1 = join(dir, `${geoLevel}-full.geojson`);
+      const filePath2 = join(dir, `${geoLevel}.geojson`);
       const fd1 = require("fs").openSync(filePath1, "w"); // eslint-disable-line
       const fd2 = require("fs").openSync(filePath2, "w"); // eslint-disable-line
       for (const feature of (geojson as any).features) {
@@ -817,7 +817,7 @@ max string length of ~512MB).
     maximumTileBytes: number = 750000
   ): GeoLevelInfo[] {
     const joinedMbtiles = join(dir, "all-geounits.mbtiles");
-    const inputs = geoLevels.map(geoLevel => join(dir, `${geoLevel}-stripped.geojson`));
+    const inputs = geoLevels.map(geoLevel => join(dir, `${geoLevel}.geojson`));
     // Convert all layers to vector tiles in one go, to ensure simplification with
     // detection of shared borders applies to all layers at once.
     // Only apply minZoom filters (when a layer first appears), NOT maxZoom caps.
@@ -855,7 +855,7 @@ max string length of ~512MB).
     const labelsMbtiles = geoLevels.map(geoLevel => join(dir, `${geoLevel}-labels.mbtiles`));
     geoLevels.forEach((geoLevel, idx) => {
       const minimumZoom = minZooms[idx];
-      const input = join(dir, `${geoLevel}.geojson`);
+      const input = join(dir, `${geoLevel}-full.geojson`);
       const output = separateMbtiles[idx];
       tileJoin([joinedMbtiles], {
         force: true,

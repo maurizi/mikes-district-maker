@@ -178,7 +178,7 @@ async function main() {
 
   // Step 1: Login
   console.log("\n1. Logging in...");
-  const apiBase = config.baseUrl.replace(":3003", ":3005");
+  const apiBase = config.baseUrl;
   let jwt: string;
   try {
     const loginResp = await fetch(`${apiBase}/api/auth/email/login`, {

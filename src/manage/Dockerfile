@@ -28,14 +28,12 @@ WORKDIR /home/node/app/manage
 RUN set -ex \
   && deps=" \
   libsqlite3-dev \
+  libgeos-dev \
   procps \
-  python3 \
-  python3-pip \
   make \
   g++ \
   " \
-  && apt-get update && apt-get install -yq $deps --no-install-recommends \
-  && pip3 install --break-system-packages shapely
+  && apt-get update && apt-get install -yq $deps --no-install-recommends
 
 COPY package.json /home/node/app/manage
 COPY yarn.lock /home/node/app/manage
@@ -46,5 +44,9 @@ COPY --from=tippecanoe /usr/local/bin/tippecanoe /usr/local/bin/tippecanoe
 COPY --from=tippecanoe /usr/local/bin/tile-join /usr/local/bin/tile-join
 
 COPY . /home/node/app/manage
+
+# Limit V8 heap so GC returns memory to OS between phases.
+# GEOS native memory is outside this limit.
+ENV NODE_OPTIONS="--max-old-space-size=24576"
 
 CMD ["/home/node/app/manage/bin/run"]

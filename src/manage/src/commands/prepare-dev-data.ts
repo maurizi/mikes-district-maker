@@ -11,12 +11,16 @@ import {
 import { JsonStreamStringify } from "json-stream-stringify";
 import { dirname, join } from "path";
 import { tmpdir } from "os";
-import * as shapefile from "shapefile";
-import * as unzipper from "unzipper";
 import RBush from "rbush";
-import * as proj4Module from "proj4";
-const proj4 = (proj4Module as any).default || proj4Module;
 import { GeosHelper } from "../lib/geos-helper";
+import {
+  extractZipToDir,
+  readShapefile,
+  findFileInDir,
+  extractVotingData,
+  apportion,
+  reprojectFeature
+} from "../lib/voting-data";
 
 // Simple bbox from GeoJSON coordinates (no library needed)
 function featureBbox(f: GeoJSON.Feature): [number, number, number, number] {
@@ -51,35 +55,6 @@ function featureCentroid(f: GeoJSON.Feature): [number, number] {
   return [sumX / count, sumY / count];
 }
 
-// Reproject a GeoJSON feature's coordinates from source CRS to WGS84
-function reprojectFeature(
-  feature: GeoJSON.Feature,
-  projDef: string
-): GeoJSON.Feature {
-  // Check if already geographic (NAD83 or WGS84)
-  if (projDef.startsWith("GEOGCS") && !projDef.includes("PROJCS")) {
-    return feature; // Already in geographic coordinates
-  }
-
-  const converter = proj4(projDef, "EPSG:4326");
-
-  function reprojectCoords(coords: any): any {
-    if (typeof coords[0] === "number") {
-      // It's a point [x, y]
-      const [lng, lat] = converter.forward(coords as [number, number]);
-      return [lng, lat];
-    }
-    return coords.map(reprojectCoords);
-  }
-
-  return {
-    ...feature,
-    geometry: {
-      ...feature.geometry,
-      coordinates: reprojectCoords((feature.geometry as any).coordinates)
-    } as any
-  };
-}
 import {
   Feature,
   FeatureCollection,
@@ -204,34 +179,6 @@ function insertPointsIntoGeometry(
   };
 }
 
-async function extractZipToDir(zipBuffer: Buffer, dir: string): Promise<void> {
-  mkdirSync(dir, { recursive: true });
-  const zip = await unzipper.Open.buffer(zipBuffer);
-  await zip.extract({ path: dir });
-}
-
-async function readShapefile(
-  shpPath: string,
-  dbfPath?: string
-): Promise<GeoJSON.Feature[]> {
-  const features: GeoJSON.Feature[] = [];
-  const source = await shapefile.open(shpPath, dbfPath || null);
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    const result = await source.read();
-    if (result.done) break;
-    features.push(result.value);
-  }
-  return features;
-}
-
-function findFileInDir(dir: string, extension: string): string {
-  const files = readdirSync(dir) as string[];
-  const found = files.find((f: string) => f.endsWith(extension));
-  if (!found) throw new Error(`No ${extension} file found in ${dir}`);
-  return join(dir, found);
-}
-
 // R-tree item for spatial index
 interface RTreeItem {
   minX: number;
@@ -239,66 +186,6 @@ interface RTreeItem {
   maxX: number;
   maxY: number;
   index: number;
-}
-
-// Extract vote columns grouped by office code, also detect election year
-// Column format: G20PRERTRU — {electionType}{YY}{office3}{party1}{name3}
-function extractVotingData(
-  props: Record<string, any>
-): { byOffice: Record<string, { democrat: number; republican: number; other: number }>; electionYear: string } {
-  const byOffice: Record<
-    string,
-    { democrat: number; republican: number; other: number }
-  > = {};
-  let electionYear = "";
-
-  for (const [key, value] of Object.entries(props)) {
-    // Match vote columns: letter + 2 digits + 3-letter office + party + name
-    const match = key.match(/^[GPCRS](\d{2})([A-Z]{3})([DRLGIOCNSMPUAWBETH])/);
-    if (!match) continue;
-
-    const year = match[1];
-    const office = match[2];
-    const partyCode = match[3];
-    const votes =
-      typeof value === "number" ? value : parseInt(String(value)) || 0;
-
-    if (!electionYear) electionYear = year;
-
-    if (!byOffice[office]) {
-      byOffice[office] = { democrat: 0, republican: 0, other: 0 };
-    }
-
-    if (partyCode === "D") {
-      byOffice[office].democrat += votes;
-    } else if (partyCode === "R") {
-      byOffice[office].republican += votes;
-    } else {
-      byOffice[office].other += votes;
-    }
-  }
-
-  return { byOffice, electionYear };
-}
-
-// Apportion an integer total into parts proportional to ratios,
-// using largest-remainder method to preserve the sum
-function apportion(total: number, ratios: number[]): number[] {
-  const sum = ratios.reduce((a, b) => a + b, 0);
-  if (sum === 0) return ratios.map(() => 0);
-
-  const exact = ratios.map(r => (total * r) / sum);
-  const floored = exact.map(Math.floor);
-  let remainder = total - floored.reduce((a, b) => a + b, 0);
-
-  // Distribute remainder to entries with largest fractional parts
-  const fractionals = exact.map((e, i) => ({ i, frac: e - floored[i] }));
-  fractionals.sort((a, b) => b.frac - a.frac);
-  for (let j = 0; j < remainder; j++) {
-    floored[fractionals[j].i]++;
-  }
-
-  return floored;
 }
 
 export default class PrepareDevData extends Command {
@@ -436,12 +323,12 @@ export default class PrepareDevData extends Command {
           asian: asianN,
           hispanic: hispanicN,
           other: otherN,
-          vap: vapN,
-          vap_white: vapWhiteN,
-          vap_black: vapBlackN,
-          vap_asian: vapAsianN,
-          vap_hispanic: vapHispanicN,
-          vap_other: vapOtherN
+          VAP: vapN,
+          "VAP White": vapWhiteN,
+          "VAP Black": vapBlackN,
+          "VAP Asian": vapAsianN,
+          "VAP Hispanic": vapHispanicN,
+          "VAP Other": vapOtherN
         });
       }
       this.log(`   ${blockDemographics.size} block demographics loaded`);
@@ -457,6 +344,96 @@ export default class PrepareDevData extends Command {
         countyNames.set(countyFp, name.split(",")[0].trim());
       }
       this.log(`   ${countyNames.size} county names loaded`);
+
+      // Fetch CVAP data from ACS 5-year estimates at block group level
+      this.log("\n1c. Fetching CVAP data from ACS 5-year estimates...");
+      // B05003 race iterations: total (B05003), White non-Hispanic (H), Black (B), Asian (D), Hispanic (I)
+      // CVAP = Male 18+ Native (_009) + Male 18+ Naturalized (_011) + Female 18+ Native (_020) + Female 18+ Naturalized (_022)
+      const cvapTables = [
+        { prefix: "B05003", key: "cvapTotal" },
+        { prefix: "B05003H", key: "cvapWhite" },
+        { prefix: "B05003B", key: "cvapBlack" },
+        { prefix: "B05003D", key: "cvapAsian" },
+        { prefix: "B05003I", key: "cvapHispanic" }
+      ];
+      const cvapVars = cvapTables
+        .flatMap(t => [`${t.prefix}_009E`, `${t.prefix}_011E`, `${t.prefix}_020E`, `${t.prefix}_022E`]);
+      const acsUrl = `https://api.census.gov/data/2022/acs/acs5?get=${cvapVars.join(",")}&for=block%20group:*&in=state:${stateFips}&in=county:*&in=tract:*`;
+      const acsResp = await fetch(acsUrl);
+      if (!acsResp.ok)
+        throw new Error(`ACS API failed: ${acsResp.status}`);
+      const acsData: string[][] = await acsResp.json();
+
+      // Parse CVAP by block group
+      const bgCvap = new Map<string, {
+        cvapTotal: number; cvapWhite: number; cvapBlack: number;
+        cvapAsian: number; cvapHispanic: number; cvapOther: number;
+      }>();
+      for (let i = 1; i < acsData.length; i++) {
+        const row = acsData[i];
+        // Each table has 4 vars: _009E, _011E, _020E, _022E
+        const vals: Record<string, number> = {};
+        let colIdx = 0;
+        for (const t of cvapTables) {
+          const v009 = parseInt(row[colIdx++]) || 0;
+          const v011 = parseInt(row[colIdx++]) || 0;
+          const v020 = parseInt(row[colIdx++]) || 0;
+          const v022 = parseInt(row[colIdx++]) || 0;
+          vals[t.key] = v009 + v011 + v020 + v022;
+        }
+        // Geography columns are at the end: state, county, tract, block group
+        const bgState = row[colIdx++];
+        const bgCounty = row[colIdx++];
+        const bgTract = row[colIdx++];
+        const bgBlockGroup = row[colIdx++];
+        const bgId = `${bgState}${bgCounty}${bgTract}${bgBlockGroup}`;
+        const cvapOther = Math.max(0, vals.cvapTotal - vals.cvapWhite - vals.cvapBlack - vals.cvapAsian - vals.cvapHispanic);
+        bgCvap.set(bgId, {
+          cvapTotal: vals.cvapTotal,
+          cvapWhite: vals.cvapWhite,
+          cvapBlack: vals.cvapBlack,
+          cvapAsian: vals.cvapAsian,
+          cvapHispanic: vals.cvapHispanic,
+          cvapOther
+        });
+      }
+      this.log(`   ${bgCvap.size} block groups with CVAP data`);
+
+      // Compute VAP totals per block group for proportional distribution
+      const bgVapTotals = new Map<string, number>();
+      for (const [geoId, demo] of blockDemographics) {
+        // Block group = first 12 chars of block GeoID (state2 + county3 + tract6 + bg1)
+        const bgId = geoId.substring(0, 12);
+        bgVapTotals.set(bgId, (bgVapTotals.get(bgId) || 0) + demo.VAP);
+      }
+
+      // Distribute CVAP to blocks proportionally by VAP
+      let cvapMatched = 0;
+      let cvapUnmatched = 0;
+      for (const [geoId, demo] of blockDemographics) {
+        const bgId = geoId.substring(0, 12);
+        const cvap = bgCvap.get(bgId);
+        const bgVap = bgVapTotals.get(bgId) || 0;
+        if (cvap && bgVap > 0) {
+          const ratio = demo.VAP / bgVap;
+          demo.CVAP = Math.round(cvap.cvapTotal * ratio);
+          demo["CVAP White"] = Math.round(cvap.cvapWhite * ratio);
+          demo["CVAP Black"] = Math.round(cvap.cvapBlack * ratio);
+          demo["CVAP Asian"] = Math.round(cvap.cvapAsian * ratio);
+          demo["CVAP Hispanic"] = Math.round(cvap.cvapHispanic * ratio);
+          demo["CVAP Other"] = Math.round(cvap.cvapOther * ratio);
+          cvapMatched++;
+        } else {
+          demo.CVAP = 0;
+          demo["CVAP White"] = 0;
+          demo["CVAP Black"] = 0;
+          demo["CVAP Asian"] = 0;
+          demo["CVAP Hispanic"] = 0;
+          demo["CVAP Other"] = 0;
+          cvapUnmatched++;
+        }
+      }
+      this.log(`   CVAP distributed: ${cvapMatched} blocks matched, ${cvapUnmatched} unmatched`);
 
       // Save cache as separate files to avoid string length limits
       if (cacheBase) {
@@ -788,8 +765,26 @@ export default class PrepareDevData extends Command {
     let splitBlocks = 0;
     let noMatch = 0;
     let totalSubBlocks = 0;
-    const demoKeys = ["population", "white", "black", "asian", "hispanic", "other",
-      "vap", "vap_white", "vap_black", "vap_asian", "vap_hispanic", "vap_other"];
+    const demoKeys = [
+      "population",
+      "white",
+      "black",
+      "asian",
+      "hispanic",
+      "other",
+      "VAP",
+      "VAP White",
+      "VAP Black",
+      "VAP Asian",
+      "VAP Hispanic",
+      "VAP Other",
+      "CVAP",
+      "CVAP White",
+      "CVAP Black",
+      "CVAP Asian",
+      "CVAP Hispanic",
+      "CVAP Other"
+    ];
 
     for (let bi = 0; bi < blockFeatures.length; bi++) {
       const blockFeature = blockFeatures[bi];
@@ -904,13 +899,19 @@ export default class PrepareDevData extends Command {
           ? [...pFaces, ...sliverPrecincts.flatMap(sp => byPrecinct.get(sp) || [])]
           : pFaces;
 
-        let subGeom = facesToMerge[0].geom;
-        for (let fi = 1; fi < facesToMerge.length; fi++) {
-          const u = geosHelper.union(subGeom, facesToMerge[fi].geom);
-          subGeom = u;
+        // Collect face coordinates directly into a MultiPolygon — no GEOS union.
+        // Union introduces vertex drift that creates slivers extending into
+        // neighboring blocks. Faces from polygonize already share exact edges.
+        const polys: number[][][][] = [];
+        for (const f of facesToMerge) {
+          const faceGJ = geosHelper.toGeoJSONScaled(f.geom, COORD_SCALE);
+          if (!faceGJ) continue;
+          if (faceGJ.type === "Polygon") polys.push(faceGJ.coordinates);
+          else if (faceGJ.type === "MultiPolygon") for (const p of faceGJ.coordinates) polys.push(p);
         }
-        const subGeoJSON = geosHelper.toGeoJSONScaled(subGeom, COORD_SCALE);
-        if (facesToMerge.length > 1) geosHelper.free(subGeom);
+        const subGeoJSON: Polygon | MultiPolygon | null = polys.length === 0 ? null
+          : polys.length === 1 ? { type: "Polygon", coordinates: polys[0] }
+          : { type: "MultiPolygon", coordinates: polys };
 
         {
           const props = buildBlockProps(subBlockId, pData.precinctId, countyFp, countyNames, subDemo, pData.votes, officesFound, detectedYear);

@@ -13,7 +13,7 @@ import {
 } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
-import { IStaticFile, IStaticMetadata, TypedArray } from "../../../shared/entities";
+import { IStaticFile, IStaticMetadata } from "../../../shared/entities";
 import { geojsonPolygonLabels, tileJoin, tippecanoe } from "../lib/cmd";
 import { abbreviateNumber } from "./process-geojson";
 import {
@@ -21,35 +21,10 @@ import {
   readShapefile,
   findFileInDir,
   extractVotingData,
-  reprojectFeature
+  reprojectFeature,
+  abbrev,
+  mkTypedArray
 } from "../lib/voting-data";
-
-const UINT8_MAX = 255;
-const UINT16_MAX = 65535;
-const INT8_MIN = -128;
-const INT8_MAX = 127;
-const INT16_MIN = -32768;
-const INT16_MAX = 32767;
-
-function abbrev(id: string) {
-  return `${id}-abbrev`;
-}
-
-function mkTypedArray(data: readonly number[]): TypedArray {
-  const maxVal = data.reduce((max, v) => (max >= v ? max : v), -Infinity);
-  const minVal = data.reduce((min, v) => (min <= v ? min : v), Infinity);
-  return minVal >= 0
-    ? maxVal <= UINT8_MAX
-      ? new Uint8Array(data)
-      : maxVal <= UINT16_MAX
-        ? new Uint16Array(data)
-        : new Uint32Array(data)
-    : minVal >= INT8_MIN && maxVal <= INT8_MAX
-      ? new Int8Array(data)
-      : minVal >= INT16_MIN && maxVal <= INT16_MAX
-        ? new Int16Array(data)
-        : new Int32Array(data);
-}
 
 interface VestYear {
   readonly precinctVoting: Map<
@@ -118,7 +93,6 @@ export default class UpdateVotingData extends Command {
     this.log(`Old voting columns: ${oldVotingIds.join(", ") || "(none)"}`);
 
     // Determine which property holds the precinct assignment.
-    // prepare-dev-data always creates a "precinct" geolevel, but verify it exists.
     const precinctLevel = geoLevelIds.find((id: string) => id === "precinct") || geoLevelIds[1];
     if (!precinctLevel) {
       this.error("Cannot determine precinct geolevel from hierarchy");
@@ -201,10 +175,12 @@ export default class UpdateVotingData extends Command {
 
     this.log(`\nNew voting columns: ${allNewVotingIds.join(", ")}`);
 
-    // ── Step 2: Update block-level geojson ──
-    const blockGeojsonPath = join(dir, `${baseGeoLevel}.geojson`);
-    if (!existsSync(blockGeojsonPath)) {
-      this.error(`${baseGeoLevel}.geojson not found in output directory`);
+    // ── Step 2: Update block-level features ──
+    // Use *-full.geojson which has string geolevel properties (precinct, county)
+    // and demographic abbreviations needed for label generation.
+    const blockFullPath = join(dir, `${baseGeoLevel}-full.geojson`);
+    if (!existsSync(blockFullPath)) {
+      this.error(`${baseGeoLevel}-full.geojson not found in output directory`);
     }
 
     this.log("\nUpdating block-level features...");
@@ -218,12 +194,12 @@ export default class UpdateVotingData extends Command {
     for (const gl of geoLevelIds.slice(1)) aggregates[gl] = {};
 
     // Stream-update: read line by line, write to temp file
-    const tmpBlockPath = blockGeojsonPath + ".tmp";
+    const tmpBlockPath = blockFullPath + ".tmp";
     const outFd = openSync(tmpBlockPath, "w");
 
     const rl = require("readline").createInterface({
       // eslint-disable-line
-      input: createReadStream(blockGeojsonPath),
+      input: createReadStream(blockFullPath),
       crlfDelay: Infinity
     });
 
@@ -245,12 +221,13 @@ export default class UpdateVotingData extends Command {
         }
       }
 
-      // Look up precinct and assign new voting data.
-      // Precinct property format: "${countyFp}-${rawPrecinctId}"
-      // where countyFp is always 3 characters, so rawPrecinctId = substring(4).
+      // Look up precinct: the full geojson has the string precinct property.
+      // Format is "${countyFp}-${rawPrecinctId}" where countyFp is 3 chars.
       const precinctProp: string | undefined = props[precinctLevel];
       const rawPrecinctId =
-        precinctProp && precinctProp.length > 4 ? precinctProp.substring(4) : precinctProp;
+        precinctProp && precinctProp.length > 4
+          ? precinctProp.substring(4)
+          : precinctProp;
 
       let anyMatch = false;
       for (const vy of vestYears) {
@@ -283,7 +260,7 @@ export default class UpdateVotingData extends Command {
         votingDataArrays[id].push(props[id] || 0);
       }
 
-      // Collect aggregates for higher geolevels
+      // Collect aggregates for higher geolevels using string geolevel properties
       for (const gl of geoLevelIds.slice(1)) {
         const levelValue = props[gl];
         if (levelValue !== undefined) {
@@ -301,25 +278,25 @@ export default class UpdateVotingData extends Command {
     }
 
     closeSync(outFd);
-    renameSync(tmpBlockPath, blockGeojsonPath);
+    renameSync(tmpBlockPath, blockFullPath);
 
     this.log(`  Matched: ${matched}, Unmatched: ${unmatched}`);
 
-    // ── Step 3: Update higher-level geojson files ──
+    // ── Step 3: Update higher-level *-full.geojson files ──
     for (const gl of geoLevelIds.slice(1)) {
-      const geojsonPath = join(dir, `${gl}.geojson`);
-      if (!existsSync(geojsonPath)) {
-        this.log(`  Skipping ${gl}.geojson (not found)`);
+      const fullPath = join(dir, `${gl}-full.geojson`);
+      if (!existsSync(fullPath)) {
+        this.log(`  Skipping ${gl}-full.geojson (not found)`);
         continue;
       }
 
-      this.log(`  Updating ${gl}.geojson`);
-      const tmpPath = geojsonPath + ".tmp";
+      this.log(`  Updating ${gl}-full.geojson`);
+      const tmpPath = fullPath + ".tmp";
       const fd = openSync(tmpPath, "w");
 
       const rl2 = require("readline").createInterface({
         // eslint-disable-line
-        input: createReadStream(geojsonPath),
+        input: createReadStream(fullPath),
         crlfDelay: Infinity
       });
 
@@ -340,7 +317,7 @@ export default class UpdateVotingData extends Command {
         }
 
         // Assign aggregated voting data
-        const agg = aggregates[gl][levelValue];
+        const agg = levelValue !== undefined ? aggregates[gl][levelValue] : undefined;
         for (const id of allNewVotingIds) {
           props[id] = agg ? agg[id] || 0 : 0;
           props[abbrev(id)] = abbreviateNumber(props[id]);
@@ -350,7 +327,7 @@ export default class UpdateVotingData extends Command {
       }
 
       closeSync(fd);
-      renameSync(tmpPath, geojsonPath);
+      renameSync(tmpPath, fullPath);
     }
 
     // ── Step 4: Write .buf files ──
@@ -399,19 +376,20 @@ export default class UpdateVotingData extends Command {
 
     for (let i = 0; i < geoLevelIds.length; i++) {
       const gl = geoLevelIds[i];
-      const geojsonPath = join(dir, `${gl}.geojson`);
+      // Use *-full.geojson for labels — it has both demographic and voting abbreviations
+      const fullGeojsonPath = join(dir, `${gl}-full.geojson`);
       const labelPath = join(dir, `${gl}-labels.geojson`);
       const labelOutput = join(dir, `${gl}-labels.mbtiles`);
       const geoMbtiles = join(dir, `${gl}.mbtiles`);
 
-      if (!existsSync(geojsonPath)) {
-        this.log(`  Skipping labels for ${gl} (geojson not found)`);
+      if (!existsSync(fullGeojsonPath)) {
+        this.log(`  Skipping labels for ${gl} (${gl}-full.geojson not found)`);
         continue;
       }
 
       this.log(`  Generating labels for ${gl}`);
       geojsonPolygonLabels(
-        geojsonPath,
+        fullGeojsonPath,
         {
           collections: "largest",
           "input-format": "geojsonseq",

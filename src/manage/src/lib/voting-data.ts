@@ -5,6 +5,7 @@ import {
   mkdirSync,
   readdirSync
 } from "fs";
+import { TypedArray } from "../../../shared/entities";
 import { join } from "path";
 import * as shapefile from "shapefile";
 import * as unzipper from "unzipper";
@@ -17,28 +18,57 @@ export async function extractZipToDir(zipBuffer: Buffer, dir: string): Promise<v
   await zip.extract({ path: dir });
 }
 
-export async function readShapefile(shpPath: string, dbfPath?: string): Promise<GeoJSON.Feature[]> {
-  // Fix null-padded DBF fields: some VEST shapefiles use \0 padding instead of
-  // space padding for numeric fields. The shapefile library reads \0 as null.
-  // Fix by replacing \0 with space in the DBF file before reading.
-  const actualDbfPath = dbfPath || shpPath.replace(/\.shp$/i, ".dbf");
-  if (existsSync(actualDbfPath)) {
-    const dbfBuf = Buffer.from(readFileSync(actualDbfPath));
-    const headerSize = dbfBuf.readUInt16LE(8);
-    let fixed = false;
-    for (let i = headerSize + 1; i < dbfBuf.length; i++) {
-      if (dbfBuf[i] === 0x00) {
-        dbfBuf[i] = 0x20; // replace null with space
-        fixed = true;
+// Some DBF files (e.g. AK 2016/2020 VEST) use null-byte padding instead of
+// space padding for N-type numeric fields. The shapefile library returns null
+// for null-padded values. Fix by replacing only trailing null bytes in numeric
+// fields with spaces, leaving string fields untouched.
+export function fixDbfNullPadding(dbfBytes: Buffer): Buffer {
+  const buf = Buffer.from(dbfBytes); // copy so we don't mutate the original
+  const headerSize = buf.readUInt16LE(8);
+  const recordSize = buf.readUInt16LE(10);
+  const numRecords = buf.readUInt32LE(4);
+  const numFields = Math.floor((headerSize - 33) / 32);
+
+  const numericFields: Array<{ offset: number; len: number }> = [];
+  let fieldOffset = 1; // first byte of each record is deletion flag
+  for (let i = 0; i < numFields; i++) {
+    const descOffset = 32 + i * 32;
+    const ftype = String.fromCharCode(buf[descOffset + 11]);
+    const flen = buf[descOffset + 16];
+    if (ftype === "N") numericFields.push({ offset: fieldOffset, len: flen });
+    fieldOffset += flen;
+  }
+
+  if (numericFields.length === 0) return buf;
+
+  for (let r = 0; r < numRecords; r++) {
+    const recStart = headerSize + r * recordSize;
+    for (const { offset, len } of numericFields) {
+      const start = recStart + offset;
+      let hasNull = false;
+      for (let b = start; b < start + len; b++) {
+        if (buf[b] === 0x00) { hasNull = true; break; }
+      }
+      if (!hasNull) continue;
+      for (let b = start + len - 1; b >= start; b--) {
+        if (buf[b] === 0x00) buf[b] = 0x20;
+        else break;
       }
     }
-    if (fixed) {
-      writeFileSync(actualDbfPath, dbfBuf);
-    }
+  }
+  return buf;
+}
+
+export async function readShapefile(shpPath: string, dbfPath?: string): Promise<GeoJSON.Feature[]> {
+  const actualDbfPath = dbfPath || shpPath.replace(/\.shp$/i, ".dbf");
+  if (existsSync(actualDbfPath)) {
+    const raw = readFileSync(actualDbfPath);
+    const fixed = fixDbfNullPadding(raw);
+    if (!fixed.equals(raw)) writeFileSync(actualDbfPath, fixed);
   }
 
   const features: GeoJSON.Feature[] = [];
-  const source = await shapefile.open(shpPath, dbfPath || null);
+  const source = await shapefile.open(shpPath, actualDbfPath);
   // eslint-disable-next-line no-constant-condition
   while (true) {
     const result = await source.read();
@@ -137,4 +167,33 @@ export function reprojectFeature(feature: GeoJSON.Feature, projDef: string): Geo
       coordinates: reprojectCoords((feature.geometry as any).coordinates)
     } as any
   };
+}
+
+export function abbrev(id: string): string {
+  return `${id}-abbrev`;
+}
+
+const UINT8_MAX = 255;
+const UINT16_MAX = 65535;
+const INT8_MIN = -128;
+const INT8_MAX = 127;
+const INT16_MIN = -32768;
+const INT16_MAX = 32767;
+
+// Makes an appropriately-sized typed array for the given data.
+// Uses reduce instead of Math.max/min to avoid call stack limits on large arrays.
+export function mkTypedArray(data: readonly number[]): TypedArray {
+  const maxVal = data.reduce((max, v) => (max >= v ? max : v), -Infinity);
+  const minVal = data.reduce((min, v) => (min <= v ? min : v), Infinity);
+  return minVal >= 0
+    ? maxVal <= UINT8_MAX
+      ? new Uint8Array(data)
+      : maxVal <= UINT16_MAX
+        ? new Uint16Array(data)
+        : new Uint32Array(data)
+    : minVal >= INT8_MIN && maxVal <= INT8_MAX
+      ? new Int8Array(data)
+      : minVal >= INT16_MIN && maxVal <= INT16_MAX
+        ? new Int16Array(data)
+        : new Int32Array(data);
 }

@@ -56,15 +56,8 @@ const Row = ({
 );
 
 const VotingMapTooltip = ({ voting }: { readonly voting: { readonly [id: string]: number } }) => {
-  const total = sum(Object.values(voting));
+  const total = voting["democrat"] + voting["republican"] + voting["other"];
   const percentages = mapValues(voting, (votes: number) => (total ? votes / total : 0) * 100);
-  const order = ["republican", "democrat"];
-  // eslint-disable-next-line
-  const rows = Object.entries(percentages)
-    .sort(([a], [b]) => order.indexOf(b) - order.indexOf(a))
-    .map(([party, percent]) => (
-      <Row key={party} label={party} percent={percent} color={getPartyColor(party)} />
-    ));
 
   return (
     <Box sx={{ width: "100%", minHeight: "100%" }}>
@@ -78,7 +71,7 @@ const VotingMapTooltip = ({ voting }: { readonly voting: { readonly [id: string]
           />
           <Row
             label={"Other"}
-            percent={percentages["other party"]}
+            percent={percentages["other"]}
             color={getPartyColor("other party")}
           />
         </tbody>

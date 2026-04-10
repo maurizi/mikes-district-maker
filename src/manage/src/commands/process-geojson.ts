@@ -30,6 +30,7 @@ import {
 } from "../../../shared/entities";
 import { extractAdjacencyData } from "../lib/extract-adjacency";
 import { geojsonPolygonLabels, tileJoin, tippecanoe } from "../lib/cmd";
+import { abbrev, mkTypedArray } from "../lib/voting-data";
 import _ from "lodash";
 
 // Takes a comma-separated list of items, optionally as a pair separated by a ':'
@@ -43,18 +44,6 @@ function splitPairs(input: string): readonly [string, string][] {
           item.includes(":") ? (item.split(":", 2) as [string, string]) : [item, item]
         );
 }
-
-function abbrev(id: string) {
-  return `${id}-abbrev`;
-}
-
-// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Typed_arrays#typed_array_views
-const UINT8_MAX = 255;
-const UINT16_MAX = 65535;
-const INT8_MIN = -128;
-const INT8_MAX = 127;
-const INT16_MIN = -32768;
-const INT16_MAX = 32767;
 
 export default class ProcessGeojson extends Command {
   static description = `process GeoJSON into desired output files
@@ -609,25 +598,6 @@ max string length of ~512MB).
     };
   }
 
-  // Makes an appropriately-sized typed array containing the data
-  mkTypedArray(data: readonly number[]): TypedArray {
-    // Can't use Math.max / Math.min here, because it's a recursive function that will
-    // reach a maximum call stack when working with large arrays.
-    const maxVal = data.reduce((max, v) => (max >= v ? max : v), -Infinity);
-    const minVal = data.reduce((min, v) => (min <= v ? min : v), Infinity);
-    return minVal >= 0
-      ? maxVal <= UINT8_MAX
-        ? new Uint8Array(data)
-        : maxVal <= UINT16_MAX
-          ? new Uint16Array(data)
-          : new Uint32Array(data)
-      : minVal >= INT8_MIN && maxVal <= INT8_MAX
-        ? new Int8Array(data)
-        : minVal >= INT16_MIN && maxVal <= INT16_MAX
-          ? new Int16Array(data)
-          : new Int32Array(data);
-  }
-
   // Create demographic or voting static data and write to disk
   writeNumericData(
     dir: string,
@@ -643,7 +613,7 @@ max string length of ~512MB).
       // For demographic static data, we want an arraybuffer of base geounits where
       // each data element represents the demographic data contained in that geounit.
       const data = features.map(f => f?.properties?.[id]);
-      const typedData = this.mkTypedArray(data);
+      const typedData = mkTypedArray(data);
       writeFileSync(join(dir, fileName), typedData);
       return {
         id,
@@ -678,7 +648,7 @@ max string length of ~512MB).
       // With this information, we're able to answer questions such as:
       //  - Given a county id, which tracts belong to it?
       //  - Given a tract id, which blocks belong to it?
-      const data = this.mkTypedArray(
+      const data = mkTypedArray(
         childFeatures.map(f => {
           return geoLevelIdToIndex.get(f?.properties?.[geoLevel]) || 0;
         })

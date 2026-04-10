@@ -99,7 +99,8 @@ cd "$PROJECT_DIR"
   -n "$min_zoom" \
   -x "$max_zoom" \
   -d population,white,black,asian,hispanic,other \
-  -d vap,vap_white,vap_black,vap_asian,vap_hispanic,vap_other \
+  -d "VAP,VAP White,VAP Black,VAP Asian,VAP Hispanic,VAP Other" \
+  -d "CVAP,CVAP White,CVAP Black,CVAP Asian,CVAP Hispanic,CVAP Other" \
   $VOTING_FLAGS \
   -s "$simplification" \
   -q "$quantization" \

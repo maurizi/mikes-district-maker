@@ -113,7 +113,7 @@ with open('$CSV_FILE') as f:
   fi
 
   # Detect voting columns and available demographics from the GeoJSON
-  read -r VOTING_COLS HAS_VAP < <(cd "$PROJECT_DIR" && python3 -c "
+  read -r VOTING_COLS HAS_VAP HAS_CVAP < <(cd "$PROJECT_DIR" && python3 -c "
 import json
 with open('$GEOJSON_REL') as f:
   # Read first 20KB to get first feature's properties
@@ -127,19 +127,25 @@ for i in range(start, len(chunk)):
   if depth == 0:
     props = json.loads(chunk[start:i+1])
     vote_cols = [k for k in props if any(k.endswith(p) for p in ['democrat16','republican16','other16','democrat18','republican18','other18','democrat20','republican20','other20'])]
-    has_vap = 'yes' if 'vap' in props else 'no'
-    print(','.join(sorted(vote_cols)), has_vap)
+    has_vap = 'yes' if 'VAP' in props else 'no'
+    has_cvap = 'yes' if 'CVAP' in props else 'no'
+    print(','.join(sorted(vote_cols)), has_vap, has_cvap)
     break
-" 2>/dev/null || echo " no")
+" 2>/dev/null || echo " no no")
   VOTING_FLAGS=""
   if [[ -n "$VOTING_COLS" ]]; then
     VOTING_FLAGS="-v $VOTING_COLS"
   fi
   DEMO_FLAGS="-d population,white,black,asian,hispanic,other"
   if [[ "$HAS_VAP" == "yes" ]]; then
-    DEMO_FLAGS="$DEMO_FLAGS -d vap,vap_white,vap_black,vap_asian,vap_hispanic,vap_other"
+    DEMO_FLAGS="$DEMO_FLAGS -d 'VAP,VAP White,VAP Black,VAP Asian,VAP Hispanic,VAP Other'"
   else
     echo "  [$state_abbr] WARNING: No VAP data, skipping VAP demographics"
+  fi
+  if [[ "$HAS_CVAP" == "yes" ]]; then
+    DEMO_FLAGS="$DEMO_FLAGS -d 'CVAP,CVAP White,CVAP Black,CVAP Asian,CVAP Hispanic,CVAP Other'"
+  else
+    echo "  [$state_abbr] WARNING: No CVAP data, skipping CVAP demographics"
   fi
 
   BIG_ARG=""

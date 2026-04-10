@@ -81,7 +81,6 @@ const getRows = ({
   const votesForYear = extractYear(voting, year);
   const total = sum(Object.values(votesForYear));
   const order = ["republican", "democrat"];
-  // eslint-disable-next-line
   const percentages = Object.entries(
     mapValues(votesForYear, (votes: number) => (total ? votes / total : 0) * 100)
   ).sort(([a], [b]) => {

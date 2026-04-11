@@ -345,7 +345,9 @@ export default class PrepareDevData extends Command {
       }
       this.log(`   ${countyNames.size} county names loaded`);
 
-      // Fetch CVAP data from ACS 5-year estimates at block group level
+      // Fetch CVAP data from ACS 5-year estimates at tract level.
+      // B05003 is NOT published at block-group level — the API returns nulls
+      // for block-group queries. Tract is the finest geography available.
       this.log("\n1c. Fetching CVAP data from ACS 5-year estimates...");
       // B05003 race iterations: total (B05003), White non-Hispanic (H), Black (B), Asian (D), Hispanic (I)
       // CVAP = Male 18+ Native (_009) + Male 18+ Naturalized (_011) + Female 18+ Native (_020) + Female 18+ Naturalized (_022)
@@ -358,14 +360,14 @@ export default class PrepareDevData extends Command {
       ];
       const cvapVars = cvapTables
         .flatMap(t => [`${t.prefix}_009E`, `${t.prefix}_011E`, `${t.prefix}_020E`, `${t.prefix}_022E`]);
-      const acsUrl = `https://api.census.gov/data/2022/acs/acs5?get=${cvapVars.join(",")}&for=block%20group:*&in=state:${stateFips}&in=county:*&in=tract:*`;
+      const acsUrl = `https://api.census.gov/data/2022/acs/acs5?get=${cvapVars.join(",")}&for=tract:*&in=state:${stateFips}&in=county:*`;
       const acsResp = await fetch(acsUrl);
       if (!acsResp.ok)
         throw new Error(`ACS API failed: ${acsResp.status}`);
       const acsData: string[][] = await acsResp.json();
 
-      // Parse CVAP by block group
-      const bgCvap = new Map<string, {
+      // Parse CVAP by tract
+      const tractCvap = new Map<string, {
         cvapTotal: number; cvapWhite: number; cvapBlack: number;
         cvapAsian: number; cvapHispanic: number; cvapOther: number;
       }>();
@@ -381,14 +383,13 @@ export default class PrepareDevData extends Command {
           const v022 = parseInt(row[colIdx++]) || 0;
           vals[t.key] = v009 + v011 + v020 + v022;
         }
-        // Geography columns are at the end: state, county, tract, block group
-        const bgState = row[colIdx++];
-        const bgCounty = row[colIdx++];
-        const bgTract = row[colIdx++];
-        const bgBlockGroup = row[colIdx++];
-        const bgId = `${bgState}${bgCounty}${bgTract}${bgBlockGroup}`;
+        // Geography columns are at the end: state, county, tract
+        const tState = row[colIdx++];
+        const tCounty = row[colIdx++];
+        const tTract = row[colIdx++];
+        const tractId = `${tState}${tCounty}${tTract}`;
         const cvapOther = Math.max(0, vals.cvapTotal - vals.cvapWhite - vals.cvapBlack - vals.cvapAsian - vals.cvapHispanic);
-        bgCvap.set(bgId, {
+        tractCvap.set(tractId, {
           cvapTotal: vals.cvapTotal,
           cvapWhite: vals.cvapWhite,
           cvapBlack: vals.cvapBlack,
@@ -397,25 +398,25 @@ export default class PrepareDevData extends Command {
           cvapOther
         });
       }
-      this.log(`   ${bgCvap.size} block groups with CVAP data`);
+      this.log(`   ${tractCvap.size} tracts with CVAP data`);
 
-      // Compute VAP totals per block group for proportional distribution
-      const bgVapTotals = new Map<string, number>();
+      // Compute VAP totals per tract for proportional distribution
+      const tractVapTotals = new Map<string, number>();
       for (const [geoId, demo] of blockDemographics) {
-        // Block group = first 12 chars of block GeoID (state2 + county3 + tract6 + bg1)
-        const bgId = geoId.substring(0, 12);
-        bgVapTotals.set(bgId, (bgVapTotals.get(bgId) || 0) + demo.VAP);
+        // Tract = first 11 chars of block GeoID (state2 + county3 + tract6)
+        const tractId = geoId.substring(0, 11);
+        tractVapTotals.set(tractId, (tractVapTotals.get(tractId) || 0) + demo.VAP);
       }
 
       // Distribute CVAP to blocks proportionally by VAP
       let cvapMatched = 0;
       let cvapUnmatched = 0;
       for (const [geoId, demo] of blockDemographics) {
-        const bgId = geoId.substring(0, 12);
-        const cvap = bgCvap.get(bgId);
-        const bgVap = bgVapTotals.get(bgId) || 0;
-        if (cvap && bgVap > 0) {
-          const ratio = demo.VAP / bgVap;
+        const tractId = geoId.substring(0, 11);
+        const cvap = tractCvap.get(tractId);
+        const tractVap = tractVapTotals.get(tractId) || 0;
+        if (cvap && tractVap > 0) {
+          const ratio = demo.VAP / tractVap;
           demo.CVAP = Math.round(cvap.cvapTotal * ratio);
           demo["CVAP White"] = Math.round(cvap.cvapWhite * ratio);
           demo["CVAP Black"] = Math.round(cvap.cvapBlack * ratio);
@@ -486,6 +487,7 @@ export default class PrepareDevData extends Command {
           string,
           { democrat: number; republican: number; other: number }
         >;
+        totalVotes: Record<string, number>;
       }
     >();
     const officesFound = new Set<string>();
@@ -497,7 +499,11 @@ export default class PrepareDevData extends Command {
       const { byOffice, electionYear } = extractVotingData(props);
       if (electionYear && !detectedYear) detectedYear = electionYear;
       for (const office of Object.keys(byOffice)) officesFound.add(office);
-      precinctVoting.set(i, { precinctId, votes: byOffice });
+      const totalVotes: Record<string, number> = {};
+      for (const [office, v] of Object.entries(byOffice)) {
+        totalVotes[office] = v.democrat + v.republican + v.other;
+      }
+      precinctVoting.set(i, { precinctId, votes: byOffice, totalVotes });
     }
     this.log(
       `   Election year: 20${detectedYear}`
@@ -675,6 +681,10 @@ export default class PrepareDevData extends Command {
     const facesByBlock = new Map<number, FaceInfo[]>();
     let assigned = 0;
     let unassigned = 0;
+    let unassignedBlock = 0;
+    let unassignedPrecinct = 0;
+    // Faces where block was found but precinct wasn't — saved for second pass
+    const deferredFaces: { geom: any; area: number; blockIdx: number }[] = [];
 
     for (let fi = 0; fi < numFaces; fi++) {
       if (fi % 50000 === 0 && fi > 0) this.log(`   ${fi}/${numFaces} faces...`);
@@ -731,8 +741,23 @@ export default class PrepareDevData extends Command {
 
       geosHelper.free(rp);
 
-      if (blockIdx === -1 || precinctIdx === -1) {
+      if (blockIdx === -1) {
         unassigned++;
+        unassignedBlock++;
+        if (unassignedBlock + unassignedPrecinct <= 20) {
+          this.log(`   Unassigned face: block=-1 precinct=${precinctIdx} rp=(${rpMatch ? (parseFloat(rpMatch[0]) / COORD_SCALE).toFixed(6) : "?"
+          },${rpMatch ? (parseFloat(rpMatch[1]) / COORD_SCALE).toFixed(6) : "?"}) area=${areaOut[0].toExponential(3)}`);
+        }
+        continue;
+      }
+
+      if (precinctIdx === -1) {
+        // Defer — will try to assign via block's dominant precinct in second pass
+        const wkt = geosHelper.toWkt(face);
+        const cloned = (geosHelper as any)._WKTReader_read(
+          (geosHelper as any).reader, wkt
+        );
+        deferredFaces.push({ geom: cloned, area: areaOut[0], blockIdx });
         continue;
       }
 
@@ -750,6 +775,80 @@ export default class PrepareDevData extends Command {
     }
 
     geosHelper.free(collection);
+
+    // Second pass: assign deferred faces (block found, precinct not).
+    // Only recover faces that actually intersect a precinct — this filters out
+    // ocean/lake faces where precincts legitimately don't cover.
+    if (deferredFaces.length > 0) {
+      this.log(`   Second pass: ${deferredFaces.length} faces with block but no precinct...`);
+      let recovered = 0;
+      let stillUnassigned = 0;
+      let outsidePrecinct = 0;
+      for (const df of deferredFaces) {
+        // Check if the face intersects any precinct geometry
+        let intersectingPrecinct = -1;
+        const dfGJ = geosHelper.toGeoJSONScaled(df.geom, COORD_SCALE);
+        if (dfGJ) {
+          // Get face bbox in WGS84 for R-tree search
+          let fMinX = Infinity, fMinY = Infinity, fMaxX = -Infinity, fMaxY = -Infinity;
+          const rings = dfGJ.type === "Polygon" ? dfGJ.coordinates : dfGJ.type === "MultiPolygon" ? dfGJ.coordinates.flat() : [];
+          for (const ring of rings) {
+            for (const [x, y] of ring as number[][]) {
+              if (x < fMinX) fMinX = x;
+              if (y < fMinY) fMinY = y;
+              if (x > fMaxX) fMaxX = x;
+              if (y > fMaxY) fMaxY = y;
+            }
+          }
+          const precCands = precinctTree.search({
+            minX: fMinX - 0.001, minY: fMinY - 0.001,
+            maxX: fMaxX + 0.001, maxY: fMaxY + 0.001
+          });
+          let bestArea = 0;
+          for (const pc of precCands) {
+            if ((geosHelper as any)._Intersects(precinctGeoms[pc.index], df.geom) === 1) {
+              // Use the precinct with the largest existing area in this block,
+              // or just the first intersecting one
+              const blockFaces = facesByBlock.get(df.blockIdx);
+              if (blockFaces) {
+                const areaInBlock = blockFaces
+                  .filter(f => f.precinctIdx === pc.index)
+                  .reduce((s, f) => s + f.area, 0);
+                if (areaInBlock > bestArea) {
+                  bestArea = areaInBlock;
+                  intersectingPrecinct = pc.index;
+                }
+              }
+              if (intersectingPrecinct === -1) {
+                intersectingPrecinct = pc.index;
+              }
+            }
+          }
+        }
+
+        if (intersectingPrecinct >= 0) {
+          // Face intersects a precinct — assign it
+          if (!facesByBlock.has(df.blockIdx)) facesByBlock.set(df.blockIdx, []);
+          facesByBlock.get(df.blockIdx)!.push({
+            geom: df.geom, area: df.area, blockIdx: df.blockIdx, precinctIdx: intersectingPrecinct
+          });
+          recovered++;
+        } else {
+          // Face doesn't intersect any precinct — genuinely outside coverage (ocean/lake)
+          unassigned++;
+          unassignedPrecinct++;
+          outsidePrecinct++;
+          if (unassignedBlock + unassignedPrecinct <= 20) {
+            this.log(`   Unassigned face: block=${df.blockIdx} precinct=-1 (outside precinct coverage) area=${df.area.toExponential(3)}`);
+          }
+          geosHelper.free(df.geom);
+          stillUnassigned++;
+        }
+      }
+      assigned += recovered;
+      this.log(`   Second pass: recovered ${recovered}, outside precinct coverage ${outsidePrecinct}, still unassigned ${stillUnassigned}`);
+    }
+
     this.log(`   Assigned: ${assigned}, Unassigned: ${unassigned}`);
 
     // ── Build output features from faces ──
@@ -785,6 +884,20 @@ export default class PrepareDevData extends Command {
       "CVAP Hispanic",
       "CVAP Other"
     ];
+
+    // Track which features were assigned to which precinct for vote reconciliation
+    const primaryAssigned = new Map<
+      number,
+      Map<string, { featureIdx: number; weight: number }[]>
+    >();
+    const trackAssignment = (pi: number, fi: number, weight: number) => {
+      if (!primaryAssigned.has(pi)) primaryAssigned.set(pi, new Map());
+      const pa = primaryAssigned.get(pi)!;
+      for (const office of Array.from(officesFound)) {
+        if (!pa.has(office)) pa.set(office, []);
+        pa.get(office)!.push({ featureIdx: fi, weight });
+      }
+    };
 
     for (let bi = 0; bi < blockFeatures.length; bi++) {
       const blockFeature = blockFeatures[bi];
@@ -822,8 +935,9 @@ export default class PrepareDevData extends Command {
         geosHelper.free(merged);
         singlePrecinct++;
         {
-          const props = buildBlockProps(geoId, pData.precinctId, countyFp, countyNames, demo, pData.votes, officesFound, detectedYear);
+          const props = buildBlockProps(geoId, pData.precinctId, countyFp, countyNames, demo, pData.votes, pData.totalVotes, officesFound, detectedYear);
           require("fs").writeSync(geomFd, JSON.stringify(geoJSON || blockFeature.geometry) + "\n"); // eslint-disable-line
+          trackAssignment(pi, featureProps.length, demo.population || 0);
           featureProps.push(props);
         }
         continue;
@@ -864,8 +978,9 @@ export default class PrepareDevData extends Command {
         geosHelper.free(merged);
         singlePrecinct++;
         {
-          const props = buildBlockProps(geoId, pData.precinctId, countyFp, countyNames, demo, pData.votes, officesFound, detectedYear);
+          const props = buildBlockProps(geoId, pData.precinctId, countyFp, countyNames, demo, pData.votes, pData.totalVotes, officesFound, detectedYear);
           require("fs").writeSync(geomFd, JSON.stringify(geoJSON || blockFeature.geometry) + "\n"); // eslint-disable-line
+          trackAssignment(bestPi, featureProps.length, demo.population || 0);
           featureProps.push(props);
         }
         continue;
@@ -914,8 +1029,9 @@ export default class PrepareDevData extends Command {
           : { type: "MultiPolygon", coordinates: polys };
 
         {
-          const props = buildBlockProps(subBlockId, pData.precinctId, countyFp, countyNames, subDemo, pData.votes, officesFound, detectedYear);
+          const props = buildBlockProps(subBlockId, pData.precinctId, countyFp, countyNames, subDemo, pData.votes, pData.totalVotes, officesFound, detectedYear);
           require("fs").writeSync(geomFd, JSON.stringify(subGeoJSON || blockFeature.geometry) + "\n"); // eslint-disable-line
+          trackAssignment(pi, featureProps.length, subDemo.population || 0);
           featureProps.push(props);
         }
       }
@@ -925,6 +1041,17 @@ export default class PrepareDevData extends Command {
         try { geosHelper.free(f.geom); } catch { /* already freed */ }
       }
     }
+
+    // Reconcile primary-year votes against precinct totals before freeing
+    // precinctVoting. This fixes residuals from per-capita scaling + rounding
+    // and guarantees sum(block votes) === precinct votes for every precinct.
+    const primaryReconciled = reconcilePrecinctVotes(
+      featureProps,
+      primaryAssigned,
+      (pi: number) => precinctVoting.get(pi)!.votes,
+      detectedYear
+    );
+    this.log(`   Reconciled ${primaryReconciled} precinct-party totals (primary year)`);
 
     // Close geometry temp file and clean up GEOS geometries (but keep helper alive
     // for addVotingYear — creating a second GeosHelper causes segfaults from
@@ -936,6 +1063,7 @@ export default class PrepareDevData extends Command {
     vestFeatures.length = 0;
     blockDemographics.clear();
     precinctVoting.clear();
+    primaryAssigned.clear();
 
     // Force glibc to return freed native memory to the OS.
     // Without this, glibc holds onto ~30GB of freed GEOS heap pages.
@@ -1250,7 +1378,7 @@ export default class PrepareDevData extends Command {
         const pa = precinctAssigned.get(containingPi)!;
         for (const office of Array.from(officesFound)) {
           if (!pa.has(office)) pa.set(office, []);
-          pa.get(office)!.push({ featureIdx: fi, weight: 1.0 });
+          pa.get(office)!.push({ featureIdx: fi, weight: pop });
         }
         continue;
       }
@@ -1309,10 +1437,10 @@ export default class PrepareDevData extends Command {
       for (const int of intersections) {
         if (!precinctAssigned.has(int.pi)) precinctAssigned.set(int.pi, new Map());
         const pa = precinctAssigned.get(int.pi)!;
-        const w = totalArea > 0 ? int.area / totalArea : 0;
+        const areaFrac = totalArea > 0 ? int.area / totalArea : 0;
         for (const office of Array.from(officesFound)) {
           if (!pa.has(office)) pa.set(office, []);
-          pa.get(office)!.push({ featureIdx: fi, weight: w });
+          pa.get(office)!.push({ featureIdx: fi, weight: areaFrac * pop });
         }
       }
     }
@@ -1326,29 +1454,12 @@ export default class PrepareDevData extends Command {
 
     // Reconcile precinct totals
     this.log(`   Reconciling precinct totals...`);
-    let reconciled = 0;
-    for (const [pi, officeMap] of Array.from(precinctAssigned.entries())) {
-      const pd = precinctData.get(pi)!;
-      for (const [office, assignments] of Array.from(officeMap.entries())) {
-        const v = pd.votes[office] || { democrat: 0, republican: 0, other: 0 };
-        const prefix = office === "PRE" ? "" : `${office}_`;
-        for (const party of ["democrat", "republican", "other"] as const) {
-          const fieldName = `${prefix}${party}${yy}`;
-          const expected = v[party];
-          const actual = assignments.reduce((sum, a) =>
-            sum + ((featureProps[a.featureIdx])[fieldName] || 0), 0);
-          const diff = expected - actual;
-          if (diff === 0) continue;
-          reconciled++;
-          const weights = assignments.map(a => a.weight);
-          const adjustments = apportion(Math.abs(diff), weights);
-          const sign = diff > 0 ? 1 : -1;
-          for (let i = 0; i < assignments.length; i++) {
-            (featureProps[assignments[i].featureIdx])[fieldName] += sign * adjustments[i];
-          }
-        }
-      }
-    }
+    const reconciled = reconcilePrecinctVotes(
+      featureProps,
+      precinctAssigned,
+      (pi: number) => precinctData.get(pi)!.votes,
+      yy
+    );
     this.log(`   Reconciled ${reconciled} precinct-party totals`);
   }
 }
@@ -1360,6 +1471,7 @@ function buildBlockProps(
   countyNames: Map<string, string>,
   demo: Record<string, number>,
   votes: Record<string, { democrat: number; republican: number; other: number }>,
+  totalVotes: Record<string, number>,
   officesFound: Set<string>,
   electionYear: string
 ): Record<string, any> {
@@ -1371,17 +1483,64 @@ function buildBlockProps(
     ...demo
   };
 
-  // Add voting data for all offices, suffixed by year
+  // Disaggregate precinct-level votes to this block by per-capita scaling.
+  // Reconciliation later fixes up residuals so precinct totals match exactly.
   // Presidential (PRE) uses bare names: democrat20, republican20 (for PVI calculation)
   // Other offices use prefixed names: USS_democrat20, GOV_democrat20, etc.
   const yy = electionYear; // e.g. "20" for 2020
+  const pop = demo.population || 0;
   for (const office of Array.from(officesFound)) {
     const v = votes[office] || { democrat: 0, republican: 0, other: 0 };
+    const total = totalVotes[office] || 0;
     const prefix = office === "PRE" ? "" : `${office}_`;
-    props[`${prefix}democrat${yy}`] = v.democrat;
-    props[`${prefix}republican${yy}`] = v.republican;
-    props[`${prefix}other${yy}`] = v.other;
+    if (total > 0 && pop > 0) {
+      props[`${prefix}democrat${yy}`] = Math.round((v.democrat / total) * pop);
+      props[`${prefix}republican${yy}`] = Math.round((v.republican / total) * pop);
+      props[`${prefix}other${yy}`] = Math.round((v.other / total) * pop);
+    } else {
+      props[`${prefix}democrat${yy}`] = 0;
+      props[`${prefix}republican${yy}`] = 0;
+      props[`${prefix}other${yy}`] = 0;
+    }
   }
 
   return props;
+}
+
+/**
+ * Reconcile per-block votes so their sum matches each precinct's exact totals.
+ * Adjusts residuals from rounding / per-capita scaling by apportioning the
+ * diff across assigned blocks weighted by population contribution.
+ */
+function reconcilePrecinctVotes(
+  featureProps: Record<string, any>[],
+  precinctAssigned: Map<number, Map<string, { featureIdx: number; weight: number }[]>>,
+  getPrecinctVotes: (pi: number) => Record<string, { democrat: number; republican: number; other: number }>,
+  electionYear: string
+): number {
+  const yy = electionYear;
+  let reconciled = 0;
+  for (const [pi, officeMap] of Array.from(precinctAssigned.entries())) {
+    const votes = getPrecinctVotes(pi);
+    for (const [office, assignments] of Array.from(officeMap.entries())) {
+      const v = votes[office] || { democrat: 0, republican: 0, other: 0 };
+      const prefix = office === "PRE" ? "" : `${office}_`;
+      for (const party of ["democrat", "republican", "other"] as const) {
+        const fieldName = `${prefix}${party}${yy}`;
+        const expected = v[party];
+        const actual = assignments.reduce((sum, a) =>
+          sum + ((featureProps[a.featureIdx])[fieldName] || 0), 0);
+        const diff = expected - actual;
+        if (diff === 0) continue;
+        reconciled++;
+        const weights = assignments.map(a => a.weight);
+        const adjustments = apportion(Math.abs(diff), weights);
+        const sign = diff > 0 ? 1 : -1;
+        for (let i = 0; i < assignments.length; i++) {
+          (featureProps[assignments[i].featureIdx])[fieldName] += sign * adjustments[i];
+        }
+      }
+    }
+  }
+  return reconciled;
 }

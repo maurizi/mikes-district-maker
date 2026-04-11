@@ -231,6 +231,7 @@ export type IProject = ProjectTemplateFields & {
   readonly archived: boolean;
   readonly planscoreUrl: string;
   readonly submittedDt?: Date;
+  readonly simplifiedDistricts?: unknown;
 };
 
 export type ProjectNest = Pick<

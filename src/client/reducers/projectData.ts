@@ -565,8 +565,11 @@ const projectDataReducer = (
         const geojson = action.payload;
         const { project } = state.projectData.resource;
         const findCoords = getFindCoords(state.findTool, geojson);
-        // Fire-and-forget: persist GeoJSON to server (server simplifies for mini-map views)
-        void patchProject(project.id, { districts: geojson } as any);
+        // Fire-and-forget: persist GeoJSON to server (server simplifies for mini-map views).
+        // Skip if the server already has simplified districts (i.e. this is just an initial load).
+        if (!project.simplifiedDistricts) {
+          void patchProject(project.id, { districts: geojson } as any);
+        }
         return updateCurrentState(
           {
             ...state,

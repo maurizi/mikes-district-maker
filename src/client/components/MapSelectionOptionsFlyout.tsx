@@ -5,12 +5,14 @@ import store from "../store";
 import {
   toggleLimitDrawingToWithinCounty,
   setElectionYear,
+  setSelectedOffice,
   setPopulationKey
 } from "../actions/projectOptions";
 import Tooltip from "./Tooltip";
 import Icon from "./Icon";
 import { IStaticMetadata, GroupTotal } from "../../shared/entities";
 import { ElectionYear } from "../types";
+import { getOfficeYearCombos, officeName } from "../functions";
 
 const POPULATION_LABELS: { readonly [key: string]: string } = {
   population: "All people",
@@ -53,17 +55,19 @@ const MapSelectionOptionsFlyout = ({
   metadata,
   topGeoLevelName,
   electionYear,
+  selectedOffice,
   populationKey
 }: {
   readonly limitSelectionToCounty: boolean;
   readonly metadata?: IStaticMetadata;
   readonly topGeoLevelName?: string;
   readonly electionYear: ElectionYear;
+  readonly selectedOffice: string;
   readonly populationKey: GroupTotal;
 }) => {
   const votingIds = metadata?.voting?.map(file => file.id) || [];
-  const hasMultipleElections =
-    votingIds.some(id => id.endsWith("16")) && votingIds.some(id => id.endsWith("20"));
+  const officeYearCombos = getOfficeYearCombos(votingIds);
+  const hasElections = officeYearCombos.length > 0;
   const populations =
     metadata?.demographicsGroups?.flatMap(group =>
       group.total && Object.keys(POPULATION_LABELS).includes(group.total) ? [group.total] : []
@@ -76,7 +80,7 @@ const MapSelectionOptionsFlyout = ({
           <Icon name="cog" />
         </MenuButton>
       </Tooltip>
-      <Menu sx={{ ...menuStyle.menu, p: 3 }}>
+      <Menu sx={{ ...menuStyle.menu, p: 3, maxHeight: "400px", overflowY: "auto" }}>
         <ul sx={menuStyle.menuList}>
           <li sx={style.menuItem}>
             <Heading as="h4">Drawing</Heading>
@@ -90,33 +94,30 @@ const MapSelectionOptionsFlyout = ({
               Limit drawing to within {topGeoLevelName}
             </Label>
           </li>
-          {hasMultipleElections && (
+          {hasElections && (
             <li sx={style.menuItem}>
               <Heading as="h4">Tooltip</Heading>
               <legend>Election</legend>
-
-              <Label sx={style.inputLabel}>
-                <Radio
-                  name="map-selection-election-year"
-                  value="16"
-                  checked={electionYear === "16"}
-                  onChange={() => {
-                    store.dispatch(setElectionYear("16"));
-                  }}
-                />
-                Presidential 2016
-              </Label>
-              <Label sx={style.inputLabel}>
-                <Radio
-                  name="map-selection-election-year"
-                  value="20"
-                  checked={electionYear === "20"}
-                  onChange={() => {
-                    store.dispatch(setElectionYear("20"));
-                  }}
-                />
-                <Box>Presidential 2020</Box>
-              </Label>
+              {officeYearCombos.map(({ office, year }) => {
+                const radioValue = `${office}|${year}`;
+                const isSelected = selectedOffice === office && electionYear === year;
+                const yearFull = year ? `20${year}` : "";
+                const label = `${officeName(office)}${yearFull ? ` ${yearFull}` : ""}`;
+                return (
+                  <Label sx={style.inputLabel} key={radioValue}>
+                    <Radio
+                      name="map-selection-election"
+                      value={radioValue}
+                      checked={isSelected}
+                      onChange={() => {
+                        store.dispatch(setElectionYear(year));
+                        store.dispatch(setSelectedOffice(office));
+                      }}
+                    />
+                    <Box>{label}</Box>
+                  </Label>
+                );
+              })}
             </li>
           )}
           {hasMultiplePopulationTotals && (

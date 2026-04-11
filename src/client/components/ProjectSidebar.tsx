@@ -1,4 +1,4 @@
-import React, { Fragment, memo, useEffect, useState } from "react";
+import React, { Fragment, memo, useEffect, useMemo, useState } from "react";
 import { Box, Button, Flex, ThemeUIStyleObject } from "theme-ui";
 import { pickBy, sum } from "lodash";
 
@@ -933,9 +933,18 @@ const SidebarRows = ({
     cachedPopulationKey
   ]);
 
-  const popPerRep = getPopulationPerRepresentative(geojson, project.numberOfMembers);
-  const demographicsMetricFields = getDemographicsMetricFields(staticMetadata);
-  const electionsMetricFields = getVotingMetricFields(staticMetadata);
+  const popPerRep = useMemo(
+    () => getPopulationPerRepresentative(geojson, project.numberOfMembers),
+    [geojson, project.numberOfMembers]
+  );
+  const demographicsMetricFields = useMemo(
+    () => getDemographicsMetricFields(staticMetadata),
+    [staticMetadata]
+  );
+  const electionsMetricFields = useMemo(
+    () => getVotingMetricFields(staticMetadata),
+    [staticMetadata]
+  );
 
   return (
     <React.Fragment>

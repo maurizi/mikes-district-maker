@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Flex, Box, Label, Button, Select, Slider, Text, ThemeUIStyleObject } from "theme-ui";
+import { Flex, Box, Button, Slider, Text, ThemeUIStyleObject } from "theme-ui";
 import {
   GeoLevelInfo,
   GeoLevelHierarchy,
@@ -9,8 +9,9 @@ import {
 } from "../../shared/entities";
 import { ElectionYear } from "../types";
 import { toggleFind } from "../actions/districtDrawing";
-import { geoLevelLabel, capitalizeFirstLetter, canSwitchGeoLevels } from "../functions";
+import { geoLevelLabel, canSwitchGeoLevels } from "../functions";
 import MapSelectionOptionsFlyout from "./MapSelectionOptionsFlyout";
+import LabelAutocomplete from "./LabelAutocomplete";
 
 import Icon from "./Icon";
 import Tooltip from "./Tooltip";
@@ -19,8 +20,7 @@ import {
   setSelectionTool,
   SelectionTool,
   PaintBrushSize,
-  setPaintBrushSize,
-  setMapLabel
+  setPaintBrushSize
 } from "../actions/districtDrawing";
 import store from "../store";
 import icons from "../icons";
@@ -156,6 +156,7 @@ const MapHeader = ({
   isReadOnly,
   limitSelectionToCounty,
   electionYear,
+  selectedOffice,
   populationKey
 }: {
   readonly label?: string;
@@ -169,36 +170,13 @@ const MapHeader = ({
   readonly findMenuOpen: boolean;
   readonly limitSelectionToCounty: boolean;
   readonly electionYear: ElectionYear;
+  readonly selectedOffice: string;
   readonly populationKey: GroupTotal;
 }) => {
   const [isPaintBrushSizeSliderVisible, setPaintBrushSizeSliderVisibility] = useState(false);
   const topGeoLevelName = metadata
     ? metadata.geoLevelHierarchy[metadata.geoLevelHierarchy.length - 1].id
     : undefined;
-  const labelFields =
-    metadata && metadata.demographics
-      ? [
-          ...metadata.demographics.map(file => {
-            return {
-              id: file.id,
-              label: file.id
-            };
-          }),
-          ...(metadata.voting
-            ? metadata.voting.map(file => {
-                return {
-                  id: file.id,
-                  // Fix suffix on voting IDs if needed
-                  label:
-                    file.id.endsWith("16") || file.id.endsWith("20")
-                      ? file.id.slice(0, -2) + " '" + file.id.slice(-2)
-                      : file.id
-                };
-              })
-            : [])
-        ]
-      : undefined;
-
   // Close paintbrush slider if the user switches to another tool, open it if toggled from another tool
   useEffect(() => {
     if (selectionTool !== SelectionTool.PaintBrush) {
@@ -208,13 +186,6 @@ const MapHeader = ({
     }
   }, [selectionTool]);
 
-  const labelOptions = labelFields
-    ? labelFields.map(val => (
-        <option key={val.id} value={val.id}>
-          {capitalizeFirstLetter(val.label)}
-        </option>
-      ))
-    : [];
   const geoLevelOptions = metadata
     ? metadata.geoLevelHierarchy
         .slice()
@@ -299,6 +270,7 @@ const MapHeader = ({
                 topGeoLevelName={topGeoLevelName}
                 metadata={metadata}
                 electionYear={electionYear}
+                selectedOffice={selectedOffice}
                 populationKey={populationKey}
               />
             </Box>
@@ -307,26 +279,7 @@ const MapHeader = ({
         <Flex className="geolevel-button-group">{geoLevelOptions}</Flex>
       </Flex>
       <Box sx={{ lineHeight: "1" }}>
-        <Flex sx={{ alignItems: "baseline" }}>
-          <Label
-            htmlFor="population-dropdown"
-            sx={{ display: "none", width: "auto", mb: 0, mr: 2 }}
-          >
-            Labels:
-          </Label>
-          <Select
-            id="population-dropdown"
-            value={label || "Select..."}
-            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-              const label = e.currentTarget.value;
-              store.dispatch(setMapLabel(label));
-            }}
-            sx={{ width: "auto", paddingRight: "30px", fontSize: 1 }}
-          >
-            <option>Labels ...</option>
-            {labelOptions}
-          </Select>
-        </Flex>
+        <LabelAutocomplete metadata={metadata} selectedLabel={label} />
       </Box>
       <Box
         sx={{

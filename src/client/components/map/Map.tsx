@@ -447,6 +447,7 @@ const DistrictsMap = ({
     return () => {
       map.off("load", onMapLoad);
       map.off("zoomend", setLevelVisibility);
+      map.remove();
     };
 
     // Everything in this effect should only happen on component load
@@ -770,32 +771,22 @@ const DistrictsMap = ({
       );
   };
 
-  // Compute array of top geolevels split across multiple districts
-  const splitCountiesDistricts = project?.districtsDefinition.map(c => {
-    if (Array.isArray(c)) {
-      return c;
-    } else {
-      return undefined;
-    }
-  });
-
   // Set features from topmost geolayer that are split across districts to be selected
-  map &&
-    staticMetadata &&
-    splitCountiesDistricts.forEach((c, id) => {
-      if (c !== undefined) {
-        map &&
-          map.setFeatureState(
-            {
-              source: GEOLEVELS_SOURCE_ID,
-              id,
-              sourceLayer:
-                staticMetadata.geoLevelHierarchy[staticMetadata.geoLevelHierarchy.length - 1].id
-            },
-            { split: true }
-          );
+  useEffect(() => {
+    if (!map || !staticMetadata) {
+      return;
+    }
+    const sourceLayer =
+      staticMetadata.geoLevelHierarchy[staticMetadata.geoLevelHierarchy.length - 1].id;
+    project?.districtsDefinition.forEach((c, id) => {
+      if (Array.isArray(c)) {
+        map.setFeatureState(
+          { source: GEOLEVELS_SOURCE_ID, id, sourceLayer },
+          { split: true }
+        );
       }
     });
+  }, [map, staticMetadata, project?.districtsDefinition]);
 
   // @ts-ignore
   const generateLabelsGeojson = (geojson: DistrictsGeoJSON): Labels => {

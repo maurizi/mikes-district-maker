@@ -135,14 +135,18 @@ function baseIndicesForGeoUnit(
 function accumulateBaseIndices(geoUnitHierarchy: GeoUnitHierarchy): number[] {
   // eslint-disable-next-line
   const baseIndices: number[] = [];
-  geoUnitHierarchy.forEach(currentIndices =>
-    // eslint-disable-next-line
-    baseIndices.push(
-      ...(typeof currentIndices === "number"
-        ? [currentIndices]
-        : accumulateBaseIndices(currentIndices))
-    )
-  );
+  const stack: (GeoUnitHierarchy | number)[] = [geoUnitHierarchy];
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    if (typeof current === "number") {
+      baseIndices.push(current);
+    } else {
+      // Push in reverse so we process in original order
+      for (let i = current.length - 1; i >= 0; i--) {
+        stack.push(current[i]);
+      }
+    }
+  }
   return baseIndices;
 }
 

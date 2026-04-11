@@ -73,7 +73,7 @@ export interface BaseEvaluateMetric {
   readonly showInSummary: boolean;
 }
 
-export type ElectionYear = "16" | "20" | "combined";
+export type ElectionYear = string;
 
 export interface PviBucket {
   readonly name: string;

@@ -515,7 +515,7 @@ export function generateMapLayers(
       "text-padding": 3,
       "text-field": ["concat", regionCode, "-", ["get", "id"]],
       "text-max-width": 10,
-      "text-font": ["Atlas Grotesk Bold"],
+      "text-font": ["Noto Sans Bold"],
       visibility: "visible"
     },
     paint: {
@@ -569,7 +569,7 @@ export function generateMapLayers(
         "text-padding": 2,
         "text-field": "",
         "text-max-width": 10,
-        "text-font": ["Atlas Grotesk Bold"],
+        "text-font": ["Noto Sans Bold"],
         visibility: "none"
       },
       paint: {

@@ -17,7 +17,8 @@ import {
   areAnyGeoUnitsSelected,
   destructureResource,
   geoLevelLabel,
-  extractYear
+  extractYear,
+  extractOffice
 } from "../../functions";
 import { getTotalSelectedDemographics } from "../../worker-functions";
 import { featuresToGeoUnits, SET_FEATURE_DELAY } from "./index";
@@ -69,6 +70,7 @@ const MapTooltip = ({
   project,
   map,
   electionYear,
+  selectedOffice,
   populationKey
 }: {
   readonly geoLevelIndex: number;
@@ -77,6 +79,7 @@ const MapTooltip = ({
   readonly project?: IProject;
   readonly map?: maplibregl.Map;
   readonly electionYear: ElectionYear;
+  readonly selectedOffice: string;
   readonly populationKey: GroupTotal;
 }) => {
   const [point, setPoint] = useState({ x: 0, y: 0 });
@@ -208,11 +211,12 @@ const MapTooltip = ({
     const y = point.y;
     const votingForYear =
       electionYear && data.voting ? extractYear(data.voting, electionYear) : data.voting;
+    const votingForOffice = votingForYear ? extractOffice(votingForYear, selectedOffice) : undefined;
     const voting =
-      votingForYear && Object.keys(votingForYear).length > 0
-        ? votingForYear
+      votingForOffice && Object.keys(votingForOffice).length > 0
+        ? votingForOffice
         : data.voting && Object.keys(data.voting).length > 0
-        ? data.voting
+        ? extractOffice(data.voting, "")
         : undefined;
     const demographicsGroups = staticMetadata && getDemographicsGroups(staticMetadata);
     const hasAdjustedPopulation =
@@ -293,6 +297,7 @@ function mapStateToProps(state: State) {
     project: destructureResource(state.project.projectData, "project"),
     staticMetadata: destructureResource(state.project.staticData, "staticMetadata"),
     electionYear: state.projectOptions.electionYear,
+    selectedOffice: state.projectOptions.selectedOffice,
     populationKey: state.projectOptions.populationKey
   };
 }

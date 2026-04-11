@@ -20,7 +20,6 @@ import { planarTriangleArea, presimplify, simplify } from "topojson-simplify";
 import { GeometryCollection, GeometryObject, Objects, Topology } from "topojson-specification";
 
 import {
-  TypedArray,
   GeoLevelInfo,
   GeoUnitDefinition,
   HierarchyDefinition,

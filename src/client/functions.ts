@@ -278,6 +278,96 @@ export function extractYear(voting: DemographicCounts, year?: ElectionYear): Dem
     : voting;
 }
 
+const OFFICE_NAMES: Record<string, string> = {
+  "": "Presidential",
+  USS: "US Senate",
+  GOV: "Governor",
+  ATG: "Atty General",
+  AUD: "Auditor",
+  LTG: "Lt. Governor",
+  SOS: "Sec. of State",
+  TRE: "Treasurer",
+  INS: "Insurance",
+  AGR: "Agriculture",
+  SPI: "Superintendent",
+  PSC: "Public Service",
+  SAC: "Sup. Court",
+  SSC: "Sup. Court",
+  LND: "Land",
+  LAB: "Labor",
+  HAL: "House At-Large",
+  COC: "Corp. Comm.",
+  COU: "County",
+  DEL: "Delegate",
+  PUC: "Pub. Utilities",
+  SCC: "Sup. Court"
+};
+
+export function officeName(code: string): string {
+  return OFFICE_NAMES[code] || code;
+}
+
+export function extractOffice(
+  voting: DemographicCounts,
+  office: string
+): DemographicCounts {
+  if (!office) {
+    return pickBy(voting, (val, key) => !key.includes("_"));
+  }
+  const prefix = office + "_";
+  return mapKeys(
+    pickBy(voting, (val, key) => key.startsWith(prefix)),
+    (val, key) => key.slice(prefix.length)
+  );
+}
+
+// Parse a voting ID into its office code, party, and year suffix
+export function parseVotingId(id: string): {
+  readonly office: string;
+  readonly party: string;
+  readonly year: string;
+} {
+  const underscoreIdx = id.indexOf("_");
+  let office: string;
+  let rest: string;
+  if (underscoreIdx !== -1) {
+    office = id.slice(0, underscoreIdx);
+    rest = id.slice(underscoreIdx + 1);
+  } else {
+    office = "";
+    rest = id;
+  }
+  const yearMatch = rest.match(/(16|18|20)$/);
+  const year = yearMatch ? yearMatch[1] : "";
+  const party = yearMatch ? rest.slice(0, -2) : rest;
+  return { office, party, year };
+}
+
+// Discover unique office+year combos from voting metadata IDs
+export function getOfficeYearCombos(
+  votingIds: readonly string[]
+): readonly { readonly office: string; readonly year: string }[] {
+  const seen = new Set<string>();
+  const combos: { office: string; year: string }[] = [];
+  for (const id of votingIds) {
+    const { office, year } = parseVotingId(id);
+    const key = `${office}|${year}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      combos.push({ office, year });
+    }
+  }
+  // Sort: presidential first, then alphabetically by office name, then by year
+  combos.sort((a, b) => {
+    if (a.office === "" && b.office !== "") return -1;
+    if (a.office !== "" && b.office === "") return 1;
+    const nameCompare = officeName(a.office).localeCompare(officeName(b.office));
+    if (nameCompare !== 0) return nameCompare;
+    return a.year.localeCompare(b.year);
+  });
+  return combos;
+}
+
 /*
  * Assign nested geounit to district.
  *

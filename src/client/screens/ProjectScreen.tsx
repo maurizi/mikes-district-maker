@@ -247,6 +247,7 @@ const ProjectScreen = ({
                 advancedEditingEnabled={project?.advancedEditingEnabled}
                 isReadOnly={isReadOnly}
                 electionYear={projectOptions.electionYear}
+                selectedOffice={projectOptions.selectedOffice}
                 populationKey={projectOptions.populationKey}
               />
             ) : (

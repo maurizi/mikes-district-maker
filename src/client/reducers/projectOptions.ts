@@ -7,6 +7,7 @@ import { ElectionYear } from "../types";
 import {
   toggleLimitDrawingToWithinCounty,
   setElectionYear,
+  setSelectedOffice,
   setPopulationKey
 } from "../actions/projectOptions";
 import { resetProjectState } from "../actions/root";
@@ -15,12 +16,14 @@ import { GroupTotal } from "../../shared/entities";
 export interface ProjectOptionsState {
   readonly limitSelectionToCounty: boolean;
   readonly electionYear: ElectionYear;
+  readonly selectedOffice: string;
   readonly populationKey: GroupTotal;
 }
 
 export const initialProjectOptionsState: ProjectOptionsState = {
   limitSelectionToCounty: false,
   electionYear: "16",
+  selectedOffice: "",
   populationKey: "population"
 };
 
@@ -43,6 +46,11 @@ const projectOptionsReducer = (
       return {
         ...state,
         electionYear: action.payload
+      };
+    case getType(setSelectedOffice):
+      return {
+        ...state,
+        selectedOffice: action.payload
       };
     case getType(setPopulationKey):
       return {

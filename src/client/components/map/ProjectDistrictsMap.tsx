@@ -68,24 +68,26 @@ const ProjectDistrictsMap = ({
       },
       bounds,
       fitBoundsOptions: { padding: context === "communityMaps" ? 15 : 10 },
-      interactive: false
+      interactive: false,
+      attributionControl: false
     });
 
     function onLoad() {
-      districts &&
+      if (districts) {
         map.addSource("districts", {
           type: "geojson",
           data: districts
         });
-      map.addLayer({
-        id: "districts",
-        type: "fill",
-        source: "districts",
-        layout: {},
-        paint: {
-          "fill-color": { type: "identity", property: "color" }
-        }
-      });
+        map.addLayer({
+          id: "districts",
+          type: "fill",
+          source: "districts",
+          layout: {},
+          paint: {
+            "fill-color": { type: "identity", property: "color" }
+          }
+        });
+      }
       map.resize();
       setMapLoaded(true);
     }
@@ -93,6 +95,7 @@ const ProjectDistrictsMap = ({
     map.on("load", onLoad);
     return () => {
       map.off("load", onLoad);
+      map.remove();
     };
   }, [mapRef, districts, bounds]);
 

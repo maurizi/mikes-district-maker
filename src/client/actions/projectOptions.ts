@@ -6,4 +6,6 @@ export const toggleLimitDrawingToWithinCounty = createAction("Limit drawing to w
 
 export const setElectionYear = createAction("Set election year for tooltip data")<ElectionYear>();
 
+export const setSelectedOffice = createAction("Set selected office for tooltip data")<string>();
+
 export const setPopulationKey = createAction("Set field to use for population")<GroupTotal>();

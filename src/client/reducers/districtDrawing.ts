@@ -138,7 +138,7 @@ export const initialDistrictDrawingState: DistrictDrawingState = {
   evaluateMetric: undefined,
   findTool: FindTool.Unassigned,
   saving: "unsaved",
-  mapLabel: "undefined",
+  mapLabel: undefined,
   showReferenceLayers: new Set(),
   undoHistory: {
     past: [],

@@ -466,17 +466,6 @@ export async function submitProject(projectId: ProjectId): Promise<IProject> {
   });
 }
 
-async function uploadToPlanScore(project: IProject): Promise<void> {
-  return new Promise((resolve, reject) => {
-    apiAxios
-      .post(`/api/projects/${project.id}/plan-score`)
-      .then(() => resolve())
-      .catch(error => {
-        reject(error.message);
-      });
-  });
-}
-
 async function pollForPlanScoreUpdates(projectId: ProjectId, numTries = 1): Promise<IProject> {
   return new Promise((resolve, reject) => {
     fetchProject(projectId)
@@ -495,8 +484,52 @@ async function pollForPlanScoreUpdates(projectId: ProjectId, numTries = 1): Prom
   });
 }
 
-export async function checkPlanScoreAPI(project: IProject): Promise<IProject> {
-  await uploadToPlanScore(project);
+// PlanScore multi-step upload, driven from the browser.
+//
+// Steps 1 and 3 require a bearer token we can't ship to the client, so we
+// proxy them through our server. Step 2 (the geometry PUT) goes directly to
+// PlanScore's S3 bucket — the large payload never touches our server.
+// See https://github.com/PlanScore/PlanScore/blob/main/API.md
+export async function checkPlanScoreAPI(
+  project: IProject,
+  geojson: DistrictsGeoJSON
+): Promise<IProject> {
+  // Step 1: ask the server to fetch a signed-upload policy from PlanScore.
+  const credsResponse = await apiAxios.get<[string, Record<string, string>]>(
+    `/api/projects/${project.id}/plan-score/upload-credentials`
+  );
+  const [s3Uri, uploadFields] = credsResponse.data;
+
+  // Step 2: POST the geometry directly to PlanScore's S3 bucket. The
+  // success_action_redirect field tells S3 where to 302 to, and that's also
+  // the callback URL we'll hand back to the server for step 3. Use
+  // redirect: "manual" so we don't chase the redirect (which would be a GET
+  // without a bearer token and fail).
+  //
+  // The unassigned district must be stripped; PlanScore treats its presence
+  // as an incomplete plan and never finishes processing.
+  const callbackLocation = uploadFields.success_action_redirect;
+  if (!callbackLocation) {
+    throw new Error("PlanScore upload response missing success_action_redirect");
+  }
+  const form = new FormData();
+  Object.entries(uploadFields).forEach(([key, val]) => form.append(key, val));
+  const strippedGeojson = { ...geojson, features: geojson.features.slice(1) };
+  form.append(
+    "file",
+    new Blob([JSON.stringify(strippedGeojson)], { type: "application/json" }),
+    `${project.name}.geojson`
+  );
+  await fetch(s3Uri, { method: "POST", body: form, redirect: "manual" });
+
+  // Step 3: ask the server to post the callback to PlanScore. The server
+  // fire-and-forgets polling and writes planscoreUrl onto the project row
+  // when PlanScore finishes, which the poll below picks up.
+  await apiAxios.post(`/api/projects/${project.id}/plan-score/finalize`, {
+    callbackLocation,
+    description: project.name
+  });
+
   return pollForPlanScoreUpdates(project.id);
 }
 

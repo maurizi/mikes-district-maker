@@ -1,12 +1,10 @@
-import { FeatureCollection, MultiPolygon } from "geojson";
 import { Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
 
 import { ProjectVisibility } from "../../../../shared/constants";
 import {
-  DistrictProperties,
   DistrictsDefinition,
   IProject,
-  ProjectProperties
+  ThumbnailGeoJSON
 } from "../../../../shared/entities";
 import { RegionConfig } from "../../region-configs/entities/region-config.entity";
 import { Chamber } from "../../chambers/entities/chamber.entity";
@@ -16,13 +14,6 @@ import {
   DEFAULT_POPULATION_DEVIATION,
   DEFAULT_PINNED_METRIC_FIELDS
 } from "../../../../shared/constants";
-
-// TODO #179: Move to shared/entities
-export type DistrictsGeoJSON = FeatureCollection<MultiPolygon, DistrictProperties> & {
-  readonly metadata?: ProjectProperties;
-};
-
-export type SimplifiedDistrictsGeoJSON = FeatureCollection<MultiPolygon>;
 
 @Entity()
 @Index("IDX_PUBLISHED_PROJECTS", { synchronize: false })
@@ -39,7 +30,7 @@ export class Project implements IProject {
   regionConfig: RegionConfig;
 
   // The version of Project.regionConfig at the time of last update,
-  // used to bust cache for districts column
+  // used to bust cache for the client-rebuilt district geometry.
   @Column({ type: "timestamp with time zone", name: "region_config_version" })
   regionConfigVersion: Date;
 
@@ -61,19 +52,19 @@ export class Project implements IProject {
   })
   districtsDefinition: DistrictsDefinition;
 
+  // Client-computed, simplified thumbnail geojson used to render project
+  // previews on listings. Written by the client on save.
   @Column({
     type: "jsonb",
-    name: "districts",
+    name: "thumbnail",
     nullable: true
   })
-  districts?: DistrictsGeoJSON;
+  thumbnail?: ThumbnailGeoJSON;
 
-  @Column({
-    type: "jsonb",
-    name: "simplified_districts",
-    nullable: true
-  })
-  simplifiedDistricts?: SimplifiedDistrictsGeoJSON;
+  // Whether every geounit is assigned to a district (i.e. the unassigned
+  // district is empty). Used by the community-maps listing "completed" filter.
+  @Column({ type: "boolean", name: "is_complete", default: false })
+  isComplete: boolean;
 
   @ManyToOne(() => User, { nullable: false, eager: true })
   @JoinColumn({ name: "user_id" })

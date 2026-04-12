@@ -4,7 +4,6 @@ import {
   readFileSync,
   mkdirSync,
   existsSync,
-  readdirSync,
   createWriteStream,
   createReadStream
 } from "fs";
@@ -17,6 +16,7 @@ import {
   extractZipToDir,
   readShapefile,
   findFileInDir,
+  findShapefile,
   extractVotingData,
   apportion,
   reprojectFeature
@@ -458,15 +458,13 @@ export default class PrepareDevData extends Command {
     const vestBuffer = readFileSync(vestPath);
     const vestDir = join(tmp, "vest");
     await extractZipToDir(vestBuffer, vestDir);
-    const vestShp = findFileInDir(vestDir, ".shp");
-    const vestDbf = findFileInDir(vestDir, ".dbf");
+    const { shpPath: vestShp, dbfPath: vestDbf, prjPath: vestPrj } = findShapefile(vestDir);
     let vestFeatures = await readShapefile(vestShp, vestDbf);
-    this.log(`   ${vestFeatures.length} VEST precincts loaded`);
+    this.log(`   ${vestFeatures.length} VEST precincts loaded (${vestShp})`);
 
     // Reproject VEST features to WGS84 if needed
-    const prjFiles = readdirSync(vestDir).filter(f => f.endsWith(".prj"));
-    if (prjFiles.length > 0) {
-      const prjContent = readFileSync(join(vestDir, prjFiles[0]), "utf-8").trim();
+    if (vestPrj) {
+      const prjContent = readFileSync(vestPrj, "utf-8").trim();
       const isProjected = prjContent.startsWith("PROJCS");
       if (isProjected) {
         this.log(`   Reprojecting from projected CRS to WGS84...`);
@@ -1171,15 +1169,13 @@ export default class PrepareDevData extends Command {
     const vestBuffer = readFileSync(vestZipPath);
     const vestDir = join(tmpDir, `vest-add-${Date.now()}`);
     await extractZipToDir(vestBuffer, vestDir);
-    const vestShp = findFileInDir(vestDir, ".shp");
-    const vestDbf = findFileInDir(vestDir, ".dbf");
+    const { shpPath: vestShp, dbfPath: vestDbf, prjPath: vestPrj } = findShapefile(vestDir);
     let vestFeatures = await readShapefile(vestShp, vestDbf);
-    this.log(`   ${vestFeatures.length} precincts loaded`);
+    this.log(`   ${vestFeatures.length} precincts loaded (${vestShp})`);
 
     // Reproject if needed
-    const prjFiles = readdirSync(vestDir).filter(f => f.endsWith(".prj"));
-    if (prjFiles.length > 0) {
-      const prjContent = readFileSync(join(vestDir, prjFiles[0]), "utf-8").trim();
+    if (vestPrj) {
+      const prjContent = readFileSync(vestPrj, "utf-8").trim();
       if (prjContent.startsWith("PROJCS")) {
         this.log(`   Reprojecting...`);
         vestFeatures = vestFeatures.map(f => reprojectFeature(f, prjContent));

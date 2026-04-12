@@ -153,10 +153,15 @@ export function computeRowFill(stops: ChoroplethSteps, value?: number, interval?
   }
 }
 
-// Source: https://cookpolitical.com/analysis/national/pvi/introducing-2021-cook-political-report-partisan-voter-index
-const nationalDemVoteShare16 = 51.1;
-const nationalDemVoteShare20 = 52.3;
-const nationalDemVoteShareAvg = (nationalDemVoteShare16 + nationalDemVoteShare20) / 2;
+// National Democratic two-party presidential vote share, per Cook Political
+// Report PVI methodology. 2016 / 2020 values from the 2022 Cook PVI release;
+// 2024 computed from Wikipedia two-party popular vote totals (75,017,613 Dem
+// / 77,302,580 Rep). Update when Cook publishes the 2025 PVI revision.
+const NATIONAL_DEM_VOTE_SHARE: Record<string, number> = {
+  "16": 51.1,
+  "20": 52.3,
+  "24": 49.2
+};
 
 // Computes share of votes for party1
 export function calculatePartyVoteShare(
@@ -212,62 +217,95 @@ export function getDemographicsPercentages(
  * @param  {[DemographicCounts]} voting
  * @return {[number | undefined]} pvi
  */
-export function calculatePVI(voting: DemographicCounts, year?: ElectionYear): number | undefined {
-  if (
-    "democrat16" in voting &&
-    "republican16" in voting &&
-    "democrat20" in voting &&
-    "republican20" in voting &&
-    year !== "16" &&
-    year !== "20"
-  ) {
-    const votes16 = calculatePartyVoteShare(voting.democrat16, voting.republican16);
-    const votes20 = calculatePartyVoteShare(voting.democrat20, voting.republican20);
-    if (votes16 !== undefined && votes20 !== undefined) {
-      const avgVoteShare = (votes16 + votes20) / 2;
-      return avgVoteShare - nationalDemVoteShareAvg;
-    }
-  } else if (year === "20") {
-    const voteShare =
-      "democrat20" in voting && "republican20" in voting
-        ? calculatePartyVoteShare(voting.democrat20, voting.republican20)
-        : "democrat" in voting && "republican" in voting
-        ? calculatePartyVoteShare(voting.democrat, voting.republican)
-        : undefined;
-    if (voteShare !== undefined) {
-      return voteShare - nationalDemVoteShare20;
-    }
-  } else {
-    // We have some states for which we anticipate having only 2016 election data
-    // We assume unspecified vote totals are from 2016
-    const voteShare =
-      "democrat16" in voting && "republican16" in voting
-        ? calculatePartyVoteShare(voting.democrat16, voting.republican16)
-        : "democrat" in voting && "republican" in voting
-        ? calculatePartyVoteShare(voting.democrat, voting.republican)
-        : undefined;
-    if (voteShare !== undefined) {
-      return voteShare - nationalDemVoteShare16;
-    }
+// Presidential years present in a voting record (keys like `democrat20` with
+// matching `republican20`). Excludes office-prefixed columns (`USS_democrat20`).
+function getPresidentialYearsInVoting(voting: DemographicCounts): readonly string[] {
+  const years = new Set<string>();
+  for (const key of Object.keys(voting)) {
+    const m = key.match(/^democrat(\d{2})$/);
+    if (m && `republican${m[1]}` in voting) years.add(m[1]);
   }
+  return Array.from(years).sort();
 }
 
-export const hasMultipleElections = (staticMetadata?: IStaticMetadata) =>
-  staticMetadata?.voting?.some(file => file.id.endsWith("16")) &&
-  staticMetadata?.voting?.some(file => file.id.endsWith("20"));
+function pviForYear(voting: DemographicCounts, year: string): number | undefined {
+  const dem = (voting as Record<string, number>)[`democrat${year}`];
+  const rep = (voting as Record<string, number>)[`republican${year}`];
+  if (dem === undefined || rep === undefined) return undefined;
+  const share = calculatePartyVoteShare(dem, rep);
+  const baseline = NATIONAL_DEM_VOTE_SHARE[year];
+  if (share === undefined || baseline === undefined) return undefined;
+  return share - baseline;
+}
 
-export const has16Election = (staticMetadata?: IStaticMetadata) => {
-  return (
-    staticMetadata?.voting?.some(file => file.id.endsWith("16")) ||
-    (staticMetadata?.voting &&
-      Object.keys(staticMetadata?.voting || {}).length > 0 &&
-      !has20Election(staticMetadata)) ||
-    false
-  );
+export function calculatePVI(voting: DemographicCounts, year?: ElectionYear): number | undefined {
+  // Explicit year override (tooltip / flyout can pin to a specific year).
+  if (year) {
+    const pv = pviForYear(voting, year);
+    if (pv !== undefined) return pv;
+    // Fall through to defaults if the requested year isn't present.
+  }
+
+  // Default: average of the two most recent presidential years present.
+  const years = getPresidentialYearsInVoting(voting);
+  if (years.length >= 2) {
+    const [y1, y2] = years.slice(-2);
+    const share1 = calculatePartyVoteShare(
+      (voting as Record<string, number>)[`democrat${y1}`],
+      (voting as Record<string, number>)[`republican${y1}`]
+    );
+    const share2 = calculatePartyVoteShare(
+      (voting as Record<string, number>)[`democrat${y2}`],
+      (voting as Record<string, number>)[`republican${y2}`]
+    );
+    const base1 = NATIONAL_DEM_VOTE_SHARE[y1];
+    const base2 = NATIONAL_DEM_VOTE_SHARE[y2];
+    if (
+      share1 !== undefined &&
+      share2 !== undefined &&
+      base1 !== undefined &&
+      base2 !== undefined
+    ) {
+      return (share1 + share2) / 2 - (base1 + base2) / 2;
+    }
+  } else if (years.length === 1) {
+    return pviForYear(voting, years[0]);
+  }
+
+  // Legacy path: bare `democrat` / `republican` columns with no year suffix.
+  // These only exist in older region builds; treat them as 2016.
+  if ("democrat" in voting && "republican" in voting) {
+    const share = calculatePartyVoteShare(
+      (voting as Record<string, number>).democrat,
+      (voting as Record<string, number>).republican
+    );
+    if (share !== undefined) return share - NATIONAL_DEM_VOTE_SHARE["16"];
+  }
+  return undefined;
+}
+
+export const getAvailableElectionYears = (
+  staticMetadata?: IStaticMetadata
+): readonly string[] => {
+  const years = new Set<string>();
+  for (const file of staticMetadata?.voting || []) {
+    const { year } = parseVotingId(file.id);
+    if (year) years.add(year);
+  }
+  return Array.from(years).sort();
 };
 
-export const has20Election = (staticMetadata?: IStaticMetadata) =>
-  staticMetadata?.voting?.some(file => file.id.endsWith("20")) || false;
+export const hasMultipleElections = (staticMetadata?: IStaticMetadata) =>
+  getAvailableElectionYears(staticMetadata).length > 1;
+
+// True if the region exposes any presidential voting columns for the given
+// 2-digit year (e.g. "20" or "24"). Replaces the old year-specific helpers.
+export const hasElectionYear = (staticMetadata: IStaticMetadata | undefined, year: string) =>
+  getAvailableElectionYears(staticMetadata).includes(year);
+
+// True if any presidential voting data exists at all.
+export const hasAnyElection = (staticMetadata?: IStaticMetadata) =>
+  getAvailableElectionYears(staticMetadata).length > 0;
 
 export function extractYear(voting: DemographicCounts, year?: ElectionYear): DemographicCounts {
   return year
@@ -307,6 +345,36 @@ export function officeName(code: string): string {
   return OFFICE_NAMES[code] || code;
 }
 
+const OFFICE_RANK_ORDER: readonly string[] = [
+  "", // Presidential
+  "USS", // US Senate
+  "GOV", // Governor
+  "HAL", // House At-Large
+  "LTG", // Lt. Governor
+  "ATG", // Atty General
+  "SOS", // Sec. of State
+  "TRE", // Treasurer
+  "AUD", // Auditor
+  "INS", // Insurance
+  "AGR", // Agriculture
+  "LND", // Land
+  "LAB", // Labor
+  "SPI", // Superintendent
+  "PSC", // Public Service
+  "PUC", // Pub. Utilities
+  "COC", // Corp. Comm.
+  "SAC", // Sup. Court
+  "SSC", // Sup. Court
+  "SCC", // Sup. Court
+  "COU", // County
+  "DEL" // Delegate
+];
+
+export function officeRank(code: string): number {
+  const idx = OFFICE_RANK_ORDER.indexOf(code);
+  return idx === -1 ? OFFICE_RANK_ORDER.length : idx;
+}
+
 export function extractOffice(
   voting: DemographicCounts,
   office: string
@@ -337,7 +405,7 @@ export function parseVotingId(id: string): {
     office = "";
     rest = id;
   }
-  const yearMatch = rest.match(/(16|18|20)$/);
+  const yearMatch = rest.match(/(\d{2})$/);
   const year = yearMatch ? yearMatch[1] : "";
   const party = yearMatch ? rest.slice(0, -2) : rest;
   return { office, party, year };
@@ -357,10 +425,10 @@ export function getOfficeYearCombos(
       combos.push({ office, year });
     }
   }
-  // Sort: presidential first, then alphabetically by office name, then by year
+  // Sort by office rank (presidential, senate, governor, ...), then year
   combos.sort((a, b) => {
-    if (a.office === "" && b.office !== "") return -1;
-    if (a.office !== "" && b.office === "") return 1;
+    const rankCompare = officeRank(a.office) - officeRank(b.office);
+    if (rankCompare !== 0) return rankCompare;
     const nameCompare = officeName(a.office).localeCompare(officeName(b.office));
     if (nameCompare !== 0) return nameCompare;
     return a.year.localeCompare(b.year);

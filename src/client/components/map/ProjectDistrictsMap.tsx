@@ -2,8 +2,8 @@ import { Box, Spinner, ThemeUIStyleObject } from "theme-ui";
 import maplibregl from "maplibre-gl";
 import React, { useEffect, useRef, useState } from "react";
 
-import { IStaticMetadata, ProjectNest } from "../../../shared/entities";
-import { DistrictGeoJSON, SimplifiedDistrictsGeoJSON } from "../../types";
+import { IStaticMetadata, ProjectNest, ThumbnailGeoJSON } from "../../../shared/entities";
+import { DistrictGeoJSON } from "../../types";
 import { getDistrictColor } from "../../constants/colors";
 import { fetchMemoizedStateBbox } from "../../api";
 
@@ -40,10 +40,7 @@ const ProjectDistrictsMap = ({
       setBounds([...bboxData]);
     });
 
-  // TODO #179 - the districts property can't be defined in the shared/entities.d.ts right now
-  const districts: SimplifiedDistrictsGeoJSON | undefined =
-    // @ts-ignore
-    project.simplifiedDistricts;
+  const districts: ThumbnailGeoJSON | undefined = project.thumbnail;
 
   useEffect(() => {
     if (mapRef.current === null || bounds === null) {

@@ -78,11 +78,62 @@ export async function readShapefile(shpPath: string, dbfPath?: string): Promise<
   return features;
 }
 
-export function findFileInDir(dir: string, extension: string): string {
-  const files = readdirSync(dir) as string[];
-  const found = files.find((f: string) => f.endsWith(extension));
-  if (!found) throw new Error(`No ${extension} file found in ${dir}`);
-  return join(dir, found);
+// RDH shapefile zips often bundle multiple variants of the same state's data,
+// one per office (e.g. `_cong_prec`, `_sldl_prec`, `_sldu_prec`, `_all_prec`).
+// We want the "all offices" superset. These are tried in order; the first
+// substring that matches a candidate path wins.
+export const SHAPEFILE_PREFERENCES: readonly string[] = [
+  "_all_prec",
+  "_no_splits_prec",
+  "_all_pber",
+  "_all_tx_vtd",
+  "_st_prec",
+  "_st_"
+];
+
+// Recursive walk. Skips dotfiles and the __MACOSX directory that zip tools
+// sometimes leave behind. If `preferences` is supplied, matches whose path
+// contains an earlier preference substring win over later ones; otherwise the
+// first file found in depth-first order is returned.
+export function findFileInDir(
+  dir: string,
+  extension: string,
+  preferences?: readonly string[]
+): string {
+  const matches: string[] = [];
+  function walk(d: string) {
+    for (const entry of readdirSync(d, { withFileTypes: true })) {
+      if (entry.name.startsWith(".") || entry.name === "__MACOSX") continue;
+      const full = join(d, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.toLowerCase().endsWith(extension.toLowerCase())) matches.push(full);
+    }
+  }
+  walk(dir);
+  if (matches.length === 0) throw new Error(`No ${extension} file found in ${dir}`);
+  if (preferences && preferences.length > 0) {
+    for (const pref of preferences) {
+      const lowered = pref.toLowerCase();
+      const hit = matches.find(m => m.toLowerCase().includes(lowered));
+      if (hit) return hit;
+    }
+  }
+  return matches[0];
+}
+
+// Locate a shapefile triplet (shp/dbf/prj) in an extracted zip. The dbf and
+// prj are resolved as siblings of the chosen shp, which is important for RDH
+// zips where each office-specific sub-shapefile lives in its own subdirectory
+// alongside its own dbf/prj.
+export function findShapefile(
+  dir: string,
+  preferences: readonly string[] = SHAPEFILE_PREFERENCES
+): { readonly shpPath: string; readonly dbfPath: string; readonly prjPath?: string } {
+  const shpPath = findFileInDir(dir, ".shp", preferences);
+  const stem = shpPath.replace(/\.shp$/i, "");
+  const dbfPath = existsSync(`${stem}.dbf`) ? `${stem}.dbf` : findFileInDir(dir, ".dbf", preferences);
+  const prjPath = existsSync(`${stem}.prj`) ? `${stem}.prj` : undefined;
+  return { shpPath, dbfPath, prjPath };
 }
 
 // Extract vote columns grouped by office code, also detect election year

@@ -91,13 +91,13 @@ with open('$CSV_FILE') as f:
       # Download from S3
       echo "  [$state_abbr] Downloading input.geojson from S3..."
       S3_PREFIX="s3://${S3_BUCKET}/regions/US/${state_abbr}/"
-      LATEST_VERSION=$(aws s3 ls "$S3_PREFIX" | tail -1 | awk '{print $2}')
+      LATEST_VERSION=$(AWS_PROFILE=district-builder aws s3 ls "$S3_PREFIX" | tail -1 | awk '{print $2}')
       if [[ -z "$LATEST_VERSION" ]]; then
         echo "  [$state_abbr] ERROR: No data found on S3 at $S3_PREFIX"
         return 1
       fi
       S3_GEOJSON="${S3_PREFIX}${LATEST_VERSION}input.geojson"
-      aws s3 cp "$S3_GEOJSON" "$GEOJSON_HOST" || {
+      AWS_PROFILE=district-builder aws s3 cp "$S3_GEOJSON" "$GEOJSON_HOST" || {
         echo "  [$state_abbr] ERROR: Failed to download $S3_GEOJSON"
         return 1
       }
@@ -153,6 +153,19 @@ for i in range(start, len(chunk)):
     BIG_ARG="-b"
   fi
 
+  # Find the existing S3 version for --inputS3Dir
+  S3_PREFIX="s3://${S3_BUCKET}/regions/US/${state_abbr}/"
+  INPUT_S3_DIR_FLAG=""
+  # LATEST_VERSION may already be set from the download step above; if not, look it up
+  if [[ -z "$LATEST_VERSION" ]]; then
+    LATEST_VERSION=$(AWS_PROFILE=district-builder aws s3 ls "$S3_PREFIX" | tail -1 | awk '{print $2}')
+  fi
+  if [[ -n "$LATEST_VERSION" ]]; then
+    INPUT_S3_DIR_FLAG="--inputS3Dir ${S3_PREFIX}${LATEST_VERSION}"
+  else
+    echo "  [$state_abbr] WARNING: No existing S3 version found, proceeding without --inputS3Dir"
+  fi
+
   # Run process-geojson
   echo "  [$state_abbr] Running process-geojson..."
   mkdir -p "$DEV_DATA/output/${state_abbr}"
@@ -168,21 +181,16 @@ for i in range(start, len(chunk)):
     -q "$quantization" \
     -t "$max_tile_bytes" \
     $BIG_ARG \
+    $INPUT_S3_DIR_FLAG \
     -o "dev-data/output/${state_abbr}"
 
-  # Publish/update region
-  echo "  [$state_abbr] Publishing region..."
+  # Update region
+  echo "  [$state_abbr] Updating region..."
   S3_URI="s3://${S3_BUCKET}/regions/US/${state_abbr}/$(date -u +%Y-%m-%dT%H:%M:%S.000Z)/"
-  if ! ./scripts/manage publish-region \
-    -b "$S3_BUCKET" \
-    "dev-data/output/${state_abbr}" US "$state_abbr" "$state_name" 2>&1; then
-    echo "  [$state_abbr] Region exists, updating in-place..."
-    ./scripts/manage update-region "dev-data/output/${state_abbr}" "$S3_URI"
-    # Update the DB record to point to the new S3 path
-    docker compose exec -T database psql -U districtbuilder -c \
-      "UPDATE region_config SET s3_uri = '${S3_URI}', version = '$(date -u +%Y-%m-%dT%H:%M:%S.000Z)' WHERE region_code = '${state_abbr}';" \
-      > /dev/null 2>&1 || echo "  [$state_abbr] WARNING: Could not update DB record"
-  fi
+  ./scripts/manage update-region "dev-data/output/${state_abbr}" "$S3_URI"
+  docker compose exec -T database psql -U districtbuilder -c \
+    "UPDATE region_config SET s3_uri = '${S3_URI}', version = '$(date -u +%Y-%m-%dT%H:%M:%S.000Z)' WHERE region_code = '${state_abbr}';" \
+    > /dev/null 2>&1 || echo "  [$state_abbr] WARNING: Could not update DB record"
 
   # Cleanup output to save disk (keep the downloaded GeoJSON for potential re-runs)
   echo "  [$state_abbr] Cleaning up output..."

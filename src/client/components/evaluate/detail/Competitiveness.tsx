@@ -102,7 +102,7 @@ const CompetitivenessMetricDetail = ({
     setPlanScoreLoaded("pending");
     project &&
       geojson &&
-      checkPlanScoreAPI(project)
+      checkPlanScoreAPI(project, geojson)
         .then(updatedProject => {
           store.dispatch(projectFetchSuccess({ project: updatedProject, geojson }));
         })

@@ -23,6 +23,8 @@ for k, v in row.items():
 echo ""
 echo "=========================================="
 echo "Processing $state_abbr ($state_name)"
+echo "  2024: ${vest_2024:-none} (${precinct_field_2024:-n/a})"
+echo "  2022: ${vest_2022:-none} (${precinct_field_2022:-n/a})"
 echo "  2020: $vest_2020 ($precinct_field_2020)"
 echo "  2018: ${vest_2018:-none} (${precinct_field_2018:-n/a})"
 echo "  2016: ${vest_2016:-none} (${precinct_field_2016:-n/a})"
@@ -35,19 +37,25 @@ GEOJSON_HOST="$DEV_DATA/staging/${state_abbr}.geojson"
 if [[ -f "$GEOJSON_HOST" ]]; then
   echo "  [$state_abbr] GeoJSON already exists, skipping prepare-dev-data"
 else
-  echo "  [$state_abbr] Copying VEST zips..."
+  echo "  [$state_abbr] Copying election zips..."
   cp "$DATA_DIR/$vest_2020" "$DEV_DATA/staging/"
   [[ -n "$vest_2018" ]] && cp "$DATA_DIR/$vest_2018" "$DEV_DATA/staging/"
   [[ -n "$vest_2016" ]] && cp "$DATA_DIR/$vest_2016" "$DEV_DATA/staging/"
+  [[ -n "$vest_2022" ]] && cp "$DATA_DIR/$vest_2022" "$DEV_DATA/staging/"
+  [[ -n "$vest_2024" ]] && cp "$DATA_DIR/$vest_2024" "$DEV_DATA/staging/"
 
   ADDITIONAL=""
-  if [[ -n "$vest_2016" && -n "$precinct_field_2016" && "$precinct_field_2016" != "UNKNOWN" ]]; then
-    ADDITIONAL="${precinct_field_2016}:dev-data/staging/${vest_2016}"
-  fi
-  if [[ -n "$vest_2018" && -n "$precinct_field_2018" && "$precinct_field_2018" != "UNKNOWN" ]]; then
-    if [[ -n "$ADDITIONAL" ]]; then ADDITIONAL="${ADDITIONAL},"; fi
-    ADDITIONAL="${ADDITIONAL}${precinct_field_2018}:dev-data/staging/${vest_2018}"
-  fi
+  append_year() {
+    local zip=$1 field=$2
+    if [[ -n "$zip" && -n "$field" && "$field" != "UNKNOWN" ]]; then
+      if [[ -n "$ADDITIONAL" ]]; then ADDITIONAL="${ADDITIONAL},"; fi
+      ADDITIONAL="${ADDITIONAL}${field}:dev-data/staging/${zip}"
+    fi
+  }
+  append_year "$vest_2016" "$precinct_field_2016"
+  append_year "$vest_2018" "$precinct_field_2018"
+  append_year "$vest_2022" "$precinct_field_2022"
+  append_year "$vest_2024" "$precinct_field_2024"
 
   echo "  [$state_abbr] Running prepare-dev-data..."
   cd "$PROJECT_DIR"
@@ -68,6 +76,8 @@ else
   rm -f "$DEV_DATA/staging/$vest_2020"
   [[ -n "$vest_2018" ]] && rm -f "$DEV_DATA/staging/$vest_2018"
   [[ -n "$vest_2016" ]] && rm -f "$DEV_DATA/staging/$vest_2016"
+  [[ -n "$vest_2022" ]] && rm -f "$DEV_DATA/staging/$vest_2022"
+  [[ -n "$vest_2024" ]] && rm -f "$DEV_DATA/staging/$vest_2024"
 fi
 
 # Step 2: Run process-geojson
@@ -79,13 +89,26 @@ if [[ "$big_flag" == "true" ]]; then
   BIG_ARG="-b"
 fi
 
+S3_BUCKET="districtbuilder-dev-238046523378"
+S3_PREFIX="s3://${S3_BUCKET}/regions/US/${state_abbr}/"
+LATEST_VERSION=$(AWS_PROFILE=district-builder aws s3 ls "$S3_PREFIX" | tail -1 | awk '{print $2}')
+INPUT_S3_DIR_FLAG=""
+if [[ -n "$LATEST_VERSION" ]]; then
+  INPUT_S3_DIR_FLAG="--inputS3Dir ${S3_PREFIX}${LATEST_VERSION}"
+else
+  echo "  [$state_abbr] WARNING: No existing S3 version found, proceeding without --inputS3Dir"
+fi
+
 VOTING_COLS=$(cd "$PROJECT_DIR" && python3 -c "
-import json
+import json, re
 with open('$GEOJSON_REL') as f:
   data = json.load(f)
 if data['features']:
   props = data['features'][0]['properties']
-  vote_cols = [k for k in props if any(k.endswith(p) for p in ['democrat16','republican16','other16','democrat18','republican18','other18','democrat20','republican20','other20'])]
+  # Matches bare (e.g. democrat20) and office-prefixed (e.g. USS_democrat20)
+  # voting columns for any 2-digit year.
+  pat = re.compile(r'(?:^|_)(?:democrat|republican|other)\d{2}\$')
+  vote_cols = [k for k in props if pat.search(k)]
   print(','.join(sorted(vote_cols)))
 " 2>/dev/null || echo "")
 VOTING_FLAGS=""
@@ -106,22 +129,16 @@ cd "$PROJECT_DIR"
   -q "$quantization" \
   -t "$max_tile_bytes" \
   $BIG_ARG \
+  $INPUT_S3_DIR_FLAG \
   -o "dev-data/output/${state_abbr}"
 
-# Step 3: Publish region
-echo "  [$state_abbr] Publishing region..."
-S3_BUCKET="districtbuilder-dev-238046523378"
+# Step 3: Update region
+echo "  [$state_abbr] Updating region..."
 S3_URI="s3://${S3_BUCKET}/regions/US/${state_abbr}/$(date -u +%Y-%m-%dT%H:%M:%S.000Z)/"
-if ! ./scripts/manage publish-region \
-  -b "$S3_BUCKET" \
-  "dev-data/output/${state_abbr}" US "$state_abbr" "$state_name" 2>&1; then
-  echo "  [$state_abbr] Region exists, updating in-place..."
-  ./scripts/manage update-region "dev-data/output/${state_abbr}" "$S3_URI"
-  # update-region only uploads files, so update the DB record too
-  docker compose exec -T database psql -U districtbuilder -c \
-    "UPDATE region_config SET s3_uri = '${S3_URI}', version = '$(date -u +%Y-%m-%dT%H:%M:%S.000Z)' WHERE region_code = '${state_abbr}';" \
-    > /dev/null 2>&1 || echo "  [$state_abbr] WARNING: Could not update DB record"
-fi
+./scripts/manage update-region "dev-data/output/${state_abbr}" "$S3_URI"
+docker compose exec -T database psql -U districtbuilder -c \
+  "UPDATE region_config SET s3_uri = '${S3_URI}', version = '$(date -u +%Y-%m-%dT%H:%M:%S.000Z)' WHERE region_code = '${state_abbr}';" \
+  > /dev/null 2>&1 || echo "  [$state_abbr] WARNING: Could not update DB record"
 
 # Step 4: Update CSV status (with file lock for concurrent access)
 echo "  [$state_abbr] Updating CSV status..."

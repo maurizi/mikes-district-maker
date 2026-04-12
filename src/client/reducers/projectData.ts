@@ -79,6 +79,7 @@ import {
   showResourceFailedToast
 } from "../functions";
 import {
+  checkPlanScoreAPI,
   convertGeoJsonToShapefile,
   fetchProjectData,
   fetchProjectReferenceLayers,
@@ -562,20 +563,37 @@ const projectDataReducer = (
     }
     case getType(localMergeComplete): {
       if ("resource" in state.projectData) {
-        const geojson = action.payload;
+        const { districts, thumbnail, isComplete } = action.payload;
         const { project } = state.projectData.resource;
+        // Stamp metadata onto the in-memory districts. Not persisted — only
+        // exists so exported .geojson files keep the shape downstream
+        // consumers rely on.
+        const geojson: DistrictsGeoJSON = {
+          ...districts,
+          metadata: {
+            completed: isComplete,
+            creator: { id: project.user.id, name: project.user.name },
+            regionConfig: {
+              id: project.regionConfig.id,
+              name: project.regionConfig.name,
+              countryCode: project.regionConfig.countryCode,
+              regionCode: project.regionConfig.regionCode,
+              s3URI: project.regionConfig.s3URI
+            },
+            chamber: project.chamber
+          }
+        };
         const findCoords = getFindCoords(state.findTool, geojson);
-        // Fire-and-forget: persist GeoJSON to server (server simplifies for mini-map views).
-        // Skip if the server already has simplified districts (i.e. this is just an initial load).
-        if (!project.simplifiedDistricts) {
-          void patchProject(project.id, { districts: geojson } as any);
-        }
-        return updateCurrentState(
+        // Only persist the thumbnail when this merge was triggered by a save
+        // the user initiated (saving === "saving") — we don't want to re-POST
+        // identical bytes every time the user opens a project.
+        const wasTriggeredBySave = state.saving === "saving";
+        const nextState = updateCurrentState(
           {
             ...state,
             saving: "saved",
             projectData: {
-              resource: { project, geojson }
+              resource: { project: { ...project, isComplete, thumbnail }, geojson }
             },
             findIndex:
               state.findIndex !== undefined && findCoords && findCoords.length !== 0
@@ -586,6 +604,12 @@ const projectDataReducer = (
             districtsDefinition: project.districtsDefinition
           }
         );
+        return wasTriggeredBySave
+          ? loop(
+              nextState,
+              Cmd.run(() => patchProject(project.id, { thumbnail, isComplete }))
+            )
+          : nextState;
       }
       return state;
     }
@@ -817,7 +841,16 @@ const projectDataReducer = (
         return state;
       }
     }
-    case getType(projectSubmitSuccess):
+    case getType(projectSubmitSuccess): {
+      // The server used to fire off a PlanScore upload when a contest map was
+      // submitted with no existing planscoreUrl; that now lives here since
+      // the browser holds the districts geojson.
+      const { project: submitted, geojson: submittedGeojson } = action.payload;
+      if (!submitted.planscoreUrl) {
+        void checkPlanScoreAPI(submitted, submittedGeojson).catch(() => {
+          /* polled result surfaces in the UI via fetchProject; swallow here */
+        });
+      }
       return loop(
         {
           ...state,
@@ -833,6 +866,7 @@ const projectDataReducer = (
             ])
           : Cmd.action(clearSelectedGeounits(true))
       );
+    }
     default:
       return state as never;
   }

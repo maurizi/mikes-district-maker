@@ -14,7 +14,18 @@ DEV_DATA="$PROJECT_DIR/dev-data"
 # Parse args
 FILTER_STATE=""
 DRY_RUN=false
-MAX_PARALLEL=2
+MAX_PARALLEL=3
+
+# Largest states (by staging geojson size) — run one-at-a-time in phase 2
+BIG_STATES=(TX CA NC PA FL MO IL)
+
+is_big_state() {
+  local s="$1"
+  for big in "${BIG_STATES[@]}"; do
+    [[ "$s" == "$big" ]] && return 0
+  done
+  return 1
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -42,8 +53,9 @@ with open('$CSV_FILE') as f:
         print(json.dumps(row))
 " > "$WORK_FILE"
 
-# Collect rows to process
-ROWS_TO_PROCESS=()
+# Collect rows to process, split into small (parallel) and big (sequential)
+SMALL_ROWS=()
+BIG_ROWS=()
 NUM_ROWS=$(wc -l < "$WORK_FILE")
 for i in $(seq 1 "$NUM_ROWS"); do
   ROW=$(sed -n "${i}p" "$WORK_FILE")
@@ -67,12 +79,22 @@ for k in ['state_abbr', 'status', 'vest_2020', 'precinct_field_2020']:
     continue
   fi
 
+  if is_big_state "$state_abbr"; then
+    GROUP="big"
+  else
+    GROUP="small"
+  fi
+
   if $DRY_RUN; then
-    echo "[DRY RUN] Would process $state_abbr"
+    echo "[DRY RUN] Would process $state_abbr ($GROUP)"
     continue
   fi
 
-  ROWS_TO_PROCESS+=("$ROW")
+  if [[ "$GROUP" == "big" ]]; then
+    BIG_ROWS+=("$ROW")
+  else
+    SMALL_ROWS+=("$ROW")
+  fi
 done
 
 rm -f "$WORK_FILE"
@@ -83,7 +105,8 @@ if $DRY_RUN; then
 fi
 
 echo ""
-echo "Processing ${#ROWS_TO_PROCESS[@]} states with max $MAX_PARALLEL parallel jobs"
+echo "Phase 1: ${#SMALL_ROWS[@]} small states with max $MAX_PARALLEL parallel jobs"
+echo "Phase 2: ${#BIG_ROWS[@]} big states one-at-a-time (${BIG_STATES[*]})"
 echo ""
 
 # Process with job pool
@@ -111,7 +134,11 @@ cleanup_finished_jobs() {
   RUNNING_STATES=("${NEW_STATES[@]}")
 }
 
-for ROW in "${ROWS_TO_PROCESS[@]}"; do
+# Phase 1: small states in parallel
+if [[ ${#SMALL_ROWS[@]} -gt 0 ]]; then
+  echo "=== Phase 1: small states (parallel x$MAX_PARALLEL) ==="
+fi
+for ROW in "${SMALL_ROWS[@]}"; do
   # Always clean up finished jobs before checking capacity
   cleanup_finished_jobs
 
@@ -131,13 +158,31 @@ for ROW in "${ROWS_TO_PROCESS[@]}"; do
   RUNNING_STATES+=("$STATE")
 done
 
-# Wait for all remaining jobs
+# Wait for all phase 1 jobs to drain
 for idx in "${!RUNNING_PIDS[@]}"; do
   wait "${RUNNING_PIDS[$idx]}" 2>/dev/null
   EXIT_CODE=$?
   if [[ $EXIT_CODE -ne 0 ]]; then
     echo "FAILED: ${RUNNING_STATES[$idx]} (exit $EXIT_CODE)"
     FAILED_STATES+=("${RUNNING_STATES[$idx]}")
+  fi
+done
+RUNNING_PIDS=()
+RUNNING_STATES=()
+
+# Phase 2: big states one-at-a-time
+if [[ ${#BIG_ROWS[@]} -gt 0 ]]; then
+  echo ""
+  echo "=== Phase 2: big states (sequential) ==="
+fi
+for ROW in "${BIG_ROWS[@]}"; do
+  STATE=$(echo "$ROW" | python3 -c "import json,sys; print(json.loads(sys.stdin.readline())['state_abbr'])")
+  echo "Starting $STATE (sequential)"
+  "$SCRIPT_DIR/process-state.sh" "$ROW" > "$DEV_DATA/${STATE}.log" 2>&1
+  EXIT_CODE=$?
+  if [[ $EXIT_CODE -ne 0 ]]; then
+    echo "FAILED: $STATE (exit $EXIT_CODE)"
+    FAILED_STATES+=("$STATE")
   fi
 done
 

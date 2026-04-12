@@ -5,13 +5,19 @@ import {
   IsEnum,
   IsNotEmpty,
   IsNumber,
+  IsObject,
   IsOptional,
+  IsString,
   Max,
   Min
 } from "class-validator";
 
 import { ProjectVisibility } from "../../../../shared/constants";
-import { DistrictsDefinition, UpdateProjectData } from "../../../../shared/entities";
+import {
+  DistrictsDefinition,
+  ThumbnailGeoJSON,
+  UpdateProjectData
+} from "../../../../shared/entities";
 
 export class UpdateProjectDto implements UpdateProjectData {
   @IsNotEmpty({ message: "Please enter a name for your project" })
@@ -56,6 +62,15 @@ export class UpdateProjectDto implements UpdateProjectData {
   @IsOptional()
   readonly archived?: boolean;
 
+  @IsBoolean()
   @IsOptional()
-  readonly districts?: any;
+  readonly isComplete?: boolean;
+
+  @IsObject()
+  @IsOptional()
+  readonly thumbnail?: ThumbnailGeoJSON;
+
+  @IsString()
+  @IsOptional()
+  readonly planscoreUrl?: string;
 }

@@ -66,8 +66,10 @@ export class ProjectTemplatesService extends TypeOrmCrudService<ProjectTemplate>
       .addSelect("regionConfig.s3URI", "regionS3URI")
       .addSelect("chamber.name", "chamberName")
       .addSelect(
-        // Extract just the geojson properties, so we avoid querying the (much larger) geometries
-        `jsonb_path_query_array("projects"."districts", '$.features[*].properties')`,
+        // Extract just the geojson properties, so we avoid querying the (much larger) geometries.
+        // The client-written thumbnail preserves feature properties (contiguity, compactness,
+        // demographics, voting) for exactly this purpose.
+        `jsonb_path_query_array("projects"."thumbnail", '$.features[*].properties')`,
         "districtProperties"
       )
       .orderBy("projects.name");
@@ -121,7 +123,7 @@ export class ProjectTemplatesService extends TypeOrmCrudService<ProjectTemplate>
         "project.isFeatured",
         "project.id",
         "project.updatedDt",
-        "project.simplifiedDistricts",
+        "project.thumbnail",
         "user.name"
       ])
       .orderBy("project.name")

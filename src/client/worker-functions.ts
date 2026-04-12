@@ -8,7 +8,8 @@ import {
   GeoUnits,
   IProject,
   IStaticMetadata,
-  S3URI
+  S3URI,
+  ThumbnailGeoJSON
 } from "../shared/entities";
 import { DistrictsGeoJSON, StaticCounts } from "../client/types";
 import { WorkerFunctions } from "./worker";
@@ -34,7 +35,11 @@ export const mergeDistricts = memoize(
     regionURI: S3URI,
     districtsDefinition: DistrictsDefinition,
     numberOfDistricts: number
-  ): Promise<DistrictsGeoJSON> => {
+  ): Promise<{
+    readonly districts: DistrictsGeoJSON;
+    readonly thumbnail: ThumbnailGeoJSON;
+    readonly isComplete: boolean;
+  }> => {
     return worker.mergeDistricts(staticMetadata, regionURI, districtsDefinition, numberOfDistricts);
   },
   {

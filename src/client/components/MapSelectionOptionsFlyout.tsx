@@ -1,4 +1,5 @@
-import { Box, Checkbox, Label, Radio, Heading, ThemeUIStyleObject } from "theme-ui";
+import { useState } from "react";
+import { Checkbox, Flex, Label, Radio, Select, Heading, ThemeUIStyleObject } from "theme-ui";
 import { Button as MenuButton, Wrapper, Menu } from "react-aria-menubutton";
 import { style as menuStyle } from "./MenuButton.styles";
 import store from "../store";
@@ -47,6 +48,27 @@ const style: Record<string, ThemeUIStyleObject> = {
     "> div": {
       minWidth: "32px"
     }
+  },
+  electionRow: {
+    alignItems: "center",
+    gap: 2,
+    mt: 1,
+    mb: 1
+  },
+  yearRadio: {
+    textTransform: "none",
+    color: "heading",
+    lineHeight: "normal",
+    fontWeight: "medium",
+    width: "auto",
+    "> div": {
+      minWidth: "24px"
+    }
+  },
+  officeSelect: {
+    flex: "1 1 auto",
+    minWidth: "140px",
+    py: 1
   }
 };
 
@@ -68,6 +90,20 @@ const MapSelectionOptionsFlyout = ({
   const votingIds = metadata?.voting?.map(file => file.id) || [];
   const officeYearCombos = getOfficeYearCombos(votingIds);
   const hasElections = officeYearCombos.length > 0;
+  const availableYears = Array.from(new Set(officeYearCombos.map(c => c.year))).sort();
+  const officesByYear = (year: string) =>
+    officeYearCombos.filter(c => c.year === year).map(c => c.office);
+  // Remember the office picked per year so switching back restores the prior choice
+  const [officeByYear, setOfficeByYear] = useState<Record<string, string>>(() => ({
+    [electionYear]: selectedOffice
+  }));
+  const officeForRow = (year: string): string => {
+    const offices = officesByYear(year);
+    if (year === electionYear && offices.includes(selectedOffice)) return selectedOffice;
+    const remembered = officeByYear[year];
+    if (remembered && offices.includes(remembered)) return remembered;
+    return offices[0] || "";
+  };
   const populations =
     metadata?.demographicsGroups?.flatMap(group =>
       group.total && Object.keys(POPULATION_LABELS).includes(group.total) ? [group.total] : []
@@ -80,7 +116,7 @@ const MapSelectionOptionsFlyout = ({
           <Icon name="cog" />
         </MenuButton>
       </Tooltip>
-      <Menu sx={{ ...menuStyle.menu, p: 3, maxHeight: "400px", overflowY: "auto" }}>
+      <Menu sx={{ ...menuStyle.menu, p: 3, maxHeight: "400px", overflowY: "auto", width: "270px" }}>
         <ul sx={menuStyle.menuList}>
           <li sx={style.menuItem}>
             <Heading as="h4">Drawing</Heading>
@@ -97,25 +133,41 @@ const MapSelectionOptionsFlyout = ({
           {hasElections && (
             <li sx={style.menuItem}>
               <Heading as="h4">Tooltip</Heading>
-              <legend>Election</legend>
-              {officeYearCombos.map(({ office, year }) => {
-                const radioValue = `${office}|${year}`;
-                const isSelected = selectedOffice === office && electionYear === year;
-                const yearFull = year ? `20${year}` : "";
-                const label = `${officeName(office)}${yearFull ? ` ${yearFull}` : ""}`;
+              <legend>Selected office</legend>
+              {availableYears.map(year => {
+                const isSelectedYear = electionYear === year;
+                const rowOffice = officeForRow(year);
                 return (
-                  <Label sx={style.inputLabel} key={radioValue}>
-                    <Radio
-                      name="map-selection-election"
-                      value={radioValue}
-                      checked={isSelected}
-                      onChange={() => {
-                        store.dispatch(setElectionYear(year));
-                        store.dispatch(setSelectedOffice(office));
+                  <Flex sx={style.electionRow} key={year}>
+                    <Label sx={style.yearRadio}>
+                      <Radio
+                        name="map-selection-election-year"
+                        value={year}
+                        checked={isSelectedYear}
+                        onChange={() => {
+                          store.dispatch(setElectionYear(year));
+                          store.dispatch(setSelectedOffice(rowOffice));
+                        }}
+                      />
+                      {`20${year}`}
+                    </Label>
+                    <Select
+                      value={rowOffice}
+                      disabled={!isSelectedYear}
+                      onChange={e => {
+                        const newOffice = e.target.value;
+                        setOfficeByYear(prev => ({ ...prev, [year]: newOffice }));
+                        store.dispatch(setSelectedOffice(newOffice));
                       }}
-                    />
-                    <Box>{label}</Box>
-                  </Label>
+                      sx={style.officeSelect}
+                    >
+                      {officesByYear(year).map(office => (
+                        <option key={office} value={office}>
+                          {officeName(office)}
+                        </option>
+                      ))}
+                    </Select>
+                  </Flex>
                 );
               })}
             </li>

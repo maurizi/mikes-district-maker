@@ -7,6 +7,7 @@ import {
   LockedDistricts,
   ProjectId,
   ReferenceLayerId,
+  ThumbnailGeoJSON,
   UpdateReferenceLayer
 } from "../../shared/entities";
 import { DistrictsGeoJSON, DynamicProjectData, StaticProjectData } from "../types";
@@ -124,7 +125,11 @@ export const exportGeoJsonFailure = createAction("Export project GeoJSON failure
 export const exportShp = createAction("Export project Shapefile")<IProject>();
 export const exportShpFailure = createAction("Export project Shapefile failure")<string>();
 
-export const localMergeComplete = createAction("Local merge complete")<DistrictsGeoJSON>();
+export const localMergeComplete = createAction("Local merge complete")<{
+  readonly districts: DistrictsGeoJSON;
+  readonly thumbnail: ThumbnailGeoJSON;
+  readonly isComplete: boolean;
+}>();
 export const localMergeFailure = createAction("Local merge failure")();
 
 export const projectSubmit = createAction("Project submit")();

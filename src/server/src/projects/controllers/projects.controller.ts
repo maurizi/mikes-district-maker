@@ -31,12 +31,9 @@ import {
 } from "@dataui/crud";
 import stringify from "csv-stringify/lib/sync";
 import { Response } from "express";
-import FormData from "form-data";
 import { convert } from "geojson2shp";
 import * as _ from "lodash";
-import { spawn, Thread, Worker } from "threads";
 
-import { SimplifyFunctions } from "../../simplify-worker";
 import isUUID from "validator/lib/isUUID";
 import { Pagination } from "nestjs-typeorm-paginate";
 
@@ -49,11 +46,11 @@ import {
 import { S3Client } from "@aws-sdk/client-s3";
 import {
   DistrictsDefinition,
+  DistrictsGeoJSON,
   GeoUnitHierarchy,
   IStaticMetadata,
   ProjectId,
-  PublicUserProperties,
-  UserId
+  PublicUserProperties
 } from "../../../../shared/entities";
 import { fetchCachedJson } from "../../common/functions";
 import { ProjectVisibility } from "../../../../shared/constants";
@@ -62,7 +59,7 @@ import { JwtAuthGuard, OptionalJwtAuthGuard } from "../../auth/guards/jwt-auth.g
 import { RegionConfig } from "../../region-configs/entities/region-config.entity";
 import { User } from "../../users/entities/user.entity";
 import { CreateProjectDto } from "../entities/create-project.dto";
-import { DistrictsGeoJSON, Project } from "../entities/project.entity";
+import { Project } from "../entities/project.entity";
 import { ProjectsService } from "../services/projects.service";
 import { OrganizationsService } from "../../organizations/services/organizations.service";
 
@@ -71,7 +68,6 @@ import { UsersService } from "../../users/services/users.service";
 import { UpdateProjectDto } from "../entities/update-project.dto";
 import { Errors } from "../../../../shared/types";
 import axios from "axios";
-import { Brackets } from "typeorm";
 import { getDemographicsMetricFields, getVotingMetricFields } from "../../../../shared/functions";
 import { ProjectTemplatesService } from "../../project-templates/services/project-templates.service";
 import { ProjectTemplate } from "../../project-templates/entities/project-template.entity";
@@ -116,7 +112,6 @@ function validateNumberOfMembers(
     }
   },
   query: {
-    exclude: ["districts"],
     join: {
       chamber: {
         eager: true
@@ -261,7 +256,7 @@ export class ProjectsController implements CrudController<Project> {
   async duplicate(@ParsedRequest() req: CrudRequest, @Param("id") id: ProjectId): Promise<Project> {
     const userId =
       typeof req.parsed.authPersist.userId === "string" ? req.parsed.authPersist.userId : undefined;
-    const project = await this.getProjectWithDistricts(id, userId);
+    const project = await this.getProject(req, id);
     const user = await this.usersService.findOne({ where: { id: userId } });
     if (!user) {
       throw new InternalServerErrorException(`User not found for authenticated user id ${userId}`);
@@ -277,13 +272,7 @@ export class ProjectsController implements CrudController<Project> {
       updatedDt: undefined,
       submittedDt: undefined,
       isFeatured: undefined,
-      // Overwrite the creator data from the original creator to match the new owner
-      districts: project.districts?.metadata?.creator
-        ? {
-            ...project.districts,
-            metadata: { ...project.districts.metadata, creator: { id: user.id, name: user.name } }
-          }
-        : project.districts
+      planscoreUrl: ""
     };
 
     try {
@@ -317,49 +306,6 @@ export class ProjectsController implements CrudController<Project> {
     });
     if (!project) {
       throw new NotFoundException(`Project ${projectId} not found`);
-    }
-    return project;
-  }
-
-  // Helper for obtaining a project for a given project request, throws exception if not found
-  async getProjectWithDistricts(id: ProjectId, userId?: UserId): Promise<Project> {
-    if (!isUUID(id)) {
-      throw new NotFoundException(`Project ${id} is not a valid UUID`);
-    }
-    // Not using 'getProject' because we need to select the 'districts' column
-    // Unauthenticated access is allowed for individual projects if they are
-    // visible or published, and not archived.
-    const qb = this.service.repository
-      .createQueryBuilder("project")
-      .leftJoinAndSelect("project.regionConfig", "regionConfig")
-      .leftJoinAndSelect("project.projectTemplate", "projectTemplate")
-      .leftJoinAndSelect("project.user", "user")
-      .leftJoinAndSelect("project.chamber", "chamber")
-      .where("project.id = :id", { id })
-      .andWhere("project.archived = false");
-
-    if (userId) {
-      qb.andWhere(
-        new Brackets(inner =>
-          inner
-            .where("project.visibility = :published", { published: ProjectVisibility.Published })
-            .orWhere("project.visibility = :visible", { visible: ProjectVisibility.Visible })
-            .orWhere("project.user_id = :userId", { userId })
-        )
-      );
-    } else {
-      qb.andWhere(
-        new Brackets(inner =>
-          inner
-            .where("project.visibility = :published", { published: ProjectVisibility.Published })
-            .orWhere("project.visibility = :visible", { visible: ProjectVisibility.Visible })
-        )
-      );
-    }
-
-    const project = await qb.getOne();
-    if (!project) {
-      throw new NotFoundException(`Project ${id} not found`);
     }
     return project;
   }
@@ -409,17 +355,6 @@ export class ProjectsController implements CrudController<Project> {
       }))
     };
     await convert(formattedGeojson, response, { layer: "districts" });
-  }
-
-  private async simplifyDistricts(districts: DistrictsGeoJSON): Promise<DistrictsGeoJSON> {
-    const worker = await spawn<SimplifyFunctions>(
-      new Worker("../../simplify-worker")
-    );
-    try {
-      return await worker.simplifyDistricts(districts);
-    } finally {
-      await Thread.terminate(worker);
-    }
   }
 
   @UseInterceptors(CrudRequestInterceptor)
@@ -511,95 +446,75 @@ export class ProjectsController implements CrudController<Project> {
       existingProject.visibility !== ProjectVisibility.Private
         ? existingProject.visibility
         : ProjectVisibility.Visible;
-    const project = await this.service.updateOne(req, { submittedDt: new Date(), visibility });
-    // Make sure submitted plans have a PlanScore report ready for judges to review
-    if (!project.planscoreUrl) {
-      this.triggerPlanScoreUpload(req, id);
-    }
-    return project;
+    // The client is responsible for kicking off the PlanScore upload after
+    // submit if planscoreUrl is still empty — it holds the districts geojson.
+    return this.service.updateOne(req, { submittedDt: new Date(), visibility });
   }
 
-  @UseInterceptors(CrudRequestInterceptor)
-  @UseGuards(OptionalJwtAuthGuard)
-  @Post(":id/plan-score")
-  async sendToPlanScoreAPI(
-    @ParsedRequest() req: CrudRequest,
+  // Thin proxy for PlanScore step 1 (GET /upload). The bearer token is held
+  // server-side; the response [s3Uri, formFields] is forwarded to the browser
+  // which then POSTs the geometry directly to PlanScore's S3 bucket.
+  @UseGuards(JwtAuthGuard)
+  @Get(":id/plan-score/upload-credentials")
+  async planScoreUploadCredentials(
     @Param("id") projectId: ProjectId
-  ): Promise<void> {
-    // First clear out the existing planscore URL
-    await this.service.updateOne(req, { planscoreUrl: "" });
-    this.triggerPlanScoreUpload(req, projectId);
-  }
-
-  triggerPlanScoreUpload(req: CrudRequest, projectId: ProjectId) {
-    const userId = req.parsed.authPersist.userId as string;
-    // The body of this function happens in a callback that we *don't* wait for
-    // The frontend will poll to find out when this is completed
-    void this.getProjectWithDistricts(projectId, userId).then(project => {
-      const uploadDistricts = async () => {
-        try {
-          const planscoreUrl = await this.uploadToPlanScore(project);
-          void this.service.updateOne(req, { planscoreUrl });
-        } catch (e) {
-          this.logger.error(`Error uploading to planscore for project '${projectId}': ${e}`);
-          void this.service.updateOne(req, { planscoreUrl: "error" });
-        }
-      };
-      project.districts && uploadDistricts();
-    });
-  }
-
-  async uploadToPlanScore(project: Project) {
-    const PLAN_SCORE_API_TOKEN = process.env.PLAN_SCORE_API_TOKEN || "";
-    const uploadResponse = await axios.get("https://api.planscore.org/upload/", {
-      headers: {
-        Authorization: `Bearer ${PLAN_SCORE_API_TOKEN}`
-      }
-    });
-    const [s3Uri, uploadData]: [string, Record<string, string>] = uploadResponse.data;
-
-    const form = new FormData();
-    Object.entries(uploadData).forEach(([key, val]) => {
-      form.append(key, val);
-    });
-    // If we don't remove the unassigned district, PlanScore will never complete processing
-    const geojson = { ...project.districts, features: project.districts?.features.slice(1) };
-    // Not nearly as easy to do a multi-part form file upload in Node as it is in the browser
-    //  - We need to use a module to emulate the browser native FormData
-    //  - axios doesn't integrate well with it, so we need to connect headers & length manually
-    form.append("file", Buffer.from(JSON.stringify(geojson)), {
-      contentType: "application/json",
-      filename: `${project.name}.geojson`
-    });
-    const s3Response = await axios.post(s3Uri, form, {
-      headers: {
-        ...form.getHeaders(),
-        "Content-Length": `${form.getLengthSync()}`
-      },
-      // API docs say to expect 302, but in practice I've seen 303, checking for either to be safe
-      validateStatus: (status: number) => status === 302 || status === 303,
-      maxRedirects: 0
-    });
-    const callbackLocation = s3Response.headers["location"];
-    const apiResponse = await axios.post(
-      callbackLocation,
-      {
-        description: project.name
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${PLAN_SCORE_API_TOKEN}`,
-          "Content-Type": "application/json"
-        }
-      }
-    );
-    const { index_url: indexUrl, plan_url: planscoreUrl } = apiResponse.data;
-    this.logger.debug(`PlanScore submitted, polling ${indexUrl}`);
-    if (typeof indexUrl !== "string" || typeof planscoreUrl !== "string") {
-      throw new Error("Unexpected response from PlanScore API");
+  ): Promise<[string, Record<string, string>]> {
+    if (!isUUID(projectId)) {
+      throw new NotFoundException(`Project ${projectId} is not a valid UUID`);
     }
-    await this.pollPlanScoreProgress(indexUrl);
-    return planscoreUrl;
+    const uploadResponse = await axios.get("https://api.planscore.org/upload/", {
+      headers: { Authorization: `Bearer ${process.env.PLAN_SCORE_API_TOKEN || ""}` }
+    });
+    return uploadResponse.data;
+  }
+
+  // Thin proxy for PlanScore step 3 (POST to the callback location returned by
+  // the S3 upload). Kicks off server-side polling and persists the final URL
+  // on the Project once PlanScore finishes; the browser polls /projects/:id
+  // just like before to discover completion.
+  @UseInterceptors(CrudRequestInterceptor)
+  @UseGuards(JwtAuthGuard)
+  @Post(":id/plan-score/finalize")
+  async planScoreFinalize(
+    @ParsedRequest() req: CrudRequest,
+    @Param("id") projectId: ProjectId,
+    @Body() body: { readonly callbackLocation: string; readonly description?: string }
+  ): Promise<void> {
+    if (!isUUID(projectId)) {
+      throw new NotFoundException(`Project ${projectId} is not a valid UUID`);
+    }
+    await this.service.updateOne(req, { planscoreUrl: "" });
+    void this.finalizeAndPoll(req, projectId, body.callbackLocation, body.description || "");
+  }
+
+  private async finalizeAndPoll(
+    req: CrudRequest,
+    projectId: ProjectId,
+    callbackLocation: string,
+    description: string
+  ) {
+    try {
+      const apiResponse = await axios.post(
+        callbackLocation,
+        { description },
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.PLAN_SCORE_API_TOKEN || ""}`,
+            "Content-Type": "application/json"
+          }
+        }
+      );
+      const { index_url: indexUrl, plan_url: planscoreUrl } = apiResponse.data;
+      if (typeof indexUrl !== "string" || typeof planscoreUrl !== "string") {
+        throw new Error("Unexpected response from PlanScore API");
+      }
+      this.logger.debug(`PlanScore submitted, polling ${indexUrl}`);
+      await this.pollPlanScoreProgress(indexUrl);
+      void this.service.updateOne(req, { planscoreUrl });
+    } catch (e) {
+      this.logger.error(`Error uploading to planscore for project '${projectId}': ${e}`);
+      void this.service.updateOne(req, { planscoreUrl: "error" });
+    }
   }
 
   async pollPlanScoreProgress(indexUrl: string, numTries = 1) {
@@ -648,7 +563,7 @@ export class ProjectsController implements CrudController<Project> {
   ) {
     // Start off with some validations that can't be handled easily at the DTO layer
     const userId = req.parsed.authPersist.userId as string;
-    const existingProject = await this.getProjectWithDistricts(id, userId);
+    const existingProject = await this.getProject(req, id);
     if (dto.lockedDistricts && existingProject.numberOfDistricts !== dto.lockedDistricts.length) {
       throw new BadRequestException({
         error: "Bad Request",
@@ -702,12 +617,6 @@ export class ProjectsController implements CrudController<Project> {
     const data = _.isEqual(_.pick(dataWithDefinitions, fields), _.pick(existingProject, fields))
       ? { ...dataWithDefinitions }
       : { ...dataWithDefinitions, updatedDt: new Date() };
-
-    // If client sent computed districts, simplify for mini-map views
-    if (dto.districts) {
-      const simplified = await this.simplifyDistricts(dto.districts);
-      Object.assign(data, { simplifiedDistricts: simplified });
-    }
 
     return this.service.updateOne(req, {
       ...data,

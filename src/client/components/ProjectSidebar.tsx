@@ -37,8 +37,9 @@ import {
   hasMultipleElections,
   calculatePartyVoteShare,
   computeDemographicSplit,
-  has16Election,
-  has20Election,
+  hasAnyElection,
+  getAvailableElectionYears,
+  parseVotingId,
   isMajorityMinority,
   getMajorityRaceDisplay,
   capitalizeFirstLetter,
@@ -280,12 +281,18 @@ const ProjectSidebar = ({
   readonly populationKey: GroupTotal;
 } & LoadingProps) => {
   const multElections = hasMultipleElections(staticMetadata);
-  const has2016Election = has16Election(staticMetadata);
-  const has2020Election = has20Election(staticMetadata);
-  const polLabel = multElections
-    ? "Cook Partisan Voting Index (2016 / 2020)"
-    : "Political Lean (2016)";
-  const hasElectionData = has2016Election || has2020Election;
+  const availableYears = getAvailableElectionYears(staticMetadata);
+  // PVI uses the two most recent presidential years when available,
+  // otherwise the single year we have.
+  const pviYears = availableYears.slice(-2);
+  const formatFullYear = (yy: string) => `20${yy}`;
+  const polLabel =
+    pviYears.length >= 2
+      ? `Cook Partisan Voting Index (${formatFullYear(pviYears[0])} / ${formatFullYear(pviYears[1])})`
+      : pviYears.length === 1
+      ? `Political Lean (${formatFullYear(pviYears[0])})`
+      : "Political Lean";
+  const hasElectionData = hasAnyElection(staticMetadata);
 
   const getTooltip = (id: string): string =>
     staticMetadata?.demographicsGroups?.find(
@@ -335,31 +342,26 @@ const ProjectSidebar = ({
   const coreDemographicHeaders = demographicHeaders.slice(0, coreLength);
   const extraDemographicHeaders = demographicHeaders.slice(coreLength).flat();
 
-  const electionText = {
-    dem16: "Dem. '16",
-    rep16: "Rep. '16",
-    other16: "Other '16",
-    dem20: "Dem. '20",
-    rep20: "Rep. '20",
-    other20: "Other '20"
-  };
-
-  const electionTooltip = {
-    dem16: "Democratic vote share 2016",
-    rep16: "Republican vote share 2016",
-    other16: "Other vote share 2016",
-    dem20: "Democratic vote share 2020",
-    rep20: "Republican vote share 2020",
-    other20: "Other vote share 2020"
+  const PARTY_LABELS: Record<string, { readonly short: string; readonly long: string }> = {
+    dem: { short: "Dem.", long: "Democratic" },
+    rep: { short: "Rep.", long: "Republican" },
+    other: { short: "Other", long: "Other" }
   };
 
   const electionMetricHeaders: readonly MetricHeader[] =
     (staticMetadata &&
-      getVotingMetricFields(staticMetadata)?.map(([, metric]) => ({
-        text: electionText[metric],
-        tooltip: electionTooltip[metric],
-        metric
-      }))) ||
+      getVotingMetricFields(staticMetadata)?.map(([fileId, metric]) => {
+        const partyMatch = metric.match(/^(dem|rep|other)(\d{2})$/);
+        const party = partyMatch ? partyMatch[1] : "other";
+        const { year } = parseVotingId(fileId);
+        const yy = year || (partyMatch ? partyMatch[2] : "");
+        const labels = PARTY_LABELS[party] ?? PARTY_LABELS.other;
+        return {
+          text: yy ? `${labels.short} '${yy}` : labels.short,
+          tooltip: yy ? `${labels.long} vote share 20${yy}` : `${labels.long} vote share`,
+          metric
+        };
+      })) ||
     [];
 
   const metricHeaders: readonly MetricHeader[] = [

@@ -32,10 +32,7 @@ describe("ProjectsController", () => {
     regionConfig: regionConfig,
     regionConfigVersion: regionConfig.version,
     numberOfDistricts: 2,
-    districts: {
-      type: "FeatureCollection",
-      features: []
-    },
+    isComplete: false,
     user: { id: userId },
     createdDt: new Date("2022-07-12T19:50:10.921Z"),
     updatedDt: new Date("2022-07-13T19:50:10.921Z"),

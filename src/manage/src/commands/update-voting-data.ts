@@ -3,7 +3,6 @@ import {
   readFileSync,
   writeFileSync,
   existsSync,
-  readdirSync,
   unlinkSync,
   createReadStream,
   openSync,
@@ -19,7 +18,7 @@ import { abbreviateNumber } from "./process-geojson";
 import {
   extractZipToDir,
   readShapefile,
-  findFileInDir,
+  findShapefile,
   extractVotingData,
   reprojectFeature,
   abbrev,
@@ -110,19 +109,18 @@ export default class UpdateVotingData extends Command {
       const vestBuffer = readFileSync(vestPath);
       const vestDir = join(tmpdir(), `vest-update-${Date.now()}-${vi}`);
       await extractZipToDir(vestBuffer, vestDir);
-      const vestShp = findFileInDir(vestDir, ".shp");
-      let vestFeatures = await readShapefile(vestShp);
+      const { shpPath: vestShp, dbfPath: vestDbf, prjPath: vestPrj } = findShapefile(vestDir);
+      let vestFeatures = await readShapefile(vestShp, vestDbf);
 
       // Reproject if needed
-      const prjFiles = readdirSync(vestDir).filter((f: string) => f.endsWith(".prj"));
-      if (prjFiles.length > 0) {
-        const prjContent = readFileSync(join(vestDir, prjFiles[0]), "utf-8").trim();
+      if (vestPrj) {
+        const prjContent = readFileSync(vestPrj, "utf-8").trim();
         if (prjContent.startsWith("PROJCS")) {
           this.log("  Reprojecting to WGS84...");
           vestFeatures = vestFeatures.map(f => reprojectFeature(f, prjContent));
         }
       }
-      this.log(`  ${vestFeatures.length} precincts loaded`);
+      this.log(`  ${vestFeatures.length} precincts loaded (${vestShp})`);
 
       // Extract voting data per precinct
       const precinctVoting = new Map<

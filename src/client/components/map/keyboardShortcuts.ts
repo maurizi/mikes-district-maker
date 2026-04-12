@@ -35,6 +35,7 @@ interface MapContext {
   readonly evaluateMode: boolean;
   readonly expandedProjectMetrics: boolean;
   readonly electionYear: ElectionYear;
+  readonly availableElectionYears: readonly string[];
   readonly paintBrushSize: PaintBrushSize;
   // eslint-disable-next-line
   readonly setTogglePan: (isSet: boolean) => void;
@@ -246,8 +247,10 @@ export const KEYBOARD_SHORTCUTS: readonly KeyboardShortcut[] = [
     key: "y",
     text: "Toggle election year displayed in map tooltip",
     onlyForMultipleElections: true,
-    action: ({ electionYear }: MapContext) => {
-      const newYear = electionYear === "16" ? "20" : "16";
+    action: ({ electionYear, availableElectionYears }: MapContext) => {
+      if (availableElectionYears.length === 0) return;
+      const idx = availableElectionYears.indexOf(electionYear);
+      const newYear = availableElectionYears[(idx + 1) % availableElectionYears.length];
       store.dispatch(setElectionYear(newYear)) &&
         showMapActionToast(`Displaying data for the 20${newYear} election`);
     }

@@ -33,3 +33,9 @@ declare module "polylabel" {
 declare module "jwt-decode" {
   export default function jwtDecode<T = any>(token: string): T;
 }
+
+declare module "simplify-geojson" {
+  import { GeoJSON } from "geojson";
+
+  export default function simplify<G extends GeoJSON>(feature: G, tolerance?: number): G;
+}

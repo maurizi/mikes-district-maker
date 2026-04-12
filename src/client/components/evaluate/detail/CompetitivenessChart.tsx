@@ -88,9 +88,12 @@ const CompetitivenessChart = ({
                 label="# of districts"
                 left={leftAxisWidth}
                 orientation="left"
-                numTicks={yValueMax}
+                numTicks={Math.min(yValueMax, 5)}
                 labelOffset={leftTickLabelsOffset + 5}
-                tickFormat={yScale.tickFormat(1)}
+                tickFormat={(value) => {
+                  const n = value.valueOf();
+                  return Number.isInteger(n) ? n.toString() : "";
+                }}
                 tickLabelProps={() => ({
                   verticalAnchor: "middle",
                   dx: -leftTickLabelsOffset,

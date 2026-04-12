@@ -112,29 +112,41 @@ export function getDemographicsMetricFields(staticMetadata: IStaticMetadata): Me
   return data;
 }
 
+// Only bare presidential voting columns (no office prefix) become header
+// fields here — office-specific columns flow through VotingSidebarTooltip.
+// File ids look like: "democrat" / "republican" / "other party" (legacy, 2016)
+// or "democrat20" / "republican24" / "other party22" (any 2-digit year).
+const PARTY_RANK: Record<string, number> = { dem: 0, rep: 1, other: 2 };
+
+function parseBareVotingFileId(id: string): VotingMetricField | undefined {
+  if (id.includes("_")) return undefined; // office-prefixed, skip
+  const m = id.match(/^(democrat|republican|other party|other)(\d{0,2})$/);
+  if (!m) return undefined;
+  const partyName = m[1];
+  const year = m[2] || "16"; // legacy bare "democrat" ≡ 2016
+  const partyShort = partyName === "democrat" ? "dem" : partyName === "republican" ? "rep" : "other";
+  return `${partyShort}${year}` as VotingMetricField;
+}
+
+function parseVotingMetric(field: VotingMetricField): { year: number; rank: number } {
+  const m = field.match(/^(dem|rep|other)(\d{2})$/);
+  if (!m) return { year: 99, rank: 99 };
+  return { year: parseInt(m[2], 10), rank: PARTY_RANK[m[1]] ?? 99 };
+}
+
 export function getVotingMetricFields(staticMetadata: IStaticMetadata): VotingMetricsList {
   // eslint-disable-next-line functional/prefer-readonly-type
   const data: (readonly [string, VotingMetricField])[] =
     staticMetadata.voting?.flatMap(file => {
-      const field =
-        file.id === "democrat" || file.id === "democrat16"
-          ? "dem16"
-          : file.id === "republican" || file.id === "republican16"
-          ? "rep16"
-          : file.id === "other party" || file.id === "other party16"
-          ? "other16"
-          : file.id === "democrat20"
-          ? "dem20"
-          : file.id === "republican20"
-          ? "rep20"
-          : file.id === "other party20"
-          ? "other20"
-          : undefined;
-      return field !== undefined ? [[file.id, field]] : [];
+      const field = parseBareVotingFileId(file.id);
+      return field !== undefined ? [[file.id, field] as const] : [];
     }) || [];
-  const order = ["dem16", "rep16", "other16", "dem20", "rep20", "other20"];
   // eslint-disable-next-line functional/immutable-data
-  data.sort(([, a], [, b]) => order.indexOf(a) - order.indexOf(b));
+  data.sort(([, a], [, b]) => {
+    const pa = parseVotingMetric(a);
+    const pb = parseVotingMetric(b);
+    return pa.year - pb.year || pa.rank - pb.rank;
+  });
   return data;
 }
 

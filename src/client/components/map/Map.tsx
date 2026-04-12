@@ -1,5 +1,5 @@
 import { maxBy } from "lodash";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Box, Flex, Text, ThemeUIStyleObject } from "theme-ui";
 import bbox from "@turf/bbox";
 type BBox2d = [number, number, number, number];
@@ -41,6 +41,7 @@ import {
   geoLevelLabelSingular,
   assertNever,
   hasMultipleElections,
+  getAvailableElectionYears,
   calculatePVI,
   getPopulationPerRepresentative,
   getDemographicsPercentages
@@ -366,6 +367,10 @@ const DistrictsMap = ({
   const selectedGeolevel = getSelectedGeoLevel(staticMetadata.geoLevelHierarchy, geoLevelIndex);
 
   const multipleElections = hasMultipleElections(staticMetadata);
+  const availableElectionYears = useMemo(
+    () => getAvailableElectionYears(staticMetadata),
+    [staticMetadata]
+  );
 
   const minZoom = Math.min(...staticMetadata.geoLevelHierarchy.map(geoLevel => geoLevel.minZoom));
   const maxZoom = Math.max(...staticMetadata.geoLevelHierarchy.map(geoLevel => geoLevel.maxZoom));
@@ -489,7 +494,8 @@ const DistrictsMap = ({
           expandedProjectMetrics,
           paintBrushSize,
           setTogglePan,
-          electionYear
+          electionYear,
+          availableElectionYears
         });
       }
     },
@@ -506,7 +512,8 @@ const DistrictsMap = ({
       paintBrushSize,
       expandedProjectMetrics,
       multipleElections,
-      electionYear
+      electionYear,
+      availableElectionYears
     ]
   );
   // Keyboard handlers

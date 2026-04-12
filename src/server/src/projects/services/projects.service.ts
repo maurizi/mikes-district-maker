@@ -41,7 +41,7 @@ export class ProjectsService extends TypeOrmCrudService<Project> {
         "project.updatedDt",
         "project.createdDt",
         "project.submittedDt",
-        "project.simplifiedDistricts",
+        "project.thumbnail",
         "chamber.name",
         "regionConfig.name",
         "regionConfig.id",
@@ -62,13 +62,7 @@ export class ProjectsService extends TypeOrmCrudService<Project> {
       })
       .andWhere("project.archived = FALSE");
     const builderWithFilter = options.completed
-      ? // Completed projects are defined as having no geo units assigned to the unassigned district
-        //
-        // Note: while data updates might change what population is assigned, we don't expect them to
-        // change geometries, so this should be safe even with a stale 'districts' colum
-        builder.andWhere(
-          "jsonb_array_length(project.districts->'features'->0->'geometry'->'coordinates')::integer = 0"
-        )
+      ? builder.andWhere("project.isComplete = :isComplete", { isComplete: true })
       : builder;
     const builderWithRegion = options.region
       ? builderWithFilter.andWhere("regionConfig.regionCode = :region", { region: options.region })

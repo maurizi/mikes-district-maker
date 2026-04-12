@@ -1,3 +1,5 @@
+import { Feature, FeatureCollection, MultiPolygon } from "geojson";
+
 import { ProjectVisibility, ReferenceLayerTypes, ReferenceLayerColors } from "./constants";
 
 export type UserId = string;
@@ -99,6 +101,9 @@ export type DistrictProperties = {
   /* eslint-enable */
 };
 
+// Metadata stamped onto the in-memory DistrictsGeoJSON at merge time on the
+// client. Not persisted server-side; present so downstream consumers of
+// exported .geojson files (QGIS etc.) keep seeing the same shape.
 export interface ProjectProperties {
   readonly completed: boolean;
   readonly creator: Pick<IUser, "id" | "name">;
@@ -108,6 +113,17 @@ export interface ProjectProperties {
   >;
   readonly chamber?: IChamber;
 }
+
+export type DistrictGeoJSON = Feature<MultiPolygon, DistrictProperties>;
+
+export type DistrictsGeoJSON = FeatureCollection<MultiPolygon, DistrictProperties> & {
+  readonly metadata?: ProjectProperties;
+};
+
+// Simplified, client-computed district geometry used to render project
+// thumbnails on listings. Feature properties are preserved so admin exports
+// can read per-district contiguity/compactness/demographics/voting from it.
+export type ThumbnailGeoJSON = FeatureCollection<MultiPolygon, DistrictProperties>;
 
 export interface IStaticFile {
   readonly id: string;
@@ -198,7 +214,7 @@ export interface ReferenceLayerProperties {
 
 export type UpdateReferenceLayer = Pick<IReferenceLayer, "layer_color">;
 
-export type VotingMetricField = "dem16" | "rep16" | "other16" | "dem20" | "rep20" | "other20";
+export type VotingMetricField = `dem${string}` | `rep${string}` | `other${string}`;
 
 export type MetricsList = readonly (readonly [string, string])[];
 export type VotingMetricsList = readonly (readonly [string, VotingMetricField])[];
@@ -231,7 +247,8 @@ export type IProject = ProjectTemplateFields & {
   readonly archived: boolean;
   readonly planscoreUrl: string;
   readonly submittedDt?: Date;
-  readonly simplifiedDistricts?: unknown;
+  readonly isComplete: boolean;
+  readonly thumbnail?: ThumbnailGeoJSON;
 };
 
 export type ProjectNest = Pick<
@@ -245,6 +262,7 @@ export type ProjectNest = Pick<
   | "isFeatured"
   | "visibility"
   | "submittedDt"
+  | "thumbnail"
 > & {
   readonly regionConfig: Pick<IRegionConfig, "name">;
 };
@@ -278,6 +296,9 @@ export type UpdateProjectData = Partial<
     | "pinnedMetricFields"
     | "visibility"
     | "archived"
+    | "isComplete"
+    | "thumbnail"
+    | "planscoreUrl"
   >
 >;
 

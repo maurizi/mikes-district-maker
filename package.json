@@ -66,6 +66,7 @@
     "redux-beacon": "2.1.0",
     "redux-loop": "6.2.0",
     "rollbar": "^2.26.4",
+    "simplify-geojson": "^1.0.5",
     "theme-ui": "0.17.4",
     "timeago-react": "3.0.7",
     "ts.data.json": "0.3.0",

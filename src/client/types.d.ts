@@ -1,24 +1,18 @@
-import { Feature, FeatureCollection, MultiPolygon } from "geojson";
+import { FeatureCollection, MultiPolygon } from "geojson";
 import {
+  DistrictGeoJSON,
+  DistrictsGeoJSON,
   IProject,
   IStaticMetadata,
   TypedArrays,
   GeoUnitHierarchy,
-  DistrictProperties,
   DemographicCounts,
   PaginationMetadata,
-  IProject,
   IReferenceLayer,
-  ProjectProperties
+  ThumbnailGeoJSON
 } from "../shared/entities";
 
-// TODO #179: Move to shared/entities
-export type DistrictGeoJSON = Feature<MultiPolygon, DistrictProperties>;
-export type DistrictsGeoJSON = FeatureCollection<MultiPolygon, DistrictProperties> & {
-  readonly metadata?: ProjectProperties;
-};
-
-export type SimplifiedDistrictsGeoJSON = FeatureCollection<MultiPolygon, DistrictProperties>;
+export { DistrictGeoJSON, DistrictsGeoJSON, ThumbnailGeoJSON };
 
 export interface DynamicProjectData {
   readonly project: IProject;

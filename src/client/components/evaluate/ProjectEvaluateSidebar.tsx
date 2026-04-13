@@ -32,8 +32,7 @@ const ProjectEvaluateSidebar = ({
   geojson,
   metric,
   project,
-  staticMetadata,
-  isArchived
+  staticMetadata
 }: {
   readonly geojson?: DistrictsGeoJSON;
   readonly metric: EvaluateMetricWithValue | undefined;
@@ -88,7 +87,7 @@ const ProjectEvaluateSidebar = ({
   function computeRowBucket(value: number): PviBucket | undefined {
     const buckets: readonly PviBucket[] = getPviBuckets();
     const stops = getPviSteps();
-    // eslint-disable-next-line
+
     for (let i = 0; i < stops.length; i++) {
       const r = stops[i];
       if (value >= r[0]) {

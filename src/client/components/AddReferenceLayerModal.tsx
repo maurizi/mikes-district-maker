@@ -218,9 +218,9 @@ const AddReferenceLayerModal = ({
       geojson.features[0]?.geometry?.type === "Point"
         ? ReferenceLayerTypes.Point
         : geojson.features[0]?.geometry?.type === "Polygon" ||
-          geojson.features[0]?.geometry?.type === "MultiPolygon"
-        ? ReferenceLayerTypes.Polygon
-        : undefined;
+            geojson.features[0]?.geometry?.type === "MultiPolygon"
+          ? ReferenceLayerTypes.Polygon
+          : undefined;
     !layerType && setFileError("Geojson must be point or polygon");
     layerType &&
       setCreateLayerResource({
@@ -229,13 +229,14 @@ const AddReferenceLayerModal = ({
           layer_type: layerType,
           layer: geojson,
           numberOfFeatures: geojson.features.length,
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+
           fields: Object.keys(geojson.features[0].properties) || null
         }
       });
   }
 
   function onReaderLoadCsv(event: ProgressEvent<FileReader>) {
+    // eslint-disable-next-line @typescript-eslint/no-base-to-string
     const csvText = event.target?.result && event.target.result.toString();
     csvText &&
       readString(csvText, {
@@ -250,15 +251,16 @@ const AddReferenceLayerModal = ({
   }
 
   function onReaderLoadGeoJson(event: ProgressEvent<FileReader>) {
+    // eslint-disable-next-line @typescript-eslint/no-base-to-string
     const geojson = event.target?.result && JSON.parse(event.target?.result.toString());
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+
     geojson && setGeoJSON(geojson);
   }
 
   function parseFile(file: File, extension: string) {
     // const contents = await new Response(file).text();
     const reader = new FileReader();
-    /* eslint-disable functional/immutable-data */
+
     reader.onload = extension === "geojson" ? onReaderLoadGeoJson : onReaderLoadCsv;
     reader.readAsText(file);
   }

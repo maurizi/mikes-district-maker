@@ -138,9 +138,7 @@ const ProjectName = ({
       underlayStyle={{ paddingTop: "4.5rem" }}
     >
       <Flex sx={style.modal}>
-        <Link to={`/o/${template.organization.slug}`}>
-          {template.organization.name} ›
-        </Link>
+        <Link to={`/o/${template.organization.slug}`}>{template.organization.name} ›</Link>
         <Heading>{template.name}</Heading>
         <Text sx={{ mb: 2 }}>
           {template.regionConfig.name} · {template.numberOfDistricts} districts

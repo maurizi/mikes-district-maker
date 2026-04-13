@@ -1,7 +1,7 @@
 import { Loop } from "redux-loop";
 import { getType } from "typesafe-actions";
 
-import { Action, LoopAction } from "../actions";
+import { LoopAction } from "../actions";
 import { ElectionYear } from "../types";
 
 import {

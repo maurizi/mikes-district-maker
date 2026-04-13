@@ -55,6 +55,10 @@ export default tseslint.config(
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
       "@typescript-eslint/prefer-readonly-parameter-types": "off",
       "@typescript-eslint/restrict-template-expressions": "off",
+      "@typescript-eslint/no-unsafe-argument": "off",
+      "@typescript-eslint/no-unsafe-return": "off",
+      "@typescript-eslint/prefer-promise-reject-errors": "off",
+      "functional/type-declaration-immutability": "off",
       "functional/immutable-data": [
         "error",
         {

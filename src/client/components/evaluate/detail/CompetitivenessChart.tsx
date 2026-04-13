@@ -1,4 +1,4 @@
-import { Flex} from "theme-ui";
+import { Flex } from "theme-ui";
 import { PviBucket } from "../../../types";
 import { Bar } from "@visx/shape";
 import { Group } from "@visx/group";
@@ -90,7 +90,7 @@ const CompetitivenessChart = ({
                 orientation="left"
                 numTicks={Math.min(yValueMax, 5)}
                 labelOffset={leftTickLabelsOffset + 5}
-                tickFormat={(value) => {
+                tickFormat={value => {
                   const n = value.valueOf();
                   return Number.isInteger(n) ? n.toString() : "";
                 }}

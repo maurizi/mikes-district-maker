@@ -32,35 +32,32 @@ function importCsvToDefinition(
   geoUnitHierarchy: GeoUnitHierarchy,
   blockToDistrict: { readonly [blockId: string]: number }
 ): DistrictsDefinition {
-  const idToIndex = new Map<string, number>();
-  for (let i = 0; i < blockIds.length; i++) {
-    idToIndex.set(blockIds[i], i);
-  }
-  const assignment = new Uint8Array(blockIds.length);
-  for (const [blockId, district] of Object.entries(blockToDistrict)) {
+  const idToIndex = new Map(blockIds.map((id, i): readonly [string, number] => [id, i]));
+  const mutableAssignment = new Uint8Array(blockIds.length);
+  Object.entries(blockToDistrict).forEach(([blockId, district]) => {
     const idx = idToIndex.get(blockId);
     if (idx !== undefined) {
-      assignment[idx] = district;
+      mutableAssignment[idx] = district;
     }
-  }
+  });
   function walk(hierarchy: GeoUnitHierarchy | number): DistrictsDefinition | number {
     if (typeof hierarchy === "number") {
-      return assignment[hierarchy];
+      return mutableAssignment[hierarchy];
     }
     const results: (DistrictsDefinition | number)[] = hierarchy.map(h => walk(h));
-    if (results.length !== 1 && results.every(item => item === results[0])) {
-      return results[0];
+    const first = results[0];
+    if (typeof first === "number" && results.every(item => item === first)) {
+      return first;
     }
     return results;
   }
-  return walk(geoUnitHierarchy) as DistrictsDefinition;
+  const result = walk(geoUnitHierarchy);
+  return (typeof result === "number" ? [result] : result) as DistrictsDefinition;
 }
 
 @Controller("api/districts")
 export class DistrictsController {
-  constructor(
-    private readonly regionConfigService: RegionConfigsService
-  ) {}
+  constructor(private readonly regionConfigService: RegionConfigsService) {}
 
   @UseInterceptors(FileInterceptor("file"))
   @Post("import/csv")
@@ -150,27 +147,25 @@ export class DistrictsController {
 
     // Build a map from base block ID to its split variants (e.g. "42001..." -> ["42001...-1", "42001...-2"])
     const allBlockIds: Set<string> = new Set(blockIds);
-    const splitBlockMap: Map<string, string[]> = new Map();
-    for (const id of blockIds) {
+    const mutableSplitBlockMap: Map<string, string[]> = new Map();
+    blockIds.forEach(id => {
       const dashIdx = id.indexOf("-");
-      if (dashIdx !== -1) {
-        const baseId = id.substring(0, dashIdx);
-        const existing = splitBlockMap.get(baseId);
-        if (existing) {
-          // eslint-disable-next-line functional/immutable-data
-          existing.push(id);
-        } else {
-          splitBlockMap.set(baseId, [id]);
-        }
+      if (dashIdx === -1) return;
+      const baseId = id.substring(0, dashIdx);
+      const mutableExisting = mutableSplitBlockMap.get(baseId);
+      if (mutableExisting) {
+        mutableExisting.push(id);
+      } else {
+        mutableSplitBlockMap.set(baseId, [id]);
       }
-    }
+    });
 
     // Find unmatched records, expanding split blocks
     const invalidRecords = records.filter((record, i) => {
       if (flaggedRows[i]) return false;
       if (allBlockIds.has(record[0])) return false;
       // Check if this block was split during processing
-      if (splitBlockMap.has(record[0])) return false;
+      if (mutableSplitBlockMap.has(record[0])) return false;
       setFlag(record, i, "BLOCKID", "Invalid block ID");
       return true;
     });
@@ -184,22 +179,29 @@ export class DistrictsController {
 
     // Build block-to-district mapping, expanding split blocks so all sub-blocks
     // get the same district assignment as their parent
-    const blockToDistricts: { [blockId: string]: number } = {};
-    for (const [block, district] of unflaggedRows) {
+    const mutableBlockToDistricts: { [blockId: string]: number } = {};
+    unflaggedRows.forEach(([block, district]) => {
       const d = Number(district);
       if (allBlockIds.has(block)) {
-        blockToDistricts[block] = d;
+        mutableBlockToDistricts[block] = d;
       }
-      const splits = splitBlockMap.get(block);
+      const splits = mutableSplitBlockMap.get(block);
       if (splits) {
-        for (const splitId of splits) {
-          blockToDistricts[splitId] = d;
-        }
+        splits.forEach(splitId => {
+          mutableBlockToDistricts[splitId] = d;
+        });
       }
-    }
-    const districtsDefinition = importCsvToDefinition(blockIds, geoUnitHierarchy, blockToDistricts);
+    });
+    const districtsDefinition = importCsvToDefinition(
+      blockIds,
+      geoUnitHierarchy,
+      mutableBlockToDistricts
+    );
 
-    const maxDistrictId = Object.values(blockToDistricts).reduce((a, b) => Math.max(a, b), 0);
+    const maxDistrictId = Object.values(mutableBlockToDistricts).reduce(
+      (a, b) => Math.max(a, b),
+      0
+    );
     const rowFlags = flaggedRows.filter(r => !!r);
     const numFlags = rowFlags.length;
 

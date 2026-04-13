@@ -10,8 +10,6 @@ import {
 import os from "os";
 
 const S3_CACHE_DIR = process.env.S3_CACHE_DIRECTORY || "/tmp/s3-cache";
-// Alert when less than 500MB of disk space remains
-const DISK_THRESHOLD_BYTES = 500 * 1024 * 1024;
 
 @Controller("healthcheck")
 export class HealthcheckController {
@@ -32,10 +30,11 @@ export class HealthcheckController {
     return this.health.check([
       () => this.db.pingCheck("database", { timeout }),
       () => this.memory.checkRSS("memory", maxRss),
-      () => this.disk.checkStorage("disk", {
-        path: S3_CACHE_DIR,
-        thresholdPercent: 0.95
-      })
+      () =>
+        this.disk.checkStorage("disk", {
+          path: S3_CACHE_DIR,
+          thresholdPercent: 0.95
+        })
     ]);
   }
 }

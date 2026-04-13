@@ -7,7 +7,7 @@ interface StateProps {
   readonly currentPage: number;
   readonly totalPages: number;
   readonly showLastPageButton?: boolean;
-  // eslint-disable-next-line
+
   readonly setPage: (number: number) => void;
 }
 

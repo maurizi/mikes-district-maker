@@ -35,7 +35,7 @@ module.exports = {
       },
       schema: []
     },
-    create: function(context) {
+    create: function (context) {
       return {
         ClassDeclaration: node => {
           const property = getModuleProperty(node, "providers");
@@ -45,7 +45,7 @@ module.exports = {
           const servicesProvided = property.value.elements;
           const outsideServiceProvided = servicesProvided.some(serviceId => {
             const name = serviceId && serviceId.type === "Identifier" && serviceId.name;
-            const varSet = context.getScope().variableScope.set;
+            const varSet = context.sourceCode.getScope(node).variableScope.set;
             if (!name || !varSet.has(name)) {
               return false;
             }

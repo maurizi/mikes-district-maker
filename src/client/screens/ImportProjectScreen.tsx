@@ -9,7 +9,6 @@ import {
   Card,
   Flex,
   Heading,
-  jsx,
   Spinner,
   ThemeUIStyleObject,
   Label,
@@ -82,37 +81,37 @@ const validate = (
         valid: true
       }
     : !organizationSelected &&
-      numberOfDistricts &&
-      numberOfMembers &&
-      maxDistrictId &&
-      regionConfig &&
-      populationDeviation !== null &&
-      districtsDefinition &&
-      numberOfDistricts >= maxDistrictId
-    ? // Valid for the standard RegionConfig for this CSV
-      {
-        numberOfDistricts,
-        numberOfMembers,
-        regionConfig,
-        districtsDefinition,
-        chamber,
-        isCustom,
-        isMultiMember,
-        populationDeviation,
-        valid: true
-      }
-    : // Invalid
-      {
-        numberOfDistricts,
-        numberOfMembers,
-        regionConfig,
-        districtsDefinition,
-        chamber,
-        isCustom,
-        isMultiMember,
-        populationDeviation,
-        valid: false
-      };
+        numberOfDistricts &&
+        numberOfMembers &&
+        maxDistrictId &&
+        regionConfig &&
+        populationDeviation !== null &&
+        districtsDefinition &&
+        numberOfDistricts >= maxDistrictId
+      ? // Valid for the standard RegionConfig for this CSV
+        {
+          numberOfDistricts,
+          numberOfMembers,
+          regionConfig,
+          districtsDefinition,
+          chamber,
+          isCustom,
+          isMultiMember,
+          populationDeviation,
+          valid: true
+        }
+      : // Invalid
+        {
+          numberOfDistricts,
+          numberOfMembers,
+          regionConfig,
+          districtsDefinition,
+          chamber,
+          isCustom,
+          isMultiMember,
+          populationDeviation,
+          valid: false
+        };
 };
 
 type ImportResource = WriteResource<IRegionConfig | null, DistrictsImportApiSuccess>;
@@ -323,7 +322,7 @@ const ImportProjectScreen = ({ organization, regionConfigs, user }: StateProps) 
   const regionConfig = importResource.data;
   const formData = createProjectResource.data;
 
-  const [organizationsForImport, setOrganizationsForImport] = useState<readonly IOrganization[]>(
+  const [organizationsForImport, setOrganizationsForImport] = useState<readonly OrganizationNest[]>(
     []
   );
 
@@ -387,15 +386,15 @@ const ImportProjectScreen = ({ organization, regionConfigs, user }: StateProps) 
         setStateAbbrev(stateAbbrev || null);
 
         // Filter to organizations and templates that match the state FIPS code
-        const organizations: readonly IOrganization[] =
+        const organizations: readonly OrganizationNest[] =
           destructureResource(user, "organizations") || [];
         stateAbbrev &&
           setOrganizationsForImport(
             organizations
-              .map((o: IOrganization) => filterProjectTemplates(o, stateAbbrev))
+              .map((o: OrganizationNest) => filterProjectTemplates(o, stateAbbrev))
               .filter(
-                (org: IOrganization | undefined) => org !== undefined
-              ) as readonly IOrganization[]
+                (org: OrganizationNest | undefined) => org !== undefined
+              ) as readonly OrganizationNest[]
           );
 
         const regionConfig =
@@ -412,7 +411,6 @@ const ImportProjectScreen = ({ organization, regionConfigs, user }: StateProps) 
           setFileError(`State ${stateAbbrev} not currently supported`);
         }
 
-        // eslint-disable-next-line
         importNumberRef.current = importNumberRef.current + 1;
         const importNumber = importNumberRef.current;
         setImportResource({ data: regionConfig, isPending: true });
@@ -444,7 +442,6 @@ const ImportProjectScreen = ({ organization, regionConfigs, user }: StateProps) 
   }, [organization]);
 
   useEffect(() => {
-    //eslint-disable-next-line
     document.title = "DistrictBuilder | Import Map";
   });
 
@@ -457,8 +454,8 @@ const ImportProjectScreen = ({ organization, regionConfigs, user }: StateProps) 
     const selectedDistrict = formData.numberOfDistricts
       ? Number(formData.numberOfDistricts) < Number(maxDistrictId)
       : formData.chamber?.numberOfDistricts
-      ? Number(formData.chamber.numberOfDistricts) < Number(maxDistrictId)
-      : null;
+        ? Number(formData.chamber.numberOfDistricts) < Number(maxDistrictId)
+        : null;
     if (maxDistrictId !== undefined && selectedDistrict) {
       setCreateProjectResource({
         data: formData,
@@ -475,10 +472,8 @@ const ImportProjectScreen = ({ organization, regionConfigs, user }: StateProps) 
   }, [formData, maxDistrictId]);
 
   function resetForm() {
-    // eslint-disable-next-line
     importNumberRef.current += 1;
     if (fileInputRef.current) {
-      // eslint-disable-next-line
       fileInputRef.current.value = "";
     }
     setImportResource({
@@ -575,8 +570,8 @@ const ImportProjectScreen = ({ organization, regionConfigs, user }: StateProps) 
                     !rowFlags && !fileError
                       ? style.uploadSuccess
                       : fileError
-                      ? style.uploadError
-                      : style.uploadSuccessWithFlags
+                        ? style.uploadError
+                        : style.uploadSuccessWithFlags
                   }
                 >
                   {"resource" in importResource && !numFlags && !fileError ? (

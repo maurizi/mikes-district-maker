@@ -75,8 +75,8 @@ const ShareMenu = ({ invert, project }: ShareProps) => {
             project?.visibility === ProjectVisibility.Visible
               ? "link"
               : project?.visibility === ProjectVisibility.Published
-              ? "eye"
-              : "lock-locked"
+                ? "eye"
+                : "lock-locked"
           }
         />
         Share

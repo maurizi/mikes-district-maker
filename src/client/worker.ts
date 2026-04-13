@@ -42,13 +42,11 @@ interface CachedAdjacency {
   numBlocks?: number;
 }
 
-// eslint-disable-next-line
 let regionData: RegionData | undefined;
-// eslint-disable-next-line
+
 let cachedAdjacency: CachedAdjacency | undefined;
 
 function fetchRegionData(regionURI: S3URI, staticMetadata: IStaticMetadata): RegionData {
-  // eslint-disable-next-line
   if (!regionData || regionData.uri !== regionURI) {
     regionData = {
       uri: regionURI,
@@ -59,7 +57,6 @@ function fetchRegionData(regionURI: S3URI, staticMetadata: IStaticMetadata): Reg
 }
 
 function getAdjacencyData(regionURI: S3URI): CachedAdjacency {
-  // eslint-disable-next-line
   if (!cachedAdjacency || cachedAdjacency.uri !== regionURI) {
     cachedAdjacency = {
       uri: regionURI,
@@ -82,11 +79,9 @@ async function getAdjacencyWithIndex(
   return { adjacencyData, reverseIndex: cached.reverseIndex };
 }
 
-// eslint-disable-next-line
 let cachedBlockIds: { uri: S3URI; data: Promise<readonly string[]> } | undefined;
 
 function getBlockIds(regionURI: S3URI): Promise<readonly string[]> {
-  // eslint-disable-next-line
   if (!cachedBlockIds || cachedBlockIds.uri !== regionURI) {
     cachedBlockIds = { uri: regionURI, data: fetchBlockIds(regionURI) };
   }
@@ -113,17 +108,16 @@ async function getDemographics(
 function baseIndicesForGeoUnit(
   geoUnitHierarchy: GeoUnitHierarchy,
   geoUnitIndices: GeoUnitIndices
-  // eslint-disable-next-line
 ): number[] {
   const [geoUnitIndex, ...remainingGeoUnitIndices] = geoUnitIndices;
   const indicesForGeoLevel: number | NestedArray<number> = geoUnitHierarchy[geoUnitIndex];
-  // eslint-disable-next-line
+
   if (remainingGeoUnitIndices.length) {
     // Need to recurse to find the geounit in question in the hierarchy
     return baseIndicesForGeoUnit(indicesForGeoLevel as GeoUnitHierarchy, remainingGeoUnitIndices);
   }
   // We've reached the geounit we're after. Now we need to return all the base geounit ids below it
-  // eslint-disable-next-line
+
   if (typeof indicesForGeoLevel === "number") {
     // Must be working with base geounit. Wrap it in an array and return.
     return [indicesForGeoLevel];
@@ -134,9 +128,8 @@ function baseIndicesForGeoUnit(
 /*
  * Return all base indices for this subset of the geounit hierarchy.
  */
-// eslint-disable-next-line
+
 function accumulateBaseIndices(geoUnitHierarchy: GeoUnitHierarchy): number[] {
-  // eslint-disable-next-line
   const baseIndices: number[] = [];
   const stack: (GeoUnitHierarchy | number)[] = [geoUnitHierarchy];
   while (stack.length > 0) {
@@ -329,11 +322,10 @@ const functions = {
   ): Promise<StaticCounts> => {
     const data = await fetchRegionData(regionURI, staticMetadata).data;
     // Build up set of blocks ids corresponding to selected geounits
-    // eslint-disable-next-line
+
     const selectedBaseIndices: Set<number> = new Set();
     allGeoUnitIndices(selectedGeounits).forEach(geoUnitIndices =>
       baseIndicesForGeoUnit(data.geoUnitHierarchy, geoUnitIndices).forEach(index =>
-        // eslint-disable-next-line
         selectedBaseIndices.add(index)
       )
     );
@@ -349,13 +341,12 @@ const functions = {
     selectedGeounits: GeoUnits
   ): Promise<readonly DemographicCounts[]> => {
     const data = await fetchRegionData(regionURI, staticMetadata).data;
-    /* eslint-disable */
+
     // Note: not using Array.fill to populate these, because the empty array in memory gets shared
     const mutableDistrictGeounitAccum: number[][] = [];
     for (let i = 0; i <= project.numberOfDistricts; i = i + 1) {
       mutableDistrictGeounitAccum[i] = [];
     }
-    /* eslint-enable */
 
     // Collect all base geounits found in the selection
     const accumulateGeounits = (
@@ -366,7 +357,7 @@ const functions = {
       if (typeof subHierarchy === "number" && typeof subDefinition === "number") {
         // The base case: we made it to the bottom of the trees and need to assign this
         // base geonunit to the district found in the district definition
-        // eslint-disable-next-line
+
         mutableDistrictGeounitAccum[subDefinition].push(subHierarchy);
         return;
       } else if (subIndices.length === 0 && typeof subHierarchy !== "number") {

@@ -56,7 +56,7 @@ let Differ,
       return -1;
     };
 
-(floor = Math.floor), (max = Math.max), (min = Math.min);
+((floor = Math.floor), (max = Math.max), (min = Math.min));
 
 _calculateRatio = function (matches, length) {
   if (length) {
@@ -68,7 +68,7 @@ _calculateRatio = function (matches, length) {
 
 _arrayCmp = function (a, b) {
   let i, la, lb, _i, _ref, _ref1;
-  (_ref = [a.length, b.length]), (la = _ref[0]), (lb = _ref[1]);
+  ((_ref = [a.length, b.length]), (la = _ref[0]), (lb = _ref[1]));
   for (
     i = _i = 0, _ref1 = min(la, lb);
     0 <= _ref1 ? _i < _ref1 : _i > _ref1;
@@ -398,12 +398,12 @@ SequenceMatcher = (function () {
       _ref3,
       _ref4,
       _ref5;
-    (_ref = [this.a, this.b, this.b2j, this.isbjunk]),
+    ((_ref = [this.a, this.b, this.b2j, this.isbjunk]),
       (a = _ref[0]),
       (b = _ref[1]),
       (b2j = _ref[2]),
-      (isbjunk = _ref[3]);
-    (_ref1 = [alo, blo, 0]), (besti = _ref1[0]), (bestj = _ref1[1]), (bestsize = _ref1[2]);
+      (isbjunk = _ref[3]));
+    ((_ref1 = [alo, blo, 0]), (besti = _ref1[0]), (bestj = _ref1[1]), (bestsize = _ref1[2]));
     j2len = {};
     for (i = _i = alo; alo <= ahi ? _i < ahi : _i > ahi; i = alo <= ahi ? ++_i : --_i) {
       newj2len = {};
@@ -418,19 +418,19 @@ SequenceMatcher = (function () {
         }
         k = newj2len[j] = (j2len[j - 1] || 0) + 1;
         if (k > bestsize) {
-          (_ref3 = [i - k + 1, j - k + 1, k]),
+          ((_ref3 = [i - k + 1, j - k + 1, k]),
             (besti = _ref3[0]),
             (bestj = _ref3[1]),
-            (bestsize = _ref3[2]);
+            (bestsize = _ref3[2]));
         }
       }
       j2len = newj2len;
     }
     while (besti > alo && bestj > blo && !isbjunk(b[bestj - 1]) && a[besti - 1] === b[bestj - 1]) {
-      (_ref4 = [besti - 1, bestj - 1, bestsize + 1]),
+      ((_ref4 = [besti - 1, bestj - 1, bestsize + 1]),
         (besti = _ref4[0]),
         (bestj = _ref4[1]),
-        (bestsize = _ref4[2]);
+        (bestsize = _ref4[2]));
     }
     while (
       besti + bestsize < ahi &&
@@ -441,10 +441,10 @@ SequenceMatcher = (function () {
       bestsize++;
     }
     while (besti > alo && bestj > blo && isbjunk(b[bestj - 1]) && a[besti - 1] === b[bestj - 1]) {
-      (_ref5 = [besti - 1, bestj - 1, bestsize + 1]),
+      ((_ref5 = [besti - 1, bestj - 1, bestsize + 1]),
         (besti = _ref5[0]),
         (bestj = _ref5[1]),
-        (bestsize = _ref5[2]);
+        (bestsize = _ref5[2]));
     }
     while (
       besti + bestsize < ahi &&
@@ -506,15 +506,19 @@ SequenceMatcher = (function () {
     if (this.matchingBlocks) {
       return this.matchingBlocks;
     }
-    (_ref = [this.a.length, this.b.length]), (la = _ref[0]), (lb = _ref[1]);
+    ((_ref = [this.a.length, this.b.length]), (la = _ref[0]), (lb = _ref[1]));
     queue = [[0, la, 0, lb]];
     matchingBlocks = [];
     while (queue.length) {
-      (_ref1 = queue.pop()), (alo = _ref1[0]), (ahi = _ref1[1]), (blo = _ref1[2]), (bhi = _ref1[3]);
-      (_ref2 = x = this.findLongestMatch(alo, ahi, blo, bhi)),
+      ((_ref1 = queue.pop()),
+        (alo = _ref1[0]),
+        (ahi = _ref1[1]),
+        (blo = _ref1[2]),
+        (bhi = _ref1[3]));
+      ((_ref2 = x = this.findLongestMatch(alo, ahi, blo, bhi)),
         (i = _ref2[0]),
         (j = _ref2[1]),
-        (k = _ref2[2]);
+        (k = _ref2[2]));
       if (k) {
         matchingBlocks.push(x);
         if (alo < i && blo < j) {
@@ -529,14 +533,14 @@ SequenceMatcher = (function () {
     i1 = j1 = k1 = 0;
     nonAdjacent = [];
     for (_i = 0, _len = matchingBlocks.length; _i < _len; _i++) {
-      (_ref3 = matchingBlocks[_i]), (i2 = _ref3[0]), (j2 = _ref3[1]), (k2 = _ref3[2]);
+      ((_ref3 = matchingBlocks[_i]), (i2 = _ref3[0]), (j2 = _ref3[1]), (k2 = _ref3[2]));
       if (i1 + k1 === i2 && j1 + k1 === j2) {
         k1 += k2;
       } else {
         if (k1) {
           nonAdjacent.push([i1, j1, k1]);
         }
-        (_ref4 = [i2, j2, k2]), (i1 = _ref4[0]), (j1 = _ref4[1]), (k1 = _ref4[2]);
+        ((_ref4 = [i2, j2, k2]), (i1 = _ref4[0]), (j1 = _ref4[1]), (k1 = _ref4[2]));
       }
     }
     if (k1) {
@@ -580,7 +584,7 @@ SequenceMatcher = (function () {
     this.opcodes = answer = [];
     _ref = this.getMatchingBlocks();
     for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-      (_ref1 = _ref[_i]), (ai = _ref1[0]), (bj = _ref1[1]), (size = _ref1[2]);
+      ((_ref1 = _ref[_i]), (ai = _ref1[0]), (bj = _ref1[1]), (size = _ref1[2]));
       tag = "";
       if (i < ai && j < bj) {
         tag = "replace";
@@ -592,7 +596,7 @@ SequenceMatcher = (function () {
       if (tag) {
         answer.push([tag, i, ai, j, bj]);
       }
-      (_ref2 = [ai + size, bj + size]), (i = _ref2[0]), (j = _ref2[1]);
+      ((_ref2 = [ai + size, bj + size]), (i = _ref2[0]), (j = _ref2[1]));
       if (size) {
         answer.push(["equal", ai, i, bj, j]);
       }
@@ -637,38 +641,38 @@ SequenceMatcher = (function () {
       codes = [["equal", 0, 1, 0, 1]];
     }
     if (codes[0][0] === "equal") {
-      (_ref = codes[0]),
+      ((_ref = codes[0]),
         (tag = _ref[0]),
         (i1 = _ref[1]),
         (i2 = _ref[2]),
         (j1 = _ref[3]),
-        (j2 = _ref[4]);
+        (j2 = _ref[4]));
       codes[0] = [tag, max(i1, i2 - n), i2, max(j1, j2 - n), j2];
     }
     if (codes[codes.length - 1][0] === "equal") {
-      (_ref1 = codes[codes.length - 1]),
+      ((_ref1 = codes[codes.length - 1]),
         (tag = _ref1[0]),
         (i1 = _ref1[1]),
         (i2 = _ref1[2]),
         (j1 = _ref1[3]),
-        (j2 = _ref1[4]);
+        (j2 = _ref1[4]));
       codes[codes.length - 1] = [tag, i1, min(i2, i1 + n), j1, min(j2, j1 + n)];
     }
     nn = n + n;
     groups = [];
     group = [];
     for (_i = 0, _len = codes.length; _i < _len; _i++) {
-      (_ref2 = codes[_i]),
+      ((_ref2 = codes[_i]),
         (tag = _ref2[0]),
         (i1 = _ref2[1]),
         (i2 = _ref2[2]),
         (j1 = _ref2[3]),
-        (j2 = _ref2[4]);
+        (j2 = _ref2[4]));
       if (tag === "equal" && i2 - i1 > nn) {
         group.push([tag, i1, min(i2, i1 + n), j1, min(j2, j1 + n)]);
         groups.push(group);
         group = [];
-        (_ref3 = [max(i1, i2 - n), max(j1, j2 - n)]), (i1 = _ref3[0]), (j1 = _ref3[1]);
+        ((_ref3 = [max(i1, i2 - n), max(j1, j2 - n)]), (i1 = _ref3[0]), (j1 = _ref3[1]));
       }
       group.push([tag, i1, i2, j1, j2]);
     }
@@ -756,7 +760,7 @@ SequenceMatcher = (function () {
       */
 
     let la, lb, _ref;
-    (_ref = [this.a.length, this.b.length]), (la = _ref[0]), (lb = _ref[1]);
+    ((_ref = [this.a.length, this.b.length]), (la = _ref[0]), (lb = _ref[1]));
     return _calculateRatio(min(la, lb), la + lb);
   };
 
@@ -772,7 +776,7 @@ _countLeading = function (line, ch) {
     */
 
   let i, n, _ref;
-  (_ref = [0, line.length]), (i = _ref[0]), (n = _ref[1]);
+  ((_ref = [0, line.length]), (i = _ref[0]), (n = _ref[1]));
   while (i < n && line[i] === ch) {
     i++;
   }
@@ -897,12 +901,12 @@ Differ = (function () {
     lines = [];
     _ref = cruncher.getOpcodes();
     for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-      (_ref1 = _ref[_i]),
+      ((_ref1 = _ref[_i]),
         (tag = _ref1[0]),
         (alo = _ref1[1]),
         (ahi = _ref1[2]),
         (blo = _ref1[3]),
-        (bhi = _ref1[4]);
+        (bhi = _ref1[4]));
       switch (tag) {
         case "replace":
           g = this._fancyReplace(a, alo, ahi, b, blo, bhi);
@@ -1027,9 +1031,9 @@ Differ = (function () {
       _ref7,
       _ref8,
       _ref9;
-    (_ref = [0.74, 0.75]), (bestRatio = _ref[0]), (cutoff = _ref[1]);
+    ((_ref = [0.74, 0.75]), (bestRatio = _ref[0]), (cutoff = _ref[1]));
     cruncher = new SequenceMatcher(this.charjunk);
-    (_ref1 = [null, null]), (eqi = _ref1[0]), (eqj = _ref1[1]);
+    ((_ref1 = [null, null]), (eqi = _ref1[0]), (eqj = _ref1[1]));
     lines = [];
     for (j = _i = blo; blo <= bhi ? _i < bhi : _i > bhi; j = blo <= bhi ? ++_i : --_i) {
       bj = b[j];
@@ -1038,7 +1042,7 @@ Differ = (function () {
         ai = a[i];
         if (ai === bj) {
           if (eqi === null) {
-            (_ref2 = [i, j]), (eqi = _ref2[0]), (eqj = _ref2[1]);
+            ((_ref2 = [i, j]), (eqi = _ref2[0]), (eqj = _ref2[1]));
           }
           continue;
         }
@@ -1048,10 +1052,10 @@ Differ = (function () {
           cruncher.quickRatio() > bestRatio &&
           cruncher.ratio() > bestRatio
         ) {
-          (_ref3 = [cruncher.ratio(), i, j]),
+          ((_ref3 = [cruncher.ratio(), i, j]),
             (bestRatio = _ref3[0]),
             (besti = _ref3[1]),
-            (bestj = _ref3[2]);
+            (bestj = _ref3[2]));
         }
       }
     }
@@ -1064,7 +1068,7 @@ Differ = (function () {
         }
         return lines;
       }
-      (_ref5 = [eqi, eqj, 1.0]), (besti = _ref5[0]), (bestj = _ref5[1]), (bestRatio = _ref5[2]);
+      ((_ref5 = [eqi, eqj, 1.0]), (besti = _ref5[0]), (bestj = _ref5[1]), (bestRatio = _ref5[2]));
     } else {
       eqi = null;
     }
@@ -1073,19 +1077,19 @@ Differ = (function () {
       line = _ref6[_l];
       lines.push(line);
     }
-    (_ref7 = [a[besti], b[bestj]]), (aelt = _ref7[0]), (belt = _ref7[1]);
+    ((_ref7 = [a[besti], b[bestj]]), (aelt = _ref7[0]), (belt = _ref7[1]));
     if (eqi === null) {
       atags = btags = "";
       cruncher.setSeqs(aelt, belt);
       _ref8 = cruncher.getOpcodes();
       for (_m = 0, _len2 = _ref8.length; _m < _len2; _m++) {
-        (_ref9 = _ref8[_m]),
+        ((_ref9 = _ref8[_m]),
           (tag = _ref9[0]),
           (ai1 = _ref9[1]),
           (ai2 = _ref9[2]),
           (bj1 = _ref9[3]),
-          (bj2 = _ref9[4]);
-        (_ref10 = [ai2 - ai1, bj2 - bj1]), (la = _ref10[0]), (lb = _ref10[1]);
+          (bj2 = _ref9[4]));
+        ((_ref10 = [ai2 - ai1, bj2 - bj1]), (la = _ref10[0]), (lb = _ref10[1]));
         switch (tag) {
           case "replace":
             atags += Array(la + 1).join("^");
@@ -1268,13 +1272,13 @@ unifiedDiff = function (a, b, _arg) {
     _ref4,
     _ref5,
     _ref6;
-  (_ref = _arg != null ? _arg : {}),
+  ((_ref = _arg != null ? _arg : {}),
     (fromfile = _ref.fromfile),
     (tofile = _ref.tofile),
     (fromfiledate = _ref.fromfiledate),
     (tofiledate = _ref.tofiledate),
     (n = _ref.n),
-    (lineterm = _ref.lineterm);
+    (lineterm = _ref.lineterm));
   /*
       Compare two sequences of lines; generate the delta as a unified diff.
 
@@ -1344,17 +1348,17 @@ unifiedDiff = function (a, b, _arg) {
       lines.push("--- " + fromfile + fromdate + lineterm);
       lines.push("+++ " + tofile + todate + lineterm);
     }
-    (_ref2 = [group[0], group[group.length - 1]]), (first = _ref2[0]), (last = _ref2[1]);
+    ((_ref2 = [group[0], group[group.length - 1]]), (first = _ref2[0]), (last = _ref2[1]));
     file1Range = _formatRangeUnified(first[1], last[2]);
     file2Range = _formatRangeUnified(first[3], last[4]);
     lines.push("@@ -" + file1Range + " +" + file2Range + " @@" + lineterm);
     for (_j = 0, _len1 = group.length; _j < _len1; _j++) {
-      (_ref3 = group[_j]),
+      ((_ref3 = group[_j]),
         (tag = _ref3[0]),
         (i1 = _ref3[1]),
         (i2 = _ref3[2]),
         (j1 = _ref3[3]),
-        (j2 = _ref3[4]);
+        (j2 = _ref3[4]));
       if (tag === "equal") {
         _ref4 = a.slice(i1, i2);
         for (_k = 0, _len2 = _ref4.length; _k < _len2; _k++) {
@@ -1440,13 +1444,13 @@ contextDiff = function (a, b, _arg) {
     _ref4,
     _ref5,
     _ref6;
-  (_ref = _arg != null ? _arg : {}),
+  ((_ref = _arg != null ? _arg : {}),
     (fromfile = _ref.fromfile),
     (tofile = _ref.tofile),
     (fromfiledate = _ref.fromfiledate),
     (tofiledate = _ref.tofiledate),
     (n = _ref.n),
-    (lineterm = _ref.lineterm);
+    (lineterm = _ref.lineterm));
   /*
       Compare two sequences of lines; generate the delta as a context diff.
 
@@ -1523,7 +1527,7 @@ contextDiff = function (a, b, _arg) {
       todate = tofiledate ? "\t" + tofiledate : "";
       lines.push("*** " + fromfile + fromdate + lineterm);
       lines.push("--- " + tofile + todate + lineterm);
-      (_ref2 = [group[0], group[group.length - 1]]), (first = _ref2[0]), (last = _ref2[1]);
+      ((_ref2 = [group[0], group[group.length - 1]]), (first = _ref2[0]), (last = _ref2[1]));
       lines.push("***************" + lineterm);
       file1Range = _formatRangeContext(first[1], last[2]);
       lines.push("*** " + file1Range + " ****" + lineterm);
@@ -1533,12 +1537,12 @@ contextDiff = function (a, b, _arg) {
             let _j, _len1, _ref3, _results;
             _results = [];
             for (_j = 0, _len1 = group.length; _j < _len1; _j++) {
-              (_ref3 = group[_j]),
+              ((_ref3 = group[_j]),
                 (tag = _ref3[0]),
                 (_ = _ref3[1]),
                 (_ = _ref3[2]),
                 (_ = _ref3[3]),
-                (_ = _ref3[4]);
+                (_ = _ref3[4]));
               _results.push(tag === "replace" || tag === "delete");
             }
             return _results;
@@ -1546,12 +1550,12 @@ contextDiff = function (a, b, _arg) {
         )
       ) {
         for (_j = 0, _len1 = group.length; _j < _len1; _j++) {
-          (_ref3 = group[_j]),
+          ((_ref3 = group[_j]),
             (tag = _ref3[0]),
             (i1 = _ref3[1]),
             (i2 = _ref3[2]),
             (_ = _ref3[3]),
-            (_ = _ref3[4]);
+            (_ = _ref3[4]));
           if (tag !== "insert") {
             _ref4 = a.slice(i1, i2);
             for (_k = 0, _len2 = _ref4.length; _k < _len2; _k++) {
@@ -1569,12 +1573,12 @@ contextDiff = function (a, b, _arg) {
             let _l, _len3, _ref5, _results;
             _results = [];
             for (_l = 0, _len3 = group.length; _l < _len3; _l++) {
-              (_ref5 = group[_l]),
+              ((_ref5 = group[_l]),
                 (tag = _ref5[0]),
                 (_ = _ref5[1]),
                 (_ = _ref5[2]),
                 (_ = _ref5[3]),
-                (_ = _ref5[4]);
+                (_ = _ref5[4]));
               _results.push(tag === "replace" || tag === "insert");
             }
             return _results;
@@ -1582,12 +1586,12 @@ contextDiff = function (a, b, _arg) {
         )
       ) {
         for (_l = 0, _len3 = group.length; _l < _len3; _l++) {
-          (_ref5 = group[_l]),
+          ((_ref5 = group[_l]),
             (tag = _ref5[0]),
             (_ = _ref5[1]),
             (_ = _ref5[2]),
             (j1 = _ref5[3]),
-            (j2 = _ref5[4]);
+            (j2 = _ref5[4]));
           if (tag !== "delete") {
             _ref6 = b.slice(j1, j2);
             for (_m = 0, _len4 = _ref6.length; _m < _len4; _m++) {

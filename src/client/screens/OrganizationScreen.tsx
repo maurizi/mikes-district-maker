@@ -7,7 +7,6 @@ import {
   Flex,
   Heading,
   Image,
-  jsx,
   Spinner,
   Text,
   Link,
@@ -32,8 +31,7 @@ import {
   IOrganization,
   IUser,
   ProjectNest,
-  IProject,
-  OrganizationSlug
+  IProject
 } from "../../shared/entities";
 
 import Icon from "../components/Icon";
@@ -51,10 +49,6 @@ interface StateProps {
   readonly organization: OrganizationState;
   readonly organizationProjects: OrganizationProjectsState;
   readonly user: UserState;
-}
-
-interface Params {
-  readonly organizationSlug: OrganizationSlug;
 }
 
 const style: Record<string, ThemeUIStyleObject> = {
@@ -170,9 +164,7 @@ const OrganizationScreen = ({ organization, organizationProjects, user }: StateP
 
   function setupProjectFromTemplate(data: CreateProjectData) {
     if (userInOrg) {
-      return createProject(data).then((project: IProject) =>
-        navigate(`/projects/${project.id}`)
-      );
+      return createProject(data).then((project: IProject) => navigate(`/projects/${project.id}`));
     } else {
       setProjectTemplateData(data);
       store.dispatch(showCopyMapModal(true));
@@ -209,7 +201,6 @@ const OrganizationScreen = ({ organization, organizationProjects, user }: StateP
   }, [organizationSlug]);
 
   useEffect(() => {
-    //eslint-disable-next-line
     document.title =
       "DistrictBuilder " + ("resource" in organization ? `| ${organization.resource.name}` : "");
   });

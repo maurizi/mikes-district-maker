@@ -8,13 +8,9 @@ import {
   NotFoundException,
   Param,
   Post,
-  // Not sure why, but eslint thinks these decorators are unused
-  /* eslint-disable */
   ParseIntPipe,
   Query,
-  /* eslint-enable */
   Body,
-  Request,
   Res,
   UseGuards,
   UseInterceptors
@@ -33,18 +29,19 @@ import stringify from "csv-stringify/lib/sync";
 import { Response } from "express";
 import { convert } from "geojson2shp";
 import * as _ from "lodash";
+import { Feature, MultiPolygon } from "geojson";
 
 import isUUID from "validator/lib/isUUID";
 import { Pagination } from "nestjs-typeorm-paginate";
 
 import {
-  MakeDistrictsErrors,
   CORE_METRIC_FIELDS,
   PLANSCORE_POLL_MS,
   PLANSCORE_POLL_MAX_TRIES
 } from "../../../../shared/constants";
 import { S3Client } from "@aws-sdk/client-s3";
-import {
+import type {
+  DistrictProperties,
   DistrictsDefinition,
   DistrictsGeoJSON,
   GeoUnitHierarchy,
@@ -73,7 +70,6 @@ import { ProjectTemplatesService } from "../../project-templates/services/projec
 import { ProjectTemplate } from "../../project-templates/entities/project-template.entity";
 import { ReferenceLayersService } from "../../reference-layers/services/reference-layers.service";
 import { ChambersService } from "../../chambers/services/chambers";
-import { Chamber } from "../../chambers/entities/chamber.entity";
 import { ReferenceLayer } from "../../reference-layers/entities/reference-layer.entity";
 
 function validateNumberOfMembers(
@@ -340,7 +336,7 @@ export class ProjectsController implements CrudController<Project> {
   ): Promise<void> {
     const formattedGeojson = {
       ...geojson,
-      features: geojson.features.map(feature => ({
+      features: geojson.features.map((feature: Feature<MultiPolygon, DistrictProperties>) => ({
         ...feature,
         properties: {
           ...feature.properties,
@@ -375,21 +371,19 @@ export class ProjectsController implements CrudController<Project> {
     ]);
     const baseGeoLevel = metadata.geoLevelHierarchy[0].id;
 
-    const csvRows: [string, number][] = [];
     function walkCsv(
       defn: DistrictsDefinition | number,
       hier: GeoUnitHierarchy | number
-    ) {
+    ): (readonly [string, number])[] {
       if (typeof hier === "number") {
-        csvRows.push([blockIds[hier], typeof defn === "number" ? defn : 0]);
-      } else {
-        for (let i = 0; i < hier.length; i++) {
-          const subDefn = typeof defn === "number" ? defn : defn[i];
-          walkCsv(subDefn as DistrictsDefinition | number, hier[i]);
-        }
+        return [[blockIds[hier], typeof defn === "number" ? defn : 0]];
       }
+      return hier.flatMap((h, i) => {
+        const subDefn = typeof defn === "number" ? defn : defn[i];
+        return walkCsv(subDefn as DistrictsDefinition | number, h);
+      });
     }
-    walkCsv(project.districtsDefinition, hierarchy);
+    const csvRows = walkCsv(project.districtsDefinition, hierarchy);
 
     return stringify(csvRows, {
       header: true,
@@ -414,7 +408,10 @@ export class ProjectsController implements CrudController<Project> {
       throw new NotFoundException("Project is not connected to an organization");
     }
     const userId = req.parsed.authPersist.userId || null;
-    const org = await this.organizationService.findOne({ where: { id: orgId }, relations: ["admin"] });
+    const org = await this.organizationService.findOne({
+      where: { id: orgId },
+      relations: ["admin"]
+    });
     const user = await this.usersService.findOne({ where: { id: userId } });
     if (!user || !org) {
       throw new NotFoundException(`Unable to find user: ${userId}`);
@@ -462,9 +459,12 @@ export class ProjectsController implements CrudController<Project> {
     if (!isUUID(projectId)) {
       throw new NotFoundException(`Project ${projectId} is not a valid UUID`);
     }
-    const uploadResponse = await axios.get("https://api.planscore.org/upload/", {
-      headers: { Authorization: `Bearer ${process.env.PLAN_SCORE_API_TOKEN || ""}` }
-    });
+    const uploadResponse = await axios.get<[string, Record<string, string>]>(
+      "https://api.planscore.org/upload/",
+      {
+        headers: { Authorization: `Bearer ${process.env.PLAN_SCORE_API_TOKEN || ""}` }
+      }
+    );
     return uploadResponse.data;
   }
 
@@ -522,14 +522,18 @@ export class ProjectsController implements CrudController<Project> {
       axios
         .get(indexUrl)
         .then((apiResponse: any) => {
-          apiResponse.data.status
-            ? resolve(void 0)
-            : numTries >= PLANSCORE_POLL_MAX_TRIES
-            ? reject(new Error("Exceeded maximum number of retries"))
-            : setTimeout(
-                () => resolve(this.pollPlanScoreProgress(indexUrl, numTries + 1)),
-                PLANSCORE_POLL_MS
-              );
+          if (apiResponse.data.status) {
+            resolve(void 0);
+            return;
+          }
+          if (numTries >= PLANSCORE_POLL_MAX_TRIES) {
+            reject(new Error("Exceeded maximum number of retries"));
+            return;
+          }
+          setTimeout(
+            () => resolve(this.pollPlanScoreProgress(indexUrl, numTries + 1)),
+            PLANSCORE_POLL_MS
+          );
         })
         .catch((e: any) => reject(e));
     });
@@ -562,7 +566,6 @@ export class ProjectsController implements CrudController<Project> {
     @ParsedBody() dto: UpdateProjectDto
   ) {
     // Start off with some validations that can't be handled easily at the DTO layer
-    const userId = req.parsed.authPersist.userId as string;
     const existingProject = await this.getProject(req, id);
     if (dto.lockedDistricts && existingProject.numberOfDistricts !== dto.lockedDistricts.length) {
       throw new BadRequestException({
@@ -650,15 +653,11 @@ export class ProjectsController implements CrudController<Project> {
       throw new InternalServerErrorException(`User not found for authenticated user id ${userId}`);
     }
 
-    const chamber = dto.chamber?.id
-      ? await this.chambersService.findOne({ where: { id: dto.chamber?.id } })
-      : undefined;
-
     const regionConfig = dto.regionConfig
       ? await this.regionConfigService.findOne({ where: { id: dto.regionConfig.id } })
       : template
-      ? template.regionConfig
-      : undefined;
+        ? template.regionConfig
+        : undefined;
     if (!regionConfig) {
       throw new NotFoundException(`Unable to find region config: ${dto.regionConfig?.id}`);
     }
@@ -700,12 +699,7 @@ export class ProjectsController implements CrudController<Project> {
       throw new InternalServerErrorException();
     }
 
-    const data = this.formatCreateProjectDto(
-      formdata,
-      districtsDefLength,
-      regionConfig,
-      req
-    );
+    const data = this.formatCreateProjectDto(formdata, districtsDefLength, regionConfig, req);
 
     try {
       // Districts GeoJSON is computed client-side on load

@@ -65,6 +65,7 @@ describe("ProjectsController", () => {
           };
           return {
             findOne: jest.fn().mockResolvedValue(project),
+            getOne: jest.fn().mockResolvedValue(project),
             updateOne: (req: unknown, data: DeepPartial<Project>) => Promise.resolve(data),
             repository: {
               createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder)

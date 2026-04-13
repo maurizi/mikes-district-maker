@@ -11,6 +11,8 @@ import prettierPlugin from "eslint-plugin-prettier";
 export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
+  functional.configs.externalVanillaRecommended,
+  react.configs.flat.recommended,
   prettier,
   {
     files: ["src/**/*.{ts,tsx}"],
@@ -34,7 +36,8 @@ export default tseslint.config(
       }
     },
     rules: {
-      "no-unused-expressions": [
+      "no-unused-expressions": "off",
+      "@typescript-eslint/no-unused-expressions": [
         "error",
         {
           allowShortCircuit: true,
@@ -44,20 +47,26 @@ export default tseslint.config(
       "no-console": ["error"],
       "react/display-name": "off",
       "react/react-in-jsx-scope": "off",
+      "react/no-unknown-property": ["error", { ignore: ["sx", "css"] }],
       "@typescript-eslint/ban-ts-comment": "off",
-      "@typescript-eslint/explicit-function-return-type": "off",
-      "@typescript-eslint/explicit-module-boundary-types": "off",
-      "@typescript-eslint/no-unnecessary-type-assertion": "off",
+      // "@typescript-eslint/explicit-function-return-type": "off",
+      // "@typescript-eslint/explicit-module-boundary-types": "off",
+      "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-unsafe-assignment": "off",
       "@typescript-eslint/no-unsafe-call": "off",
       "@typescript-eslint/no-unsafe-member-access": "off",
+      "@typescript-eslint/no-unsafe-enum-comparison": "off",
+      "@typescript-eslint/no-empty-object-type": "off",
+      "@typescript-eslint/no-misused-promises": "off",
+      "@typescript-eslint/prefer-promise-reject-errors": "off",
       "@typescript-eslint/restrict-template-expressions": "off",
       "@typescript-eslint/no-floating-promises": "off",
+      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
       "functional/functional-parameters": "off",
-      "functional/no-conditional-statements": "off",
-      "functional/no-expression-statements": "off",
-      "functional/no-return-void": "off",
-      "@typescript-eslint/prefer-readonly-parameter-types": "off",
+      // "functional/no-conditional-statements": "off",
+      // "functional/no-expression-statements": "off",
+      // "functional/no-return-void": "off",
+      // "@typescript-eslint/prefer-readonly-parameter-types": "off",
       "@typescript-eslint/no-unsafe-argument": "off",
       "prettier/prettier": "error"
     }

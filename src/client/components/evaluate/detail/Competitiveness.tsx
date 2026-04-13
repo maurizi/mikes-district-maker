@@ -125,8 +125,8 @@ const CompetitivenessMetricDetail = ({
             const bucketColor = bucket.includes("R")
               ? getPartyColor("republican")
               : bucket.includes("D")
-              ? getPartyColor("democrat")
-              : "#141414";
+                ? getPartyColor("democrat")
+                : "#141414";
             return divider ? (
               <span sx={{ color: "#000", mb: "10px" }} key={index}>
                 <span sx={{ color: bucketColor, ml: "10px", mb: "10px", mr: "10px" }}>
@@ -226,7 +226,7 @@ const CompetitivenessMetricDetail = ({
         ) : (
           project.planscoreUrl &&
           project.planscoreUrl !== "error" && (
-            <a href={project.planscoreUrl} target="_blank">
+            <a href={project.planscoreUrl} target="_blank" rel="noreferrer">
               View on PlanScore
             </a>
           )

@@ -1,12 +1,11 @@
 import React from "react";
-import { Box} from "theme-ui";
+import { Box } from "theme-ui";
 
 import { WriteResource } from "./../resource";
 
 export default function FormError({
   resource
 }: {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   readonly resource: WriteResource<any, any>;
 }): React.ReactElement | null {
   const errorMessage =

@@ -4,7 +4,6 @@ import {
   Flex,
   Input,
   InputProps,
-  jsx,
   Label,
   Select,
   SelectProps,

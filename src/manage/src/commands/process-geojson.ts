@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-empty-object-type */
 import { Args, Command, Flags, ux } from "@oclif/core";
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import {

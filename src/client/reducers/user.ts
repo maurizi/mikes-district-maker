@@ -1,7 +1,7 @@
 import { Cmd, Loop, loop } from "redux-loop";
 import { getType } from "typesafe-actions";
 
-import { Action, LoopAction } from "../actions";
+import { LoopAction } from "../actions";
 import { userFetch, userFetchFailure, userFetchSuccess } from "../actions/user";
 
 import { IUser } from "../../shared/entities";

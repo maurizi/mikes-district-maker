@@ -34,7 +34,7 @@ import { fetchCachedJson } from "../../common/functions";
 const s3 = new S3Client({});
 
 function getMetadataIds(
-  metadataMap: { [s3uri: string]: IStaticMetadata },
+  metadataMap: { readonly [s3uri: string]: IStaticMetadata },
   prop: "demographics" | "voting"
 ): readonly string[] {
   return [
@@ -158,14 +158,20 @@ export class ProjectTemplatesController {
     const regionURIs = new Set(projectRows.map(row => row.regionS3URI));
 
     // Fetch static metadata per region from S3 (no topology needed)
-    const metadataMap: { [s3uri: string]: IStaticMetadata } = {};
-    for (const uri of regionURIs) {
-      try {
-        metadataMap[uri] = await fetchCachedJson<IStaticMetadata>(s3, uri, "static-metadata.json");
-      } catch {
-        // Skip regions where metadata is unavailable
-      }
-    }
+    const mutableMetadataMap: { [s3uri: string]: IStaticMetadata } = {};
+    await Promise.all(
+      Array.from(regionURIs).map(async uri => {
+        try {
+          mutableMetadataMap[uri] = await fetchCachedJson<IStaticMetadata>(
+            s3,
+            uri,
+            "static-metadata.json"
+          );
+        } catch {
+          // Skip regions where metadata is unavailable
+        }
+      })
+    );
 
     const projectColumns = [
       "Map creator user-id",
@@ -182,14 +188,14 @@ export class ProjectTemplatesController {
       "Plan score link"
     ];
     const districtColumns = ["District number", "Contiguity", "Compactness"];
-    const demographicsColumns = getMetadataIds(metadataMap, "demographics");
-    const votingColumns = getMetadataIds(metadataMap, "voting");
+    const demographicsColumns = getMetadataIds(mutableMetadataMap, "demographics");
+    const votingColumns = getMetadataIds(mutableMetadataMap, "voting");
 
     const formatDate = (date: Date) => date.toISOString().split("T")[0];
 
     const rows = projectRows.flatMap(row =>
       row.districtProperties.map((districtProps, idx) => {
-        if (!metadataMap[row.regionS3URI]) {
+        if (!mutableMetadataMap[row.regionS3URI]) {
           throw new InternalServerErrorException();
         }
 

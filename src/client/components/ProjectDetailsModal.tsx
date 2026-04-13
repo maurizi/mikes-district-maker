@@ -2,17 +2,7 @@ import React, { useState } from "react";
 import AriaModal from "react-aria-modal";
 import { connect } from "react-redux";
 import { InputField } from "./Field";
-import {
-  Box,
-  Button,
-  Flex,
-  Heading,
-  jsx,
-  ThemeUIStyleObject,
-  Label,
-  Checkbox,
-  Divider
-} from "theme-ui";
+import { Box, Button, Flex, Heading, ThemeUIStyleObject, Label, Checkbox, Divider } from "theme-ui";
 
 import { IProject } from "../../shared/entities";
 import { State } from "../reducers";

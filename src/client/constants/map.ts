@@ -7,8 +7,7 @@ const protocol = new Protocol();
 maplibregl.addProtocol("pmtiles", protocol.tile);
 
 // Self-hosted Protomaps basemap tiles on S3
-const PMTILES_URL =
-  "https://districtbuilder-dev-238046523378.s3.amazonaws.com/basemap/us.pmtiles";
+const PMTILES_URL = "https://districtbuilder-dev-238046523378.s3.amazonaws.com/basemap/us.pmtiles";
 
 const baseLayers = noLabels("protomaps", "white");
 const labelLayers = labels("protomaps", "white", "en");

@@ -1,4 +1,4 @@
-import { Box} from "theme-ui";
+import { Box } from "theme-ui";
 import { DistrictProperties } from "../../shared/entities";
 import { ElectionYear } from "../types";
 import { getPartyColor, calculatePVI } from "../functions";

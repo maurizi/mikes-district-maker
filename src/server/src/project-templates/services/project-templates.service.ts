@@ -10,7 +10,8 @@ import {
   DistrictProperties,
   UserId,
   ProjectId,
-  ProjectTemplateId
+  ProjectTemplateId,
+  ThumbnailGeoJSON
 } from "../../../../shared/entities";
 import { Organization } from "../../organizations/entities/organization.entity";
 import { Project } from "../../projects/entities/project.entity";
@@ -41,7 +42,18 @@ export class ProjectTemplatesService extends TypeOrmCrudService<ProjectTemplate>
   async findAdminOrgProjectsWithDistrictProperties(
     slug: OrganizationSlug
   ): Promise<ProjectExportRow[]> {
-    // Returns admin-only listing of all organization projects, with data for CSV export
+    // Returns admin-only listing of all organization projects, with data for CSV export.
+    // The client-written thumbnail preserves feature properties (contiguity,
+    // compactness, demographics, voting) so we extract those here rather than
+    // reloading the full districts geometry.
+    //
+    // Previously used jsonb_path_query_array to extract features[*].properties
+    // at the SQL layer; DSQL doesn't support jsonb_* functions so we select the
+    // thumbnail as text (via simple-json TypeORM auto-parses) and project
+    // district properties in JS.
+    type Row = Omit<ProjectExportRow, "districtProperties"> & {
+      readonly thumbnail: ThumbnailGeoJSON | null;
+    };
     const builder = this.repo
       .createQueryBuilder("projectTemplate")
       .innerJoin("projectTemplate.organization", "organization")
@@ -65,15 +77,15 @@ export class ProjectTemplatesService extends TypeOrmCrudService<ProjectTemplate>
       .addSelect("regionConfig.name", "regionName")
       .addSelect("regionConfig.s3URI", "regionS3URI")
       .addSelect("chamber.name", "chamberName")
-      .addSelect(
-        // Extract just the geojson properties, so we avoid querying the (much larger) geometries.
-        // The client-written thumbnail preserves feature properties (contiguity, compactness,
-        // demographics, voting) for exactly this purpose.
-        `jsonb_path_query_array("projects"."thumbnail", '$.features[*].properties')`,
-        "districtProperties"
-      )
+      .addSelect("projects.thumbnail", "thumbnail")
       .orderBy("projects.name");
-    return builder.getRawMany<ProjectExportRow>();
+    const rows = await builder.getRawMany<Row>();
+    return rows.map(({ thumbnail, ...rest }) => ({
+      ...rest,
+      districtProperties: (thumbnail?.features ?? []).map(
+        f => f.properties as DistrictProperties
+      )
+    }));
   }
 
   async findAdminOrgProjects(slug: string): Promise<ProjectTemplate[]> {

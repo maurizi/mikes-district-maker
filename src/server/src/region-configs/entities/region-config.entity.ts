@@ -1,7 +1,6 @@
 import {
   Column,
   Entity,
-  Index,
   JoinColumn,
   OneToMany,
   PrimaryGeneratedColumn,
@@ -13,8 +12,12 @@ import { ProjectTemplate } from "../../project-templates/entities/project-templa
 import { CensusDate } from "../../../../shared/constants";
 
 @Entity()
+// The old partial unique index on (country_code, region_code) WHERE hidden <>
+// TRUE was dropped because DSQL has no partial indexes, and a plain unique
+// index would block the "retire and recreate with same code" pattern that
+// archived regions depend on. The four-column Unique below still prevents
+// exact duplicates (same name+country+region+version).
 @Unique(["name", "countryCode", "regionCode", "version"])
-@Index("UQ_region_code", ["countryCode", "regionCode"], { unique: true, where: "hidden <> TRUE" })
 export class RegionConfig implements IRegionConfig {
   @PrimaryGeneratedColumn("uuid")
   id: string;
@@ -50,6 +53,8 @@ export class RegionConfig implements IRegionConfig {
   @Column({ type: "boolean", default: false })
   archived: boolean;
 
-  @Column({ type: "enum", enum: CensusDate, default: CensusDate.Census2020 })
+  // DSQL has no enum types; stored as varchar with a CHECK constraint in the
+  // squash migration. TypeORM validates CensusDate values at the app layer.
+  @Column({ type: "varchar", length: 4, default: CensusDate.Census2020 })
   census: CensusDate;
 }

@@ -77,7 +77,6 @@ export default () => {
       createProject(form)
         .then(project => setCreateProjectResource({ data: void 0, resource: project }))
         .catch(errors => setCreateProjectResource({ data: void 0, errors }));
-    // eslint-disable-next-line
   }, []);
 
   return "resource" in createProjectResource ? (
@@ -87,10 +86,7 @@ export default () => {
       Error creating a project for this link.
       <p>
         Please contact&nbsp;
-        <a href="mailto:support@districtbuilder.org">
-          support@districtbuilder.org
-        </a>{" "}
-        for help.
+        <a href="mailto:support@districtbuilder.org">support@districtbuilder.org</a> for help.
       </p>
     </Flex>
   ) : (

@@ -15,12 +15,16 @@ vi.mock("maplibre-gl", () => ({
     Map: vi.fn(),
     NavigationControl: vi.fn(),
     Popup: vi.fn(),
-    Marker: vi.fn()
+    Marker: vi.fn(),
+    addProtocol: vi.fn(),
+    removeProtocol: vi.fn()
   },
   Map: vi.fn(),
   NavigationControl: vi.fn(),
   Popup: vi.fn(),
-  Marker: vi.fn()
+  Marker: vi.fn(),
+  addProtocol: vi.fn(),
+  removeProtocol: vi.fn()
 }));
 
 // Mock worker-functions which use Web Workers not available in jsdom

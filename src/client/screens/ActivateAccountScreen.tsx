@@ -8,12 +8,6 @@ import { activateAccount } from "../api";
 import { isUserLoggedIn } from "../jwt";
 import CenteredContent from "../components/CenteredContent";
 import { Resource } from "../resource";
-import { OrganizationSlug } from "../../shared/entities";
-
-interface Params {
-  readonly token: string;
-  readonly organizationSlug: OrganizationSlug;
-}
 
 const ActivateAccountScreen = () => {
   const { token, organizationSlug } = useParams();
@@ -22,9 +16,6 @@ const ActivateAccountScreen = () => {
     isPending: false
   });
   useEffect(() => {
-    // Disabling 'functional/no-conditional-statement' without naming it.
-    // See https://github.com/jonaskello/eslint-plugin-functional/issues/105
-    // eslint-disable-next-line
     if (token !== undefined) {
       setActivationResource({ isPending: true });
       organizationSlug
@@ -67,14 +58,10 @@ const ActivateAccountScreen = () => {
             </Text>
 
             <Link
-              to={
-                !isLoggedIn
-                  ? "/login"
-                  : organizationSlug
-                  ? `/o/${organizationSlug}`
-                  : "/"
+              to={!isLoggedIn ? "/login" : organizationSlug ? `/o/${organizationSlug}` : "/"}
+              state={
+                !isLoggedIn && organizationSlug ? { from: `/o/${organizationSlug}` } : undefined
               }
-              state={!isLoggedIn && organizationSlug ? { from: `/o/${organizationSlug}` } : undefined}
               sx={{ variant: "linkButton" }}
             >
               {!isLoggedIn ? "Log in" : "Start mapping!"}

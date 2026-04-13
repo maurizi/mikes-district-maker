@@ -34,7 +34,6 @@ import {
   areAnyGeoUnitsSelected,
   assertNever,
   mergeGeoUnits,
-  hasMultipleElections,
   calculatePartyVoteShare,
   computeDemographicSplit,
   hasAnyElection,
@@ -280,7 +279,6 @@ const ProjectSidebar = ({
   readonly pinnedMetrics?: readonly string[];
   readonly populationKey: GroupTotal;
 } & LoadingProps) => {
-  const multElections = hasMultipleElections(staticMetadata);
   const availableYears = getAvailableElectionYears(staticMetadata);
   // PVI uses the two most recent presidential years when available,
   // otherwise the single year we have.
@@ -290,8 +288,8 @@ const ProjectSidebar = ({
     pviYears.length >= 2
       ? `Cook Partisan Voting Index (${formatFullYear(pviYears[0])} / ${formatFullYear(pviYears[1])})`
       : pviYears.length === 1
-      ? `Political Lean (${formatFullYear(pviYears[0])})`
-      : "Political Lean";
+        ? `Political Lean (${formatFullYear(pviYears[0])})`
+        : "Political Lean";
   const hasElectionData = hasAnyElection(staticMetadata);
 
   const getTooltip = (id: string): string =>
@@ -586,8 +584,8 @@ const SidebarRow = memo(
       const year = partyAndElection.endsWith("16")
         ? "16"
         : partyAndElection.endsWith("20")
-        ? "20"
-        : undefined;
+          ? "20"
+          : undefined;
       const votesForYear =
         year && voting ? pickBy(voting, (val, key) => key.endsWith(year)) : voting;
       const votesForParty = (votesForYear && votesForYear[partyAndElection]) || 0;
@@ -605,7 +603,6 @@ const SidebarRow = memo(
       pinnedMetricFields.includes(field) || expandedProjectMetrics;
 
     const getTotal = (id: string): number | undefined =>
-      /* eslint-disable @typescript-eslint/no-unsafe-return */
       intermediatePopulations[demographicsGroups.findIndex(g => g.subgroups.includes(id)) || 0];
 
     const coreDemographicMetricFields = demographicsMetricFields.slice(
@@ -881,7 +878,6 @@ const SidebarRows = ({
 
   // Asynchronously recalculate demographics on state changes with web workers
   useEffect(() => {
-    // eslint-disable-next-line
     let outdated = false;
 
     async function getData() {
@@ -959,13 +955,14 @@ const SidebarRows = ({
           selectedPopulation !== undefined && totalSelectedDemographics !== undefined && selected
             ? totalSelectedDemographics.population - selectedPopulation
             : selectedPopulation !== undefined
-            ? -1 * selectedPopulation
-            : undefined;
+              ? -1 * selectedPopulation
+              : undefined;
         const numberOfReps = project.numberOfMembers[districtId - 1] || 0;
         const popDeviationThreshold =
           (project.populationDeviation / 100) * popPerRep * numberOfReps;
 
-        const targetPopulation = districtId !== 0 ? popPerRep * (project.numberOfMembers[districtId - 1] || 0) : 0;
+        const targetPopulation =
+          districtId !== 0 ? popPerRep * (project.numberOfMembers[districtId - 1] || 0) : 0;
         const deviation = feature.properties.demographics.population - targetPopulation;
 
         return (

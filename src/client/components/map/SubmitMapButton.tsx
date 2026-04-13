@@ -1,7 +1,7 @@
 import React from "react";
 import { Button as MenuButton, Menu, Wrapper } from "react-aria-menubutton";
 import { connect } from "react-redux";
-import { Box, Button, Heading} from "theme-ui";
+import { Box, Button, Heading } from "theme-ui";
 
 import { IProject } from "../../../shared/entities";
 import { projectSubmit } from "../../actions/projectData";

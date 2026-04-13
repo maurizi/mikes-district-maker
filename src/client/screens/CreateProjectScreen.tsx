@@ -9,7 +9,6 @@ import {
   Divider,
   Flex,
   Heading,
-  jsx,
   Label,
   Radio,
   ThemeUIStyleObject
@@ -233,7 +232,6 @@ const CreateProjectScreen = ({ regionConfigs, user, organization }: StateProps) 
   }, [data.regionConfig]);
 
   useEffect(() => {
-    //eslint-disable-next-line
     document.title = "DistrictBuilder | New Map";
   });
 
@@ -276,7 +274,7 @@ const CreateProjectScreen = ({ regionConfigs, user, organization }: StateProps) 
               const validatedForm = validate(data);
               // Disabling 'functional/no-conditional-statement' without naming it.
               // See https://github.com/jonaskello/eslint-plugin-functional/issues/105
-              // eslint-disable-next-line
+
               if (validatedForm.valid === true) {
                 setCreateProjectResource({ data, isPending: true });
                 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -346,6 +344,7 @@ const CreateProjectScreen = ({ regionConfigs, user, organization }: StateProps) 
                         <a
                           href="https://districtbuilder.us1.list-manage.com/subscribe?u=61da999c9897859f1c1fff262&id=70fdf1ae35"
                           target="_blank"
+                          rel="noreferrer"
                         >
                           sign up for our mailing list
                         </a>{" "}

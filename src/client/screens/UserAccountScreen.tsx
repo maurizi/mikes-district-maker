@@ -11,7 +11,6 @@ import {
   Label,
   Text,
   ThemeUIStyleObject,
-  jsx,
   Spinner
 } from "theme-ui";
 

@@ -1,4 +1,4 @@
-import { mapValues, sum } from "lodash";
+import { mapValues } from "lodash";
 import { Box, ThemeUIStyleObject } from "theme-ui";
 
 import { getPartyColor, capitalizeFirstLetter } from "../functions";

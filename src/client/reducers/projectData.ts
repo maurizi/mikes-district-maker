@@ -1,7 +1,7 @@
 import { Cmd, Loop, loop } from "redux-loop";
 import { getType } from "typesafe-actions";
 
-import { Action, LoopAction } from "../actions";
+import { LoopAction } from "../actions";
 import {
   exportCsv,
   exportCsvFailure,
@@ -111,8 +111,7 @@ function runLocalMerge(
   districtsDefinition: DistrictsDefinition,
   numberOfDistricts: number
 ) {
-  return () =>
-    mergeDistricts(staticMetadata, regionURI, districtsDefinition, numberOfDistricts);
+  return () => mergeDistricts(staticMetadata, regionURI, districtsDefinition, numberOfDistricts);
 }
 
 export function getFindCoords(findTool: FindTool, geojson?: DistrictsGeoJSON) {
@@ -189,9 +188,10 @@ const projectDataReducer = (
           projectData: {
             resource: {
               project: action.payload.project,
-              geojson: "resource" in state.projectData
-                ? state.projectData.resource.geojson
-                : action.payload.geojson
+              geojson:
+                "resource" in state.projectData
+                  ? state.projectData.resource.geojson
+                  : action.payload.geojson
             }
           },
           findIndex: undefined
@@ -414,7 +414,7 @@ const projectDataReducer = (
       );
     case getType(setProjectNameEditing):
       return { ...state, projectNameSaving: action.payload ? "unsaved" : "saved" };
-    // eslint-disable-next-line
+
     case getType(updateProjectName): {
       if ("resource" in state.projectData) {
         const projectId = state.projectData.resource.project.id;
@@ -447,7 +447,7 @@ const projectDataReducer = (
         saving: "saved",
         projectData: { resource: action.payload }
       };
-    // eslint-disable-next-line
+
     case getType(updateProjectVisibility): {
       if ("resource" in state.projectData) {
         const projectId = state.projectData.resource.project.id;
@@ -539,9 +539,10 @@ const projectDataReducer = (
             projectData: {
               resource: {
                 project: updatedProject,
-                geojson: "resource" in state.projectData
-                  ? state.projectData.resource.geojson
-                  : { type: "FeatureCollection", features: [] }
+                geojson:
+                  "resource" in state.projectData
+                    ? state.projectData.resource.geojson
+                    : { type: "FeatureCollection", features: [] }
               }
             }
           },
@@ -614,10 +615,7 @@ const projectDataReducer = (
       return state;
     }
     case getType(localMergeFailure):
-      return loop(
-        { ...state, saving: "failed" },
-        Cmd.run(showActionFailedToast)
-      );
+      return loop({ ...state, saving: "failed" }, Cmd.run(showActionFailedToast));
     case getType(updateProjectFailed):
       return loop(
         {
@@ -626,9 +624,8 @@ const projectDataReducer = (
         },
         Cmd.run(showActionFailedToast)
       );
-    // eslint-disable-next-line
+
     case getType(updateDistrictLocks): {
-      // eslint-disable-next-line
       if ("resource" in state.projectData) {
         const { id } = state.projectData.resource.project;
         const { geojson } = state.projectData.resource;
@@ -806,10 +803,9 @@ const projectDataReducer = (
       if (shpGeojson) {
         return loop(
           state,
-          Cmd.run(
-            () => convertGeoJsonToShapefile(shpGeojson, action.payload.name),
-            { failActionCreator: exportShpFailure }
-          )
+          Cmd.run(() => convertGeoJsonToShapefile(shpGeojson, action.payload.name), {
+            failActionCreator: exportShpFailure
+          })
         );
       }
       return state;

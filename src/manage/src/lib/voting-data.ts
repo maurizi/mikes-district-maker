@@ -1,10 +1,4 @@
-import {
-  readFileSync,
-  writeFileSync,
-  existsSync,
-  mkdirSync,
-  readdirSync
-} from "fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from "fs";
 import { TypedArray } from "../../../shared/entities";
 import { join } from "path";
 import * as shapefile from "shapefile";
@@ -47,7 +41,10 @@ export function fixDbfNullPadding(dbfBytes: Buffer): Buffer {
       const start = recStart + offset;
       let hasNull = false;
       for (let b = start; b < start + len; b++) {
-        if (buf[b] === 0x00) { hasNull = true; break; }
+        if (buf[b] === 0x00) {
+          hasNull = true;
+          break;
+        }
       }
       if (!hasNull) continue;
       for (let b = start + len - 1; b >= start; b--) {
@@ -69,7 +66,6 @@ export async function readShapefile(shpPath: string, dbfPath?: string): Promise<
 
   const features: GeoJSON.Feature[] = [];
   const source = await shapefile.open(shpPath, actualDbfPath);
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const result = await source.read();
     if (result.done) break;
@@ -131,7 +127,9 @@ export function findShapefile(
 ): { readonly shpPath: string; readonly dbfPath: string; readonly prjPath?: string } {
   const shpPath = findFileInDir(dir, ".shp", preferences);
   const stem = shpPath.replace(/\.shp$/i, "");
-  const dbfPath = existsSync(`${stem}.dbf`) ? `${stem}.dbf` : findFileInDir(dir, ".dbf", preferences);
+  const dbfPath = existsSync(`${stem}.dbf`)
+    ? `${stem}.dbf`
+    : findFileInDir(dir, ".dbf", preferences);
   const prjPath = existsSync(`${stem}.prj`) ? `${stem}.prj` : undefined;
   return { shpPath, dbfPath, prjPath };
 }
@@ -181,7 +179,7 @@ export function apportion(total: number, ratios: number[]): number[] {
 
   const exact = ratios.map(r => (total * r) / sum);
   const floored = exact.map(Math.floor);
-  let remainder = total - floored.reduce((a, b) => a + b, 0);
+  const remainder = total - floored.reduce((a, b) => a + b, 0);
 
   // Distribute remainder to entries with largest fractional parts
   const fractionals = exact.map((e, i) => ({ i, frac: e - floored[i] }));

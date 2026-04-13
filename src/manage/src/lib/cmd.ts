@@ -7,8 +7,8 @@ import chalk from "chalk";
 function shellExec(cmd: string, args: string[], outputPath?: string) {
   const commandAndArgs = `${cmd} ${args.join(" ")}`;
   const fullCommand = outputPath ? `${commandAndArgs} >${outputPath}` : commandAndArgs;
-  console.log(chalk.green(fullCommand)); // eslint-disable-line no-console
-  console.log(execSync(fullCommand, { maxBuffer: 1024 * 1024 * 1024 /* 1Gb */ })); // eslint-disable-line no-console
+  console.log(chalk.green(fullCommand));
+  console.log(execSync(fullCommand, { maxBuffer: 1024 * 1024 * 1024 /* 1Gb */ }));
 }
 
 function execCmd(

@@ -16,16 +16,11 @@ import { UserState } from "../reducers/user";
 import store from "../store";
 
 import PageNotFoundScreen from "./PageNotFoundScreen";
-import { OrganizationSlug } from "../../shared/entities";
 
 interface StateProps {
   readonly organization: OrganizationState;
   readonly organizationProjects: OrganizationProjectsState;
   readonly user: UserState;
-}
-
-interface Params {
-  readonly organizationSlug: OrganizationSlug;
 }
 
 const style: Record<string, ThemeUIStyleObject> = {

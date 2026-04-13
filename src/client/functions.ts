@@ -114,7 +114,6 @@ export function formatPviByDistrict(
 
 function computeRowFillInterval(stops: ChoroplethSteps, value?: number) {
   if (value) {
-    // eslint-disable-next-line
     for (let i = 0; i < stops.length; i++) {
       const r = stops[i];
       if (value >= r[0]) {
@@ -135,10 +134,8 @@ function computeRowFillInterval(stops: ChoroplethSteps, value?: number) {
 }
 
 export function computeRowFill(stops: ChoroplethSteps, value?: number, interval?: boolean): string {
-  // eslint-disable-next-line
   let i = 0;
   if (!interval) {
-    // eslint-disable-next-line
     while (i < stops.length) {
       const r = stops[i];
       if (value && value < r[0]) {
@@ -201,7 +198,6 @@ export function getDemographicsPercentages(
     populationKey === "population"
       ? selectedDemographics
       : mapKeys(selectedDemographics, (val, key) =>
-          // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
           key.slice(populationKey.length + 1).toLowerCase()
         );
   const percentages = mapValues(renamedDemographics, (population: number) =>
@@ -284,9 +280,7 @@ export function calculatePVI(voting: DemographicCounts, year?: ElectionYear): nu
   return undefined;
 }
 
-export const getAvailableElectionYears = (
-  staticMetadata?: IStaticMetadata
-): readonly string[] => {
+export const getAvailableElectionYears = (staticMetadata?: IStaticMetadata): readonly string[] => {
   const years = new Set<string>();
   for (const file of staticMetadata?.voting || []) {
     const { year } = parseVotingId(file.id);
@@ -375,10 +369,7 @@ export function officeRank(code: string): number {
   return idx === -1 ? OFFICE_RANK_ORDER.length : idx;
 }
 
-export function extractOffice(
-  voting: DemographicCounts,
-  office: string
-): DemographicCounts {
+export function extractOffice(voting: DemographicCounts, office: string): DemographicCounts {
   if (!office) {
     return pickBy(voting, (val, key) => !key.includes("_"));
   }
@@ -450,14 +441,14 @@ function assignNestedGeounit(
 ): MutableGeoUnitCollection {
   const [currentLevelGeounitId, ...remainingLevelsGeounitIds] = currentGeounitData;
   // Update districts definition using existing values or explode out district id using hierarchy
-  // eslint-disable-next-line
+
   let newDefinition: MutableGeoUnitCollection =
     typeof currentDistrictsDefinition === "number"
       ? // Auto-fill district ids using current value based on number of geounits at this level
         new Array(currentGeoUnitHierarchy.length).fill(currentDistrictsDefinition)
       : // Copy existing district ids at this level
         currentDistrictsDefinition;
-  /* eslint-disable */
+
   if (remainingLevelsGeounitIds.length) {
     // We need to go deeper...
     newDefinition[currentLevelGeounitId] = assignNestedGeounit(
@@ -475,7 +466,7 @@ function assignNestedGeounit(
       newDefinition = districtId;
     }
   }
-  /* eslint-enable */
+
   return newDefinition;
 }
 
@@ -491,7 +482,7 @@ export function assignGeounitsToDistrict(
   const districtsDefinitionCopy = cloneDeep(districtsDefinition);
   return geounitIndices.reduce((newDistrictsDefinition, geounitData) => {
     const initialGeounitId = geounitData[0];
-    // eslint-disable-next-line
+
     newDistrictsDefinition[initialGeounitId] =
       geounitData.length === 1
         ? // Assign entire county
@@ -525,7 +516,6 @@ export function getPopulationPerRepresentative(
  * See: https://www.typescriptlang.org/docs/handbook/advanced-types.html#exhaustiveness-checking
  */
 export function assertNever(x: never): never {
-  // eslint-disable-next-line
   throw new Error(`Unexpected: ${x}`);
 }
 
@@ -551,12 +541,10 @@ export function getSelectedGeoLevel(geoLevelHierarchy: GeoLevelHierarchy, geoLev
   return geoLevelHierarchy[geoLevelHierarchy.length - 1 - geoLevelIndex];
 }
 
-// eslint-disable-next-line @typescript-eslint/ban-types
-export function destructureResource<T extends object>(
+export function destructureResource<T extends object, K extends keyof T>(
   resourceT: Resource<T>,
-  key: keyof T
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): any | undefined {
+  key: K
+): T[K] | undefined {
   return "resource" in resourceT ? resourceT.resource[key] : undefined;
 }
 
@@ -580,13 +568,12 @@ export const formatDate = (date: Date): string => {
     ? isToday(d)
       ? format(d, "h:mm a")
       : isThisYear(d)
-      ? format(d, "MMM d")
-      : format(d, "MMM d yyyy")
+        ? format(d, "MMM d")
+        : format(d, "MMM d yyyy")
     : "—";
 };
 
 type ParseResults = {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   readonly data: readonly any[];
   readonly errors: readonly unknown[];
 };
@@ -596,7 +583,6 @@ export const convertCsvToGeojson = (csv: ParseResults): ReferenceLayerGeojson =>
     type: "FeatureCollection",
     features: []
   };
-  // eslint-disable-next-line functional/no-loop-statement
   for (const record of csv.data) {
     const recTransformed: Feature<Point, ReferenceLayerProperties> = {
       type: "Feature",
@@ -606,7 +592,7 @@ export const convertCsvToGeojson = (csv: ParseResults): ReferenceLayerGeojson =>
         coordinates: []
       }
     };
-    /* eslint-disable functional/immutable-data */
+
     recTransformed.properties = record;
     if ("lat" in record && "lon" in record) {
       recTransformed.geometry.coordinates = [Number(record.lon), Number(record.lat)];
@@ -617,7 +603,6 @@ export const convertCsvToGeojson = (csv: ParseResults): ReferenceLayerGeojson =>
     }
 
     geojson.features.push(recTransformed);
-    /* eslint-enable functional/immutable-data */
   }
   return geojson;
 };
@@ -630,10 +615,10 @@ export function updateNumberOfMembers(
   return numberOfDistricts === null
     ? null
     : numberOfMembers !== null
-    ? numberOfMembers.length > numberOfDistricts
-      ? numberOfMembers.slice(0, numberOfDistricts)
-      : numberOfMembers.concat(new Array(numberOfDistricts - numberOfMembers.length).fill(1))
-    : (new Array(numberOfDistricts).fill(1) as readonly number[]);
+      ? numberOfMembers.length > numberOfDistricts
+        ? numberOfMembers.slice(0, numberOfDistricts)
+        : numberOfMembers.concat(new Array(numberOfDistricts - numberOfMembers.length).fill(1))
+      : (new Array(numberOfDistricts).fill(1) as readonly number[]);
 }
 
 export function extractErrors<D, T>(

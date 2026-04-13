@@ -1,6 +1,5 @@
 import { CmdType } from "redux-loop";
 
-import { Action } from "../actions";
 import { DistrictsDefinition, GeoUnits, LockedDistricts } from "../../shared/entities";
 import { ProjectState } from "./project";
 

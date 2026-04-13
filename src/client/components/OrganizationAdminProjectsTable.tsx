@@ -35,7 +35,6 @@ const style: Record<string, ThemeUIStyleObject> = {
 };
 
 const OrganizationAdminProjectsTable = ({ templates, organizationSlug }: ProjectsTableProps) => {
-  // eslint-disable-next-line
   const [projects, setProjects] = useState<ProjectRow[]>([]);
   useEffect(() => {
     if (templates) {

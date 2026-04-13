@@ -270,8 +270,8 @@ export const AuthModalContent = ({
   return modalIntent === "initial"
     ? initialContent
     : modalIntent === "register"
-    ? registerContent
-    : modalIntent === "login"
-    ? loginContent
-    : assertNever(modalIntent);
+      ? registerContent
+      : modalIntent === "login"
+        ? loginContent
+        : assertNever(modalIntent);
 };

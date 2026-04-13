@@ -15,7 +15,6 @@ import { userFetch } from "../actions/user";
 import { showCopyMapModal } from "../actions/projectModals";
 import store from "../store";
 import { Resource } from "../resource";
-import { AuthLocationState } from "../types";
 
 const RegisterContent = ({
   children,

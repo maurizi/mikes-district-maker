@@ -17,9 +17,7 @@ export function getAllIndices(arrayBuf: TypedArray, vals: ReadonlySet<number>): 
   // eslint-disable-next-line
   let indices: number[] = [];
   arrayBuf.forEach((el: number, ind: number) => {
-    // eslint-disable-next-line
     if (vals.has(el)) {
-      // eslint-disable-next-line
       indices.push(ind);
     }
   });
@@ -32,7 +30,6 @@ export function getAllBaseIndices(
   levelIndex: number,
   vals: readonly number[]
 ): readonly number[] {
-  // eslint-disable-next-line
   if (vals.length === 0 || levelIndex === descGeoLevels.length) {
     return vals;
   }
@@ -74,7 +71,7 @@ export function getAggregatedCounts(
 ): DemographicCounts {
   // Aggregate numeric data for the IDs
   return fileProperties.reduce((data, props, ind) => {
-    let count: number = 0; // eslint-disable-line
+    let count: number = 0;
     baseIndices.forEach((v: number) => {
       if (!isNaN(staticFiles[ind][v])) {
         count += staticFiles[ind][v];
@@ -88,15 +85,14 @@ export function getDemographicLabel(id: string) {
   return id === "native"
     ? "Native American"
     : id === "pacific"
-    ? "Pacific Islander"
-    : id.split(/(?=[A-Z])/).join(" ");
+      ? "Pacific Islander"
+      : id.split(/(?=[A-Z])/).join(" ");
 }
 
 export const getMetricFieldForDemographicsId = (id: string) =>
   id === "population" ? id : `${id}Population`;
 
 export function getDemographicsMetricFields(staticMetadata: IStaticMetadata): MetricsList {
-  // eslint-disable-next-line functional/prefer-readonly-type
   const data: (readonly [string, string])[] = staticMetadata.demographics.flatMap(file =>
     CORE_METRIC_FIELDS.includes(file.id)
       ? []
@@ -107,7 +103,7 @@ export function getDemographicsMetricFields(staticMetadata: IStaticMetadata): Me
     staticMetadata.demographicsGroups?.flatMap(g =>
       g.total ? [g.total, ...g.subgroups] : g.subgroups
     ) || DEMOGRAPHIC_FIELDS_ORDER;
-  // eslint-disable-next-line functional/immutable-data
+
   data.sort(([a], [b]) => order.indexOf(a) - order.indexOf(b));
   return data;
 }
@@ -124,7 +120,8 @@ function parseBareVotingFileId(id: string): VotingMetricField | undefined {
   if (!m) return undefined;
   const partyName = m[1];
   const year = m[2] || "16"; // legacy bare "democrat" ≡ 2016
-  const partyShort = partyName === "democrat" ? "dem" : partyName === "republican" ? "rep" : "other";
+  const partyShort =
+    partyName === "democrat" ? "dem" : partyName === "republican" ? "rep" : "other";
   return `${partyShort}${year}` as VotingMetricField;
 }
 
@@ -135,13 +132,12 @@ function parseVotingMetric(field: VotingMetricField): { year: number; rank: numb
 }
 
 export function getVotingMetricFields(staticMetadata: IStaticMetadata): VotingMetricsList {
-  // eslint-disable-next-line functional/prefer-readonly-type
   const data: (readonly [string, VotingMetricField])[] =
     staticMetadata.voting?.flatMap(file => {
       const field = parseBareVotingFileId(file.id);
       return field !== undefined ? [[file.id, field] as const] : [];
     }) || [];
-  // eslint-disable-next-line functional/immutable-data
+
   data.sort(([, a], [, b]) => {
     const pa = parseVotingMetric(a);
     const pb = parseVotingMetric(b);

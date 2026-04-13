@@ -77,7 +77,7 @@ const DemographicsTooltip = ({
   const percentages = getDemographicsPercentages(demographics, demographicsGroups, populationKey);
   // Only showing hard-coded core metrics here for space / color reasons
   const rows = DEMOGRAPHIC_FIELDS_ORDER.filter(race => percentages[race] !== undefined).map(
-    (id: typeof DEMOGRAPHIC_FIELDS_ORDER[number]) => (
+    (id: (typeof DEMOGRAPHIC_FIELDS_ORDER)[number]) => (
       <Row
         key={id}
         id={id}

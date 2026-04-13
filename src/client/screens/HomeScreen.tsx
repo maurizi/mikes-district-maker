@@ -41,7 +41,6 @@ const HomeScreen = ({ projects, isSaving, duplicatedProject, user, pagination }:
   }, [isLoggedIn]);
 
   useEffect(() => {
-    //eslint-disable-next-line
     document.title = "DistrictBuilder | My Maps";
   });
 
@@ -69,10 +68,7 @@ const HomeScreen = ({ projects, isSaving, duplicatedProject, user, pagination }:
             >
               Import
             </Link>
-            <Link
-              to="/create-project"
-              sx={{ variant: "links.button", fontSize: 2, px: 4, py: 2 }}
-            >
+            <Link to="/create-project" sx={{ variant: "links.button", fontSize: 2, px: 4, py: 2 }}>
               <Icon name="plus-circle" />
               New map
             </Link>
@@ -133,14 +129,16 @@ const HomeScreen = ({ projects, isSaving, duplicatedProject, user, pagination }:
                 <a
                   href="https://github.com/PublicMapping/districtbuilder/wiki/Getting-Started-with-DistrictBuilder"
                   target="_blank"
+                  rel="noreferrer"
                 >
                   getting started guide
                 </a>{" "}
-                or see <a href="/maps">community maps</a>. If you want to start
-                mapping for an organization, you&rsquo;ll need to{" "}
+                or see <a href="/maps">community maps</a>. If you want to start mapping for an
+                organization, you&rsquo;ll need to{" "}
                 <a
                   href="https://github.com/PublicMapping/districtbuilder/wiki/Join-an-Organization"
                   target="_blank"
+                  rel="noreferrer"
                 >
                   join the organization
                 </a>{" "}

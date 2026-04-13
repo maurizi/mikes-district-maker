@@ -196,17 +196,13 @@ const SiteHeader = ({ user }: Props) => {
         ) : "resource" in user ? (
           <React.Fragment>
             <span sx={style.linkItem}>
-              <NavLink to="/">
-                My maps
-              </NavLink>
+              <NavLink to="/">My maps</NavLink>
             </span>
             {user.resource.organizations.length > 0 && (
               <OrganizationDropdown organizations={user.resource.organizations} />
             )}
             <span sx={style.linkItem}>
-              <NavLink to="/maps">
-                Community maps
-              </NavLink>
+              <NavLink to="/maps">Community maps</NavLink>
             </span>
             <span
               sx={{
@@ -255,7 +251,6 @@ const SiteHeader = ({ user }: Props) => {
 };
 
 const handleSelection = (navigate: NavigateFunction) => (key: string | number) => {
-  // eslint-disable-next-line
   if (key === UserMenuKeys.Logout) {
     logout();
     navigate("/login");

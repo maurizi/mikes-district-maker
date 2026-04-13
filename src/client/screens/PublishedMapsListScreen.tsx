@@ -1,16 +1,6 @@
 import React, { useEffect } from "react";
 import { connect } from "react-redux";
-import {
-  Flex,
-  jsx,
-  Spinner,
-  Box,
-  Heading,
-  Text,
-  Label,
-  Select,
-  ThemeUIStyleObject
-} from "theme-ui";
+import { Flex, Spinner, Box, Heading, Text, Label, Select, ThemeUIStyleObject } from "theme-ui";
 import { IProject, ProjectNest, IRegionConfig, PaginationMetadata } from "../../shared/entities";
 import "../App.css";
 import { State } from "../reducers";
@@ -100,7 +90,6 @@ const PublishedMapsListScreen = ({
   }, [isLoggedIn]);
 
   useEffect(() => {
-    //eslint-disable-next-line
     document.title = "DistrictBuilder | Community Maps " + (regionCode ? `| ${regionCode}` : "");
   });
 

@@ -1,6 +1,12 @@
 import { writeFileSync, openSync, writeSync, closeSync } from "fs";
 import { join } from "path";
-import { GeometryCollection, GeometryObject, Polygon, MultiPolygon, Topology } from "topojson-specification";
+import {
+  GeometryCollection,
+  GeometryObject,
+  Polygon,
+  MultiPolygon,
+  Topology
+} from "topojson-specification";
 
 function* walkArcs(geometry: GeometryObject): Generator<number> {
   if (geometry.type === "Polygon") {
@@ -75,10 +81,7 @@ export function extractAdjacencyData(
 
   writeFileSync(join(outputDir, "arc-coords.bin"), coordsBuf);
   writeFileSync(join(outputDir, "arc-offsets.bin"), Buffer.from(offsets.buffer));
-  writeFileSync(
-    join(outputDir, "transform.json"),
-    JSON.stringify(topology.transform ?? null)
-  );
+  writeFileSync(join(outputDir, "transform.json"), JSON.stringify(topology.transform ?? null));
 
   // Extract block GEOIDs in index order for CSV import/export
   const blockIds = geometries.map(

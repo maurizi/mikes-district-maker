@@ -8,6 +8,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
     "compile": "tsc",
     "watch": "tsc --watch",
     "fix": "eslint --fix 'src/*.{ts,tsx}' 'src/client/**/*.{ts,tsx}' 'src/shared/**/*.ts'",

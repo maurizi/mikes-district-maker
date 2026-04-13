@@ -62,7 +62,9 @@ Within each state, the parameters are as follows:
     // Invert dryRun for cleaner expressions
     const doWork = !flags.dryRun;
 
-    flags.dryRun && this.log("--dryRun passed; no changes will be made");
+    if (flags.dryRun) {
+      this.log("Running in dry run mode; no changes will be made.");
+    }
     if (!existsSync(args.configFile)) {
       this.error(`config_file ${args.configFile} does not exist, exiting`);
     }
@@ -73,25 +75,30 @@ Within each state, the parameters are as follows:
       for (const [regionCode, regionConfig] of Object.entries(regions)) {
         const outputDir = `data/output/${countryCode}/${regionCode}/`;
         this.log(`Creating output directory ${outputDir}`);
-        doWork && mkdirSync(outputDir, { recursive: true });
+        if (doWork) {
+          mkdirSync(outputDir, { recursive: true });
+        }
 
         this.log(`Processing ${regionConfig.geojsonFile} to ${outputDir}`);
         try {
-          doWork &&
-            (await ProcessGeojson.run(
+          if (doWork) {
+            await ProcessGeojson.run(
               [
                 regionConfig.geojsonFile,
                 `--outputDir=${outputDir}`,
                 // Since we know we're updating in-place, we need to pass inputS3Dir with the same path as the updateS3Dir
                 `--inputS3Dir=${regionConfig.updateS3Dir}`
               ].concat(regionConfig.processGeojsonFlags ? regionConfig.processGeojsonFlags : [])
-            ));
+            );
+          }
         } catch {
           this.warn(`Processing ${regionCode} failed; not updating S3`);
           continue;
         }
         this.log(`Updating ${regionConfig.updateS3Dir}`);
-        doWork && (await UpdateRegion.run([outputDir, regionConfig.updateS3Dir]));
+        if (doWork) {
+          await UpdateRegion.run([outputDir, regionConfig.updateS3Dir]);
+        }
       }
     }
     this.log("Done.");

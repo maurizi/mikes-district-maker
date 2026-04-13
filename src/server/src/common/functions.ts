@@ -23,11 +23,7 @@ export async function getObject(s3: S3Client, params: GetObjectCommandInput) {
  * Fetch a file from S3, caching to disk on first access.
  * Returns the file contents as a string.
  */
-export async function fetchCached(
-  s3: S3Client,
-  s3URI: S3URI,
-  fileName: string
-): Promise<string> {
+export async function fetchCached(s3: S3Client, s3URI: S3URI, fileName: string): Promise<string> {
   // Derive a cache path from the S3 URI
   const url = new URL(s3URI);
   const cacheKey = url.pathname.substring(1).replace(/\//g, "_");
@@ -53,11 +49,7 @@ export async function fetchCached(
 /**
  * Fetch and parse a JSON file from S3 with disk caching.
  */
-export async function fetchCachedJson<T>(
-  s3: S3Client,
-  s3URI: S3URI,
-  fileName: string
-): Promise<T> {
+export async function fetchCachedJson<T>(s3: S3Client, s3URI: S3URI, fileName: string): Promise<T> {
   const body = await fetchCached(s3, s3URI, fileName);
   return JSON.parse(body) as T;
 }

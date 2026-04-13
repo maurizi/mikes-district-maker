@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import { connect } from "react-redux";
-import { Alert, Box, Card, Close, Flex, Heading} from "theme-ui";
+import { Alert, Box, Card, Close, Flex, Heading } from "theme-ui";
 import Logo from "../media/logos/logo.svg?react";
 
 import { isUserLoggedIn } from "../jwt";

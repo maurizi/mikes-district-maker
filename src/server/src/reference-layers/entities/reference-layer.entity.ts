@@ -26,18 +26,20 @@ export class ReferenceLayer implements IReferenceLayer {
   @JoinColumn({ name: "project_template_id" })
   projectTemplate: ProjectTemplate;
 
-  @Column({ type: "enum", enum: ReferenceLayerTypes, default: ReferenceLayerTypes.Point })
+  // DSQL has no enum types; stored as varchar with CHECK constraints in the
+  // squash migration. TypeORM validates the enum values at the app layer.
+  @Column({ type: "varchar", length: 16, default: ReferenceLayerTypes.Point })
   layer_type: ReferenceLayerTypes;
 
   @Column({ type: "character varying", default: "" })
   label_field: string;
 
   @Column({
-    type: "jsonb",
+    type: "simple-json",
     name: "layer"
   })
   layer: ReferenceLayerGeojson;
 
-  @Column({ type: "enum", enum: ReferenceLayerColors, default: ReferenceLayerColors.Green })
+  @Column({ type: "varchar", length: 16, default: ReferenceLayerColors.Green })
   layer_color: ReferenceLayerColors;
 }

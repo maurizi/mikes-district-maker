@@ -60,13 +60,13 @@ async function fetchStaticFiles(path: S3URI, files: readonly IStaticFile[]): Pro
                 ? bpe === 1
                   ? Uint8Array
                   : bpe === 2
-                  ? Uint16Array
-                  : Uint32Array
+                    ? Uint16Array
+                    : Uint32Array
                 : bpe === 1
-                ? Int8Array
-                : bpe === 2
-                ? Int16Array
-                : Int32Array;
+                  ? Int8Array
+                  : bpe === 2
+                    ? Int16Array
+                    : Int32Array;
 
             const typedArray = new typedArrayConstructor(res.data);
             return typedArray;
@@ -94,7 +94,7 @@ export async function fetchAllStaticData(path: S3URI): Promise<StaticProjectData
 }
 
 export async function fetchBlockIds(path: S3URI): Promise<readonly string[]> {
-  const response = await s3Axios.get(staticDataUri(path, "block-ids.json"));
+  const response = await s3Axios.get<string[]>(staticDataUri(path, "block-ids.json"));
   return response.data;
 }
 

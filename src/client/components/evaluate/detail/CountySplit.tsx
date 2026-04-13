@@ -91,9 +91,7 @@ const CountySplitMetricDetail = ({
       <table sx={style.table}>
         <thead>
           <tr>
-            <th sx={{ ...style.th, ...style.colFirst }}>
-              {geoLevelLabelSingular(geoLevel)}
-            </th>
+            <th sx={{ ...style.th, ...style.colFirst }}>{geoLevelLabelSingular(geoLevel)}</th>
             <th sx={{ ...style.th, ...style.colLast }}>Split</th>
           </tr>
         </thead>
@@ -105,8 +103,8 @@ const CountySplitMetricDetail = ({
                   {countyLookup && id in countyLookup && staticMetadata
                     ? getLabelLookup(geoLevel, countyLookup[id])
                     : staticMetadata
-                    ? getLabelLookup(geoLevel, undefined, id)
-                    : ""}
+                      ? getLabelLookup(geoLevel, undefined, id)
+                      : ""}
                 </td>
                 <td sx={{ ...style.td, ...style.colLast }}>
                   <Flex sx={{ alignItems: "center" }}>

@@ -1,4 +1,4 @@
-import { Args, Command, Flags, ux } from "@oclif/core";
+import { Args, Command, Flags } from "@oclif/core";
 import {
   readFileSync,
   writeFileSync,
@@ -24,6 +24,7 @@ import {
   abbrev,
   mkTypedArray
 } from "../lib/voting-data";
+import { createInterface } from "readline";
 
 interface VestYear {
   readonly precinctVoting: Map<
@@ -36,8 +37,7 @@ interface VestYear {
 }
 
 export default class UpdateVotingData extends Command {
-  static description =
-    "Update voting data from VEST shapefiles without reprocessing geometry";
+  static description = "Update voting data from VEST shapefiles without reprocessing geometry";
 
   static args = {
     outputDir: Args.string({
@@ -160,11 +160,7 @@ export default class UpdateVotingData extends Command {
       const votingIds: string[] = [];
       for (const office of Array.from(officesFound).sort()) {
         const prefix = office === "PRE" ? "" : `${office}_`;
-        votingIds.push(
-          `${prefix}democrat${yy}`,
-          `${prefix}republican${yy}`,
-          `${prefix}other${yy}`
-        );
+        votingIds.push(`${prefix}democrat${yy}`, `${prefix}republican${yy}`, `${prefix}other${yy}`);
       }
 
       vestYears.push({ precinctVoting, votingIds, electionYear, officesFound });
@@ -195,8 +191,7 @@ export default class UpdateVotingData extends Command {
     const tmpBlockPath = blockFullPath + ".tmp";
     const outFd = openSync(tmpBlockPath, "w");
 
-    const rl = require("readline").createInterface({
-      // eslint-disable-line
+    const rl = createInterface({
       input: createReadStream(blockFullPath),
       crlfDelay: Infinity
     });
@@ -223,9 +218,7 @@ export default class UpdateVotingData extends Command {
       // Format is "${countyFp}-${rawPrecinctId}" where countyFp is 3 chars.
       const precinctProp: string | undefined = props[precinctLevel];
       const rawPrecinctId =
-        precinctProp && precinctProp.length > 4
-          ? precinctProp.substring(4)
-          : precinctProp;
+        precinctProp && precinctProp.length > 4 ? precinctProp.substring(4) : precinctProp;
 
       let anyMatch = false;
       for (const vy of vestYears) {
@@ -292,8 +285,7 @@ export default class UpdateVotingData extends Command {
       const tmpPath = fullPath + ".tmp";
       const fd = openSync(tmpPath, "w");
 
-      const rl2 = require("readline").createInterface({
-        // eslint-disable-line
+      const rl2 = createInterface({
         input: createReadStream(fullPath),
         crlfDelay: Infinity
       });
@@ -348,9 +340,7 @@ export default class UpdateVotingData extends Command {
       const typedData = mkTypedArray(data);
       const fileName = `${id}.buf`;
       writeFileSync(join(dir, fileName), typedData);
-      this.log(
-        `  Wrote ${fileName} (${typedData.constructor.name}, ${data.length} elements)`
-      );
+      this.log(`  Wrote ${fileName} (${typedData.constructor.name}, ${data.length} elements)`);
       return {
         id,
         fileName,

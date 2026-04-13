@@ -43,7 +43,7 @@ export class ProjectTemplate implements IProjectTemplateWithProjects {
   numberOfDistricts: number;
 
   @Column({
-    type: "jsonb",
+    type: "simple-json",
     name: "districts_definition",
     nullable: true
   })
@@ -63,18 +63,16 @@ export class ProjectTemplate implements IProjectTemplateWithProjects {
   populationDeviation: number;
 
   @Column({
-    type: "character varying",
-    array: true,
+    type: "simple-json",
     name: "pinned_metric_fields",
-    default: DEFAULT_PINNED_METRIC_FIELDS
+    default: () => `'${JSON.stringify(DEFAULT_PINNED_METRIC_FIELDS)}'`
   })
   pinnedMetricFields: readonly string[];
 
   @Column({
-    type: "integer",
+    type: "simple-json",
     name: "number_of_members",
-    array: true,
-    default: () => "'{}'"
+    default: () => "'[]'"
   })
   numberOfMembers: readonly number[];
 

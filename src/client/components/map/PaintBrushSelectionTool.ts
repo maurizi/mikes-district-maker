@@ -50,18 +50,17 @@ const PaintBrushSelectionTool: ISelectionTool = {
   ) {
     map.boxZoom.disable();
     map.dragPan.disable();
-    map.getCanvas().style.cursor = `url('${paint}') 0 14, default`; // eslint-disable-line
+    map.getCanvas().style.cursor = `url('${paint}') 0 14, default`;
 
     const canvas = map.getCanvasContainer();
-    let currentCounty: number | undefined = undefined; // eslint-disable-line
+    let currentCounty: number | undefined = undefined;
 
     canvas.addEventListener("mousedown", mouseDown);
     // Save mouseDown for removal upon disabling
-    this.mouseDown = mouseDown; // eslint-disable-line
+    this.mouseDown = mouseDown;
 
     const brushCircle = document.getElementById("brush-circle");
 
-    // eslint-disable-next-line
     let batchGeounits = { add: {}, remove: {} };
     const throttledStoreToRedux = throttle(() => {
       store.dispatch(editSelectedGeounits(batchGeounits));
@@ -92,10 +91,9 @@ const PaintBrushSelectionTool: ISelectionTool = {
     function updateSelection(e: MouseEvent) {
       // Capture the ongoing xy coordinates
       const current = mousePos(e);
-      // eslint-disable-next-line
+
       let features = null;
       if (paintBrushSize > 1) {
-        /* eslint-disable */
         if (brushCircle) {
           brushCircle.style.visibility = "visible";
           brushCircle.style.top = current.y + "px";
@@ -107,7 +105,6 @@ const PaintBrushSelectionTool: ISelectionTool = {
           [current.x + brushRadius, current.y - brushRadius]
         ];
         features = getFeaturesAroundPoint(bbox, current, brushRadius);
-        /* eslint-enable */
       } else {
         features = getFeaturesAtPoint(current);
       }
@@ -173,17 +170,15 @@ const PaintBrushSelectionTool: ISelectionTool = {
         currentCounty = undefined;
       }
       setActive(false);
-      /* eslint-disable */
+
       if (brushCircle) {
         brushCircle.style.visibility = "hidden";
       }
-      /* eslint-enable */
     }
     function getFeaturesAtPoint(point: maplibregl.Point) {
       return map.queryRenderedFeatures(point, { layers: [levelToSelectionLayerId(geoLevelId)] });
     }
     function getFeaturesAroundPoint(
-      // eslint-disable-next-line
       bbox: [maplibregl.PointLike, maplibregl.PointLike],
       point: maplibregl.Point,
       brushRadius: number
@@ -201,7 +196,6 @@ const PaintBrushSelectionTool: ISelectionTool = {
       );
       const circleAroundPoint = circle([centerPoint.lng, centerPoint.lat], radialDistance, options);
       return features.filter(f => {
-        // eslint-disable-next-line
         return (
           f.geometry.type === "Polygon" &&
           booleanIntersects(
@@ -215,9 +209,8 @@ const PaintBrushSelectionTool: ISelectionTool = {
   disable: function (map: maplibregl.Map) {
     map.boxZoom.enable();
     map.dragPan.enable();
-    // eslint-disable-next-line
+
     map.getCanvas().style.cursor = "grab";
-    // eslint-disable-next-line
     this.mouseDown && map.getCanvasContainer().removeEventListener("mousedown", this.mouseDown);
   }
 };

@@ -5,7 +5,6 @@ interface Props {
   readonly totalPopulation: number;
   readonly numberOfMembers: readonly number[];
   readonly errors?: readonly string[];
-  // eslint-disable-next-line functional/no-mixed-type
   readonly onChange: (numberOfMembers: readonly number[]) => void;
 }
 

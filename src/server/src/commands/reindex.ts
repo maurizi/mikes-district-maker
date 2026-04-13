@@ -17,7 +17,7 @@ async function bootstrap(): Promise<void> {
     logger.log("Running REINDEX on project table");
     await queryRunner.query("REINDEX TABLE CONCURRENTLY project");
   } catch (e) {
-    logger.error("REINDEX on project table failed");
+    logger.error("REINDEX on project table failed", e);
   } finally {
     await queryRunner.release();
   }

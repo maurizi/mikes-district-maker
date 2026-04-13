@@ -35,14 +35,14 @@ const ProjectListFlyout = (props: FlyoutProps) => {
           userMenuKey === UserMenuKeys.Delete
             ? setDeleteProject
             : userMenuKey === UserMenuKeys.ExportCsv
-            ? exportCsv
-            : userMenuKey === UserMenuKeys.ExportShapefile
-            ? exportShp
-            : userMenuKey === UserMenuKeys.CopyMap
-            ? duplicateProject
-            : userMenuKey === UserMenuKeys.ExportGeoJson
-            ? exportGeoJson
-            : setTemplateProject;
+              ? exportCsv
+              : userMenuKey === UserMenuKeys.ExportShapefile
+                ? exportShp
+                : userMenuKey === UserMenuKeys.CopyMap
+                  ? duplicateProject
+                  : userMenuKey === UserMenuKeys.ExportGeoJson
+                    ? exportGeoJson
+                    : setTemplateProject;
         store.dispatch(action(props.project));
       }}
       sx={{ display: "inline-block" }}

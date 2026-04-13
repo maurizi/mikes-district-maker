@@ -28,26 +28,30 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
             lint
         ./scripts/yarn client \
             check-format
+        ./scripts/yarn client \
+            typecheck
 
         echo "Linting server source code"
         ./scripts/yarn server \
             lint
         ./scripts/yarn server \
             check-format
+        ./scripts/yarn server \
+            typecheck
 
         echo "Linting manage source code"
         ./scripts/yarn manage \
             lint
         ./scripts/yarn manage \
             check-format
+        ./scripts/yarn manage \
+            typecheck
 
         echo "Executing client test suite"
-        ./scripts/yarn client \
-            test --watchAll=false
+        ./scripts/yarn client test
 
         echo "Executing manage test suite"
-        ./scripts/yarn manage \
-            test --watchAll=false
+        ./scripts/yarn manage test
 
         echo "Executing server test suite"
         if [[ -n "${CI}" ]]; then

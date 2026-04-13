@@ -1,4 +1,3 @@
-
 import { Button as MenuButton, Wrapper, Menu, MenuItem } from "react-aria-menubutton";
 import Icon from "../components/Icon";
 import { style, invertStyles } from "./MenuButton.styles";
@@ -46,7 +45,7 @@ const SupportMenu = ({ project, ...props }: SupportProps & StateProps) => {
         <ul sx={style.menuList}>
           <li key={UserMenuKeys.Guide}>
             <MenuItem value={UserMenuKeys.Guide}>
-              <a href={guideLink} target="_blank" sx={style.menuListItem}>
+              <a href={guideLink} target="_blank" sx={style.menuListItem} rel="noreferrer">
                 <Icon name="book-spells" sx={style.menuListIcon} />
                 Getting Started Guide
               </a>
@@ -54,7 +53,7 @@ const SupportMenu = ({ project, ...props }: SupportProps & StateProps) => {
           </li>
           <li key={UserMenuKeys.Blog}>
             <MenuItem value={UserMenuKeys.Blog}>
-              <a href={blogLink} target="_blank" sx={style.menuListItem}>
+              <a href={blogLink} target="_blank" sx={style.menuListItem} rel="noreferrer">
                 <Icon name="book-spells" sx={style.menuListIcon} />
                 Blog
               </a>
@@ -62,7 +61,7 @@ const SupportMenu = ({ project, ...props }: SupportProps & StateProps) => {
           </li>
           <li key={UserMenuKeys.Contact}>
             <MenuItem value={UserMenuKeys.Contact}>
-              <a href={contactLink} target="_blank" sx={style.menuListItem}>
+              <a href={contactLink} target="_blank" sx={style.menuListItem} rel="noreferrer">
                 <Icon name="envelope" sx={style.menuListIcon} />
                 Contact us
               </a>

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/unbound-method */
 import { DataType, IBackup, newDb } from "pg-mem";
 import { v4 } from "uuid";
 import * as typeorm from "typeorm";
@@ -51,6 +50,17 @@ describe("Create random projects", () => {
       name: "current_database",
       returns: DataType.text,
       implementation: () => "districtbuilder"
+    });
+    testDb.public.registerFunction({
+      name: "version",
+      returns: DataType.text,
+      implementation: () => "PostgreSQL 13.0 (pg-mem)"
+    });
+    testDb.public.registerFunction({
+      name: "obj_description",
+      args: [DataType.text, DataType.text],
+      returns: DataType.text,
+      implementation: () => ""
     });
     testDb.registerExtension("uuid-ossp", schema => {
       schema.registerFunction({

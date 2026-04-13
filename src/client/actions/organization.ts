@@ -28,7 +28,9 @@ export const exportOrgUsersFailure = createAction(
 export const setArchiveTemplate = createAction("set archive template")<
   IProjectTemplate | undefined
 >();
-export const archiveTemplate =
-  createAction("Archive template")<{ id: ProjectTemplateId; slug: OrganizationSlug }>();
+export const archiveTemplate = createAction("Archive template")<{
+  id: ProjectTemplateId;
+  slug: OrganizationSlug;
+}>();
 export const archiveTemplateSuccess = createAction("Archive template success")<ProjectTemplateId>();
 export const archiveTemplateFailure = createAction("Archive template failure")<string>();

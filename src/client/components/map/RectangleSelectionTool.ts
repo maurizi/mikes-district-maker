@@ -55,28 +55,28 @@ const RectangleSelectionTool: ISelectionTool = {
   ) {
     map.boxZoom.disable();
     map.dragPan.disable();
-    map.getCanvas().style.cursor = "crosshair"; // eslint-disable-line
+    map.getCanvas().style.cursor = "crosshair";
 
     const canvas = map.getCanvasContainer();
 
     // Variable to hold the starting xy coordinates
     // when `mousedown` occured.
-    let start: maplibregl.Point; // eslint-disable-line
+    let start: maplibregl.Point;
 
-    let currentCounty: number | undefined = undefined; // eslint-disable-line
+    let currentCounty: number | undefined = undefined;
 
     // Variable to hold the current xy coordinates
     // when `mousemove` or `mouseup` occurs.
-    let current: maplibregl.Point; // eslint-disable-line
+    let current: maplibregl.Point;
 
     // Variable for the draw box element.
-    let box: HTMLElement | null; // eslint-disable-line
+    let box: HTMLElement | null;
 
     canvas.addEventListener("mousedown", mouseDown);
     // Save mouseDown for removal upon disabling
-    this.mouseDown = mouseDown; // eslint-disable-line
+    this.mouseDown = mouseDown;
 
-    let initiallySelectedGeoUnits: GeoUnits; // eslint-disable-line
+    let initiallySelectedGeoUnits: GeoUnits;
 
     // Since this function is throttled, check that the box still exists before setting any
     // highlighted geounits. When the mouse is released, box is set to null, and we don't
@@ -113,7 +113,7 @@ const RectangleSelectionTool: ISelectionTool = {
       current = mousePos(e);
 
       // Append the box element if it doesnt exist
-      // eslint-disable-next-line
+
       if (!box) {
         box = document.createElement("div");
         box.classList.add("boxdraw");
@@ -126,20 +126,19 @@ const RectangleSelectionTool: ISelectionTool = {
         maxY = Math.max(start.y, current.y);
 
       // Adjust width and xy position of the box element ongoing
-      /* eslint-disable */
+
       const pos = "translate(" + minX + "px," + minY + "px)";
       box.style.transform = pos;
       box.style.webkitTransform = pos;
       box.style.width = maxX - minX + "px";
       box.style.height = maxY - minY + "px";
-      /* eslint-enable */
 
       const features = getFeaturesInBoundingBox([start, current]);
 
       // Short circuit if the features are exactly the same as the last time.
       // Don't do this for single features though, because we want to recalculate
       // on the following condition: selecting a single feature, then canceling, then selecting again.
-      // eslint-disable-next-line
+
       if (features.length > 1 && isEqual(prevFeatures, features)) {
         return;
       }
@@ -179,7 +178,7 @@ const RectangleSelectionTool: ISelectionTool = {
       setFeaturesSelectedFromGeoUnits(map, geoUnitsToAdd, true);
 
       // Deselect any features that were previously highlighted and just became unhighlighted
-      // eslint-disable-next-line
+
       if (prevFeatures) {
         const prevGeoUnits = featuresToUnlockedGeoUnits(
           prevFeatures,
@@ -235,7 +234,6 @@ const RectangleSelectionTool: ISelectionTool = {
     }
 
     function getFeaturesInBoundingBox(
-      // eslint-disable-next-line
       bbox: [maplibregl.PointLike, maplibregl.PointLike]
     ): readonly maplibregl.MapGeoJSONFeature[] {
       return map.queryRenderedFeatures(bbox, {
@@ -259,20 +257,19 @@ const RectangleSelectionTool: ISelectionTool = {
     /*
      * Select highlighted features and clean up.
      */
-    // eslint-disable-next-line
+
     function finish(bbox?: [maplibregl.PointLike, maplibregl.PointLike]) {
       // Remove these events now that finish has been called.
       document.removeEventListener("mousemove", onMouseMove);
       document.removeEventListener("mouseup", onMouseUp);
 
-      // eslint-disable-next-line
       if (box) {
         box.parentNode && box.parentNode.removeChild(box);
         box = null;
       }
 
       // If bbox exists. use this value as the argument for `queryRenderedFeatures`
-      // eslint-disable-next-line
+
       if (bbox) {
         const selectedFeatures = getFeaturesInBoundingBox(bbox);
         const geoUnits = featuresToUnlockedGeoUnits(
@@ -297,9 +294,8 @@ const RectangleSelectionTool: ISelectionTool = {
   disable: function (map: maplibregl.Map) {
     map.boxZoom.enable();
     map.dragPan.enable();
-    // eslint-disable-next-line
+
     map.getCanvas().style.cursor = "grab";
-    // eslint-disable-next-line
     this.mouseDown && map.getCanvasContainer().removeEventListener("mousedown", this.mouseDown);
   }
 };

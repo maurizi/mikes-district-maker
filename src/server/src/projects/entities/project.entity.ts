@@ -1,11 +1,7 @@
 import { Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
 
 import { ProjectVisibility } from "../../../../shared/constants";
-import {
-  DistrictsDefinition,
-  IProject,
-  ThumbnailGeoJSON
-} from "../../../../shared/entities";
+import type { DistrictsDefinition, IProject, ThumbnailGeoJSON } from "../../../../shared/entities";
 import { RegionConfig } from "../../region-configs/entities/region-config.entity";
 import { Chamber } from "../../chambers/entities/chamber.entity";
 import { User } from "../../users/entities/user.entity";
@@ -16,7 +12,6 @@ import {
 } from "../../../../shared/constants";
 
 @Entity()
-@Index("IDX_PUBLISHED_PROJECTS", { synchronize: false })
 @Index(["updatedDt", "user"])
 export class Project implements IProject {
   @PrimaryGeneratedColumn("uuid")
@@ -45,8 +40,9 @@ export class Project implements IProject {
   @Column({ name: "number_of_districts", type: "integer" })
   numberOfDistricts: number;
 
+  // DSQL stores JSON as text; simple-json serializes transparently.
   @Column({
-    type: "jsonb",
+    type: "simple-json",
     name: "districts_definition",
     nullable: true
   })
@@ -55,7 +51,7 @@ export class Project implements IProject {
   // Client-computed, simplified thumbnail geojson used to render project
   // previews on listings. Written by the client on save.
   @Column({
-    type: "jsonb",
+    type: "simple-json",
     name: "thumbnail",
     nullable: true
   })
@@ -84,14 +80,15 @@ export class Project implements IProject {
   advancedEditingEnabled: boolean;
 
   @Column({
-    type: "boolean",
+    type: "simple-json",
     name: "locked_districts",
-    array: true,
-    default: () => "'{}'"
+    default: () => "'[]'"
   })
   lockedDistricts: readonly boolean[];
 
-  @Column({ type: "enum", enum: ProjectVisibility, default: ProjectVisibility.Published })
+  // DSQL has no enum types; stored as varchar with a CHECK constraint in the
+  // squash migration. TypeORM enforces the same values at the app layer.
+  @Column({ type: "varchar", length: 16, default: ProjectVisibility.Published })
   visibility: ProjectVisibility;
 
   @Column({ type: "boolean", default: false })
@@ -108,18 +105,16 @@ export class Project implements IProject {
   populationDeviation: number;
 
   @Column({
-    type: "character varying",
-    array: true,
+    type: "simple-json",
     name: "pinned_metric_fields",
-    default: DEFAULT_PINNED_METRIC_FIELDS
+    default: () => `'${JSON.stringify(DEFAULT_PINNED_METRIC_FIELDS)}'`
   })
   pinnedMetricFields: string[];
 
   @Column({
-    type: "integer",
+    type: "simple-json",
     name: "number_of_members",
-    array: true,
-    default: () => "'{}'"
+    default: () => "'[]'"
   })
   numberOfMembers: readonly number[];
 

@@ -21,7 +21,7 @@ interface TooltipProps {
   readonly [key: string]: unknown;
 }
 
-const Tooltip = ({ content, children, placement = "top", visible, ...rest }: TooltipProps) => {
+const Tooltip = ({ content, children, placement = "top", visible }: TooltipProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const open = visible !== undefined ? visible : isOpen;
 
@@ -32,7 +32,10 @@ const Tooltip = ({ content, children, placement = "top", visible, ...rest }: Too
     middleware: [offset(8), flip(), shift({ padding: 5 })]
   });
 
-  const hover = useHover(context, { delay: { open: 500, close: 0 }, enabled: visible === undefined });
+  const hover = useHover(context, {
+    delay: { open: 500, close: 0 },
+    enabled: visible === undefined
+  });
   const focus = useFocus(context, { enabled: visible === undefined });
   const dismiss = useDismiss(context);
   const role = useRole(context, { role: "tooltip" });

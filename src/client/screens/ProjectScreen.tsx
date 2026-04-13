@@ -12,7 +12,6 @@ import {
   IReferenceLayer,
   IStaticMetadata,
   IUser,
-  ProjectId,
   TypedArrays
 } from "../../shared/entities";
 
@@ -55,7 +54,7 @@ interface StateProps {
   readonly project?: IProject;
   readonly geojson?: DistrictsGeoJSON;
   readonly staticMetadata?: IStaticMetadata;
-  readonly staticGeoLevels: TypedArrays;
+  readonly staticGeoLevels?: TypedArrays;
   readonly projectNotFound?: boolean;
   readonly findMenuOpen: boolean;
   readonly evaluateMode: boolean;
@@ -71,10 +70,6 @@ interface StateProps {
   readonly user: Resource<IUser>;
   readonly limitSelectionToCounty: boolean;
   readonly projectOptions: ProjectOptionsState;
-}
-
-interface Params {
-  readonly projectId: ProjectId;
 }
 
 const style: Record<string, ThemeUIStyleObject> = {
@@ -142,11 +137,11 @@ const ProjectScreen = ({
   // Warn the user when attempting to leave the page with selected geounits
   useBeforeunload(event => {
     // Disabling 'functional/no-conditional-statement' without naming it.
-    // eslint-disable-next-line
+
     if (areAnyGeoUnitsSelected(presentDrawingState.selectedGeounits)) {
       // Old style, used by e.g. Chrome
       // Disabling 'functional/immutable-data' without naming it.
-      // eslint-disable-next-line
+
       event.returnValue = true;
       // New style, used by e.g. Firefox
       event.preventDefault();
@@ -175,7 +170,6 @@ const ProjectScreen = ({
   }, [projectId, isLoggedIn]);
 
   useEffect(() => {
-    //eslint-disable-next-line
     document.title = "DistrictBuilder " + (project ? `| ${project.name}` : "");
   });
 

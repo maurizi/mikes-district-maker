@@ -12,18 +12,6 @@ import { getObject, s3Options } from "../../../server/src/common/functions";
 const s3 = new S3Client({});
 const PERCENT_COMPLETE = 0.25;
 
-function countBaseGeounits(hierarchy: GeoUnitHierarchy): number {
-  let count = 0;
-  for (const item of hierarchy) {
-    if (typeof item === "number") {
-      count++;
-    } else {
-      count += countBaseGeounits(item);
-    }
-  }
-  return count;
-}
-
 export default class CreateRandomProjects extends Command {
   static description = "creates randomly generated projects for development testing";
 
@@ -48,9 +36,10 @@ export default class CreateRandomProjects extends Command {
     const userRepo = dataSource.getRepository(User);
 
     const regions = await regionConfigRepo.find({
-      where: args.region === "all"
-        ? { hidden: false, archived: false }
-        : { regionCode: args.region, hidden: false, archived: false }
+      where:
+        args.region === "all"
+          ? { hidden: false, archived: false }
+          : { regionCode: args.region, hidden: false, archived: false }
     });
 
     const user = await userRepo.findOneOrFail({ where: {} });

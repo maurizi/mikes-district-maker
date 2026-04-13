@@ -9,6 +9,7 @@ import {
   Request,
   UnauthorizedException
 } from "@nestjs/common";
+import stringify from "csv-stringify/lib/sync";
 
 import { OrganizationSlug, UserId } from "../../../../shared/entities";
 import { JoinOrganizationErrors } from "../../../../shared/constants";
@@ -20,11 +21,14 @@ import { UsersService } from "../../users/services/users.service";
 import { Organization } from "../entities/organization.entity";
 import { OrganizationUserDto } from "../entities/organizationUser.dto";
 import { OrganizationsService } from "../services/organizations.service";
-import stringify = require("csv-stringify/lib/sync");
 
 @Controller("api/organization")
+@Controller("api/organization")
 export class OrganizationsController {
-  constructor(public service: OrganizationsService, private readonly usersService: UsersService) {}
+  constructor(
+    public service: OrganizationsService,
+    private readonly usersService: UsersService
+  ) {}
 
   async getOrgAndTemplates(organizationSlug: OrganizationSlug): Promise<Organization> {
     const org = await this.service.getOrgAndProjectTemplates(organizationSlug);

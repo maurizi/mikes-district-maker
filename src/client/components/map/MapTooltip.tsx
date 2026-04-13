@@ -94,10 +94,8 @@ const MapTooltip = ({
   useEffect(() => {
     const throttledSetFeature = throttle(
       (point: maplibregl.Point | undefined, geoLevel: string | undefined) => {
-        // eslint-disable-next-line
         if (!point || !geoLevel) {
           setFeature(undefined);
-          // eslint-disable-next-line
         } else {
           const features =
             map &&
@@ -111,7 +109,6 @@ const MapTooltip = ({
     );
 
     const onMouseMoveThrottled = throttle((e: maplibregl.MapMouseEvent) => {
-      // eslint-disable-next-line
       if (map && staticMetadata && invertedGeoLevelIndex !== undefined) {
         const geoLevel = staticMetadata.geoLevelHierarchy[invertedGeoLevelIndex].id;
         setPoint({
@@ -131,7 +128,6 @@ const MapTooltip = ({
     };
 
     const clearHandlers = () => {
-      // eslint-disable-next-line
       if (map) {
         map.off("mousemove", onMouseMoveThrottled);
         map.off("drag", onDrag);
@@ -139,7 +135,6 @@ const MapTooltip = ({
       }
     };
 
-    // eslint-disable-next-line
     if (map && staticMetadata) {
       clearHandlers();
       map.on("mousemove", onMouseMoveThrottled);
@@ -151,10 +146,8 @@ const MapTooltip = ({
   }, [map, staticMetadata, invertedGeoLevelIndex]);
 
   useEffect(() => {
-    // eslint-disable-next-line
     let outdated = false;
     async function getData() {
-      // eslint-disable-next-line
       if (staticMetadata && project && invertedGeoLevelIndex !== undefined) {
         const geoLevelId = staticMetadata.geoLevelHierarchy[invertedGeoLevelIndex].id;
 
@@ -182,19 +175,23 @@ const MapTooltip = ({
           [...highlightedGeounitsForLevel.keys()][0] === feature.id
             ? featureLabel()
             : highlightedGeounitsForLevel?.size === 1
-            ? `1 ${geoLevelId}`
-            : highlightedGeounitsForLevel?.size > 1
-            ? `${Number(highlightedGeounitsForLevel.size).toLocaleString()} ${geoLevelLabel(
-                geoLevelId
-              ).toLowerCase()}`
-            : featureLabel();
+              ? `1 ${geoLevelId}`
+              : highlightedGeounitsForLevel?.size > 1
+                ? `${Number(highlightedGeounitsForLevel.size).toLocaleString()} ${geoLevelLabel(
+                    geoLevelId
+                  ).toLowerCase()}`
+                : featureLabel();
 
         // Only set data if it is for the most recent version requested, to
         // avoid overwriting fresh data with stale data
         !outdated &&
           throttledDataSetter(
             setData,
-            demographics ? (voting ? { demographics, voting, heading } : { demographics, heading }) : undefined
+            demographics
+              ? voting
+                ? { demographics, voting, heading }
+                : { demographics, heading }
+              : undefined
           );
       }
     }
@@ -205,19 +202,20 @@ const MapTooltip = ({
     };
   }, [highlightedGeounits, feature, staticMetadata, project, invertedGeoLevelIndex]);
 
-  // eslint-disable-next-line
   if (map && data !== undefined) {
     const x = point.x;
     const y = point.y;
     const votingForYear =
       electionYear && data.voting ? extractYear(data.voting, electionYear) : data.voting;
-    const votingForOffice = votingForYear ? extractOffice(votingForYear, selectedOffice) : undefined;
+    const votingForOffice = votingForYear
+      ? extractOffice(votingForYear, selectedOffice)
+      : undefined;
     const voting =
       votingForOffice && Object.keys(votingForOffice).length > 0
         ? votingForOffice
         : data.voting && Object.keys(data.voting).length > 0
-        ? extractOffice(data.voting, "")
-        : undefined;
+          ? extractOffice(data.voting, "")
+          : undefined;
     const demographicsGroups = staticMetadata && getDemographicsGroups(staticMetadata);
     const hasAdjustedPopulation =
       data.demographics.population < 0 ||

@@ -1,12 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext",
-      "webworker"
-    ],
+    "lib": ["dom", "dom.iterable", "esnext", "webworker"],
     "allowJs": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
@@ -21,12 +16,6 @@
     "jsx": "react-jsx",
     "jsxImportSource": "theme-ui"
   },
-  "include": [
-    "src"
-  ],
-  "exclude": [
-    "src/server",
-    "src/manage",
-    "src/dist"
-  ]
+  "include": ["src"],
+  "exclude": ["src/server", "src/manage", "src/dist"]
 }

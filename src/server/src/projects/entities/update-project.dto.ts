@@ -13,7 +13,7 @@ import {
 } from "class-validator";
 
 import { ProjectVisibility } from "../../../../shared/constants";
-import {
+import type {
   DistrictsDefinition,
   ThumbnailGeoJSON,
   UpdateProjectData

@@ -87,11 +87,11 @@ export interface EvaluateMetricWithValue extends BaseEvaluateMetric {
   readonly popThreshold?: number;
   readonly pviByDistrict?: readonly (PviBucket | undefined)[] | undefined;
   readonly status?: boolean;
-  // eslint-disable-next-line
+
   readonly [key: string]: any;
 }
 
-export type ChoroplethSteps = readonly (readonly [number, string])[];
+export type ChoroplethSteps = [number, string][];
 
 export type ReferenceLayerGeojson =
   | FeatureCollection<MultiPolygon, ReferenceLayerProperties>

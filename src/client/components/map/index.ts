@@ -265,11 +265,11 @@ export function generateMapLayers(
       layout: { visibility: "none" },
       filter: ["match", ["get", "color"], ["transparent"], false, true],
       paint: {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         "fill-color": {
           property: "compactness",
-          stops: getCompactnessStops() as unknown as any[][]
-        } as any,
+          type: "interval",
+          stops: getCompactnessStops()
+        },
         "fill-outline-color": "gray",
         "fill-opacity": 0.9
       }
@@ -285,12 +285,11 @@ export function generateMapLayers(
       layout: { visibility: "none" },
       filter: ["match", ["get", "color"], ["transparent"], false, true],
       paint: {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         "fill-color": {
           property: "pvi",
           type: "interval",
-          stops: getPviSteps() as unknown as any[][]
-        } as any,
+          stops: getPviSteps()
+        },
         "fill-outline-color": "gray",
         "fill-opacity": 0.9
       }
@@ -306,8 +305,7 @@ export function generateMapLayers(
       layout: { visibility: "none" },
       filter: ["match", ["get", "color"], ["transparent"], false, true],
       paint: {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        "fill-color": { type: "identity", property: "majorityRaceFill" } as any,
+        "fill-color": { type: "identity", property: "majorityRaceFill" },
         "fill-outline-color": "gray",
         "fill-opacity": 0.9
       }
@@ -323,12 +321,11 @@ export function generateMapLayers(
       layout: { visibility: "none" },
       filter: ["match", ["get", "color"], ["transparent"], false, true],
       paint: {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         "fill-color": {
           property: "percentDeviation",
           type: "interval",
-          stops: getEqualPopulationStops(populationDeviation) as unknown as any[][]
-        } as any,
+          stops: getEqualPopulationStops(populationDeviation)
+        },
         "fill-outline-color": "gray",
         "fill-opacity": 0.9
       }
@@ -648,12 +645,12 @@ export function getCurrentCountyFromGeoUnits(
   geoUnits: GeoUnits
 ): number | undefined {
   const geoLevelIds = staticMetadata.geoLevelHierarchy.map(geoLevel => geoLevel.id);
-  // eslint-disable-next-line
+
   for (let i = 0; i < geoLevelIds.length; i++) {
     const geoLevelId = geoLevelIds[i];
     const value = geoUnits[geoLevelId]?.entries().next().value;
     if (value) {
-      return value[1][0] as number;
+      return value[1][0];
     }
   }
 }
@@ -673,16 +670,16 @@ function isGeoUnitLocked(
         geoUnitIndices.slice(1)
       )
     : typeof districtsDefinition === "number"
-    ? // Check if this specific district is locked
-      lockedDistricts[districtsDefinition - 1]
-    : // Check if any district at this geolevel is locked
-      districtsDefinition.some(districtId =>
-        typeof districtId === "number"
-          ? // Whole district is assigned so it can be looked up directly
-            lockedDistricts[districtId - 1]
-          : // District definition has more nesting so it must be followed further
-            isGeoUnitLocked(districtId, lockedDistricts, geoUnitIndices)
-      );
+      ? // Check if this specific district is locked
+        lockedDistricts[districtsDefinition - 1]
+      : // Check if any district at this geolevel is locked
+        districtsDefinition.some(districtId =>
+          typeof districtId === "number"
+            ? // Whole district is assigned so it can be looked up directly
+              lockedDistricts[districtId - 1]
+            : // District definition has more nesting so it must be followed further
+              isGeoUnitLocked(districtId, lockedDistricts, geoUnitIndices)
+        );
 }
 
 export function setFeaturesSelectedFromGeoUnits(
@@ -740,7 +737,6 @@ export function deselectChildGeounits(
       // geounits can't be selected at the same time as features from one geolevel up).
       const numLevelsToIgnore = isBaseLevelAlwaysVisible ? 1 : 2;
 
-      // eslint-disable-next-line
       if (geoUnitIndices.length <= staticMetadata.geoLevelHierarchy.length - numLevelsToIgnore) {
         const { childGeoUnits } = getChildGeoUnits(geoUnitIndices, staticMetadata, staticGeoLevels);
         setFeaturesSelectedFromGeoUnits(map, childGeoUnits, false);
@@ -760,13 +756,16 @@ export function getGeoLevelVisibility(
     .map(geoLevel => mapZoom >= geoLevel.minZoom);
 }
 
-/* eslint-disable */
 export interface ISelectionTool {
-  enable: (map: maplibregl.Map, ...args: any) => void;
-  disable: (map: maplibregl.Map, ...args: any) => void;
-  [x: string]: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  enable: (map: maplibregl.Map, ...args: any[]) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  disable: (map: maplibregl.Map, ...args: any[]) => void;
+  setCursor?: () => void;
+  unsetCursor?: () => void;
+  clickHandler?: (e: maplibregl.MapMouseEvent) => void;
+  mouseDown?: (e: MouseEvent) => void;
 }
-/* eslint-enable */
 
 /*
  * Return GeoUnits for given features.
@@ -793,12 +792,15 @@ export function featuresToGeoUnits(
           .filter(feature => feature.sourceLayer === geoLevelId)
           .map((feature: MapGeoJSONFeature) => [
             feature.id as FeatureId,
-            geoLevelHierarchyKeys.reduce((geounitData, key) => {
-              const geounitId = feature.properties && feature.properties[key];
-              return geounitId !== undefined && geounitId !== null
-                ? [geounitId, ...geounitData]
-                : geounitData;
-            }, [] as readonly number[])
+            geoLevelHierarchyKeys.reduce(
+              (geounitData, key) => {
+                const geounitId = feature.properties && feature.properties[key];
+                return geounitId !== undefined && geounitId !== null
+                  ? [geounitId, ...geounitData]
+                  : geounitData;
+              },
+              [] as readonly number[]
+            )
           ])
       )
     };
@@ -863,12 +865,11 @@ export function removeLockedGeoUnits(
 ) {
   Object.entries(geoUnits).forEach(([geoLevel, geoUnitsForLevel]) => {
     geoUnitsForLevel.forEach((geoUnitIndices, featureId) => {
-      // eslint-disable-next-line
       if (isGeoUnitLocked(districtsDefinition, lockedDistricts, geoUnitIndices)) {
         // Remove locked geounit
-        // eslint-disable-next-line
+
         geoUnits[geoLevel].delete(featureId);
-        // eslint-disable-next-line
+
         if (geoUnitIndices.length < staticMetadata.geoLevelHierarchy.length - 1) {
           // This geounit's children are not base geounits, so they may be selected.
           // Add any unlocked sub-geounits to allow for partial selection.

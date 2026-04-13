@@ -88,7 +88,6 @@ function findComponents(
   const blockSet = new Set(districtBlocks);
   const visited = new Set<number>();
   const components: number[][] = [];
-  const numArcs = adjacency.length / 2;
 
   for (const block of districtBlocks) {
     if (visited.has(block)) continue;
@@ -181,7 +180,8 @@ function buildArcEndpoints(
 
     if (isQuantized) {
       // Delta-encoded: accumulate all deltas to get final position
-      let x = 0, y = 0;
+      let x = 0,
+        y = 0;
       for (let i = 0; i < numPoints; i++) {
         const off = startOffset + i * 8;
         x += view.getInt32(off, true);
@@ -329,14 +329,15 @@ function decodeRing(
     // Decode points
     const points: number[][] = [];
     if (isQuantized) {
-      let x = 0, y = 0;
+      let x = 0,
+        y = 0;
       for (let i = 0; i < numPoints; i++) {
         const off = start + i * 8;
         x += view.getInt32(off, true);
         y += view.getInt32(off + 4, true);
         points.push([
-          x * transform!.scale[0] + transform!.translate[0],
-          y * transform!.scale[1] + transform!.translate[1]
+          x * transform.scale[0] + transform.translate[0],
+          y * transform.scale[1] + transform.translate[1]
         ]);
       }
     } else {
@@ -377,9 +378,7 @@ function ringArea(ring: number[][]): number {
 
 // --- Compute Polsby-Popper compactness ---
 
-function calcPolsbyPopper(
-  coordinates: number[][][][]
-): [number, Contiguity] {
+function calcPolsbyPopper(coordinates: number[][][][]): [number, Contiguity] {
   if (coordinates.length === 0) return [0, ""];
   if (coordinates.length > 1) return [0, "non-contiguous"];
 
@@ -396,7 +395,7 @@ function calcPolsbyPopper(
     sphericalArea += (lng2 - lng1) * toRad * (2 + Math.sin(lat1 * toRad) + Math.sin(lat2 * toRad));
   }
   const earthRadius = 6371008.8;
-  const areaM2 = Math.abs(sphericalArea * earthRadius * earthRadius / 2);
+  const areaM2 = Math.abs((sphericalArea * earthRadius * earthRadius) / 2);
 
   // Perimeter via Haversine
   let perimeter = 0;
@@ -405,7 +404,8 @@ function calcPolsbyPopper(
     const [lng2, lat2] = exteriorRing[i + 1];
     const dLat = (lat2 - lat1) * toRad;
     const dLng = (lng2 - lng1) * toRad;
-    const a = Math.sin(dLat / 2) ** 2 +
+    const a =
+      Math.sin(dLat / 2) ** 2 +
       Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.sin(dLng / 2) ** 2;
     perimeter += 2 * earthRadius * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
@@ -429,7 +429,6 @@ export function computeDistrictBoundaries(
   numberOfDistricts: number
 ): DistrictBoundary[] {
   const { adjacency, arcCoords, arcOffsets, transform } = adjacencyData;
-  const numArcs = adjacency.length / 2;
   const endpoints = buildArcEndpoints(arcCoords, arcOffsets, transform);
 
   const results: DistrictBoundary[] = [];

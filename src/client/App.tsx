@@ -62,21 +62,138 @@ const AppRoutes = () => (
   <BrowserRouter>
     <QueryParamProvider adapter={ReactRouter6Adapter}>
       <Routes>
-        <Route path="/" element={<PrivateRoute><RollbarContext context="home"><HomeScreen /></RollbarContext></PrivateRoute>} />
-        <Route path="/o/:organizationSlug" element={<RollbarContext context="organization"><OrganizationScreen /></RollbarContext>} />
-        <Route path="/o/:organizationSlug/admin" element={<PrivateRoute><RollbarContext context="organization-admin"><OrganizationAdminScreen /></RollbarContext></PrivateRoute>} />
-        <Route path="/projects/:projectId" element={<RollbarContext context="project"><ProjectScreen /></RollbarContext>} />
-        <Route path="/login" element={<RollbarContext context="login"><LoginScreen /></RollbarContext>} />
-        <Route path="/maps" element={<RollbarContext context="published-map-list"><PublishedMapsListScreen /></RollbarContext>} />
-        <Route path="/register" element={<RollbarContext context="register"><RegistrationScreen /></RollbarContext>} />
-        <Route path="/forgot-password" element={<RollbarContext context="forgot-password"><ForgotPasswordScreen /></RollbarContext>} />
-        <Route path="/activate/:token" element={<RollbarContext context="activate-account"><ActivateAccountScreen /></RollbarContext>} />
-        <Route path="/activate/:token/:organizationSlug" element={<RollbarContext context="activate-account-organization"><ActivateAccountScreen /></RollbarContext>} />
-        <Route path="/password-reset/:token" element={<RollbarContext context="reset-password"><ResetPasswordScreen /></RollbarContext>} />
-        <Route path="/create-project" element={<PrivateRoute><RollbarContext context="create-project"><CreateProjectScreen /></RollbarContext></PrivateRoute>} />
-        <Route path="/start-project" element={<PrivateRoute><RollbarContext context="start-project"><StartProjectScreen /></RollbarContext></PrivateRoute>} />
-        <Route path="/import-project" element={<PrivateRoute><RollbarContext context="import-project"><ImportProjectScreen /></RollbarContext></PrivateRoute>} />
-        <Route path="/user-account" element={<PrivateRoute><RollbarContext context="user-account"><UserAccountScreen /></RollbarContext></PrivateRoute>} />
+        <Route
+          path="/"
+          element={
+            <PrivateRoute>
+              <RollbarContext context="home">
+                <HomeScreen />
+              </RollbarContext>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/o/:organizationSlug"
+          element={
+            <RollbarContext context="organization">
+              <OrganizationScreen />
+            </RollbarContext>
+          }
+        />
+        <Route
+          path="/o/:organizationSlug/admin"
+          element={
+            <PrivateRoute>
+              <RollbarContext context="organization-admin">
+                <OrganizationAdminScreen />
+              </RollbarContext>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/projects/:projectId"
+          element={
+            <RollbarContext context="project">
+              <ProjectScreen />
+            </RollbarContext>
+          }
+        />
+        <Route
+          path="/login"
+          element={
+            <RollbarContext context="login">
+              <LoginScreen />
+            </RollbarContext>
+          }
+        />
+        <Route
+          path="/maps"
+          element={
+            <RollbarContext context="published-map-list">
+              <PublishedMapsListScreen />
+            </RollbarContext>
+          }
+        />
+        <Route
+          path="/register"
+          element={
+            <RollbarContext context="register">
+              <RegistrationScreen />
+            </RollbarContext>
+          }
+        />
+        <Route
+          path="/forgot-password"
+          element={
+            <RollbarContext context="forgot-password">
+              <ForgotPasswordScreen />
+            </RollbarContext>
+          }
+        />
+        <Route
+          path="/activate/:token"
+          element={
+            <RollbarContext context="activate-account">
+              <ActivateAccountScreen />
+            </RollbarContext>
+          }
+        />
+        <Route
+          path="/activate/:token/:organizationSlug"
+          element={
+            <RollbarContext context="activate-account-organization">
+              <ActivateAccountScreen />
+            </RollbarContext>
+          }
+        />
+        <Route
+          path="/password-reset/:token"
+          element={
+            <RollbarContext context="reset-password">
+              <ResetPasswordScreen />
+            </RollbarContext>
+          }
+        />
+        <Route
+          path="/create-project"
+          element={
+            <PrivateRoute>
+              <RollbarContext context="create-project">
+                <CreateProjectScreen />
+              </RollbarContext>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/start-project"
+          element={
+            <PrivateRoute>
+              <RollbarContext context="start-project">
+                <StartProjectScreen />
+              </RollbarContext>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/import-project"
+          element={
+            <PrivateRoute>
+              <RollbarContext context="import-project">
+                <ImportProjectScreen />
+              </RollbarContext>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/user-account"
+          element={
+            <PrivateRoute>
+              <RollbarContext context="user-account">
+                <UserAccountScreen />
+              </RollbarContext>
+            </PrivateRoute>
+          }
+        />
       </Routes>
     </QueryParamProvider>
   </BrowserRouter>

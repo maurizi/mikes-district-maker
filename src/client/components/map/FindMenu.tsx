@@ -71,9 +71,7 @@ const FindMenu = ({
   const num = findCoords?.length || 0;
 
   useEffect(() => {
-    // eslint-disable-next-line
     if (map && findCoords && findIndex !== undefined && findCoords.length > findIndex) {
-      // eslint-disable-next-line
       const bounds = bbox(polygon(findCoords[findIndex])) as [number, number, number, number];
       map.fitBounds(bounds, { padding: 50 });
     }

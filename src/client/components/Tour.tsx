@@ -8,7 +8,6 @@ import tourClickingGif from "../media/tour-clicking-counties-sidebar.gif";
 import tourCountiesGif from "../media/tour-counties-blockgroups.gif";
 import { DistrictsGeoJSON } from "../types";
 
-/* eslint-disable */
 interface Props {
   readonly geojson: DistrictsGeoJSON;
   readonly project: IProject;
@@ -42,8 +41,8 @@ class Tour extends Component<Props, State> {
             geoLevelsPlural[geoLevelsPlural.length - 1]
           }`
         : geoLevelsPlural.length == 2
-        ? `${largestGeoLevelPlural} and ${geoLevelsPlural[1]}`
-        : largestGeoLevelPlural;
+          ? `${largestGeoLevelPlural} and ${geoLevelsPlural[1]}`
+          : largestGeoLevelPlural;
 
     this.state = {
       run: !props.user.hasSeenTour,
@@ -352,11 +351,11 @@ class Tour extends Component<Props, State> {
           textColor: "#595959",
           width: 500,
           zIndex: 1000,
-          buttons: ['back', 'close', 'primary', 'skip']
-        }} />
+          buttons: ["back", "close", "primary", "skip"]
+        }}
+      />
     );
   }
 }
-/* eslint-enable */
 
 export default Tour;

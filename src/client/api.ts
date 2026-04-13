@@ -42,14 +42,14 @@ const apiAxios = axios.create();
 function setAxiosAuthHeaders(jwt: JWT): void {
   // Disabling 'functional/immutable-data' without naming it.
   // See https://github.com/jonaskello/eslint-plugin-functional/issues/105
-  // eslint-disable-next-line
+
   apiAxios.defaults.headers.common.Authorization = `Bearer ${jwt}`;
 }
 
 const authToken = getJWT();
 // Disabling 'functional/no-conditional-statement' without naming it.
 // See https://github.com/jonaskello/eslint-plugin-functional/issues/105
-// eslint-disable-next-line
+
 if (authToken) {
   setAxiosAuthHeaders(authToken);
 }
@@ -241,8 +241,6 @@ export async function fetchRegionConfigs(): Promise<readonly IRegionConfig[]> {
       .catch(error => reject(error.message));
   });
 }
-
-
 
 export async function patchProject(
   id: ProjectId,
@@ -474,11 +472,11 @@ async function pollForPlanScoreUpdates(projectId: ProjectId, numTries = 1): Prom
         project.planscoreUrl === "error" || numTries > PLANSCORE_POLL_MAX_TRIES
           ? reject()
           : project.planscoreUrl === ""
-          ? setTimeout(
-              () => resolve(pollForPlanScoreUpdates(projectId, numTries + 1)),
-              PLANSCORE_POLL_MS
-            )
-          : resolve(project)
+            ? setTimeout(
+                () => resolve(pollForPlanScoreUpdates(projectId, numTries + 1)),
+                PLANSCORE_POLL_MS
+              )
+            : resolve(project)
       )
       .catch(() => reject());
   });

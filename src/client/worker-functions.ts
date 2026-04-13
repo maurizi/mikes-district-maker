@@ -14,17 +14,16 @@ import {
 import { DistrictsGeoJSON, StaticCounts } from "../client/types";
 import { WorkerFunctions } from "./worker";
 
-const worker = Comlink.wrap<WorkerFunctions>(new Worker(new URL("./worker.ts", import.meta.url), { type: "module" }));
+const worker = Comlink.wrap<WorkerFunctions>(
+  new Worker(new URL("./worker.ts", import.meta.url), { type: "module" })
+);
 
-// eslint-disable-next-line
 function replacer(this: unknown, key: string | number, value: unknown): unknown {
   if (value instanceof Set) {
-    // eslint-disable-next-line
     return [...value].sort();
   } else if (value instanceof Map) {
     return [...value.entries()].sort(([a], [b]) => (a === b ? 0 : a < b ? -1 : 1));
   } else {
-    // eslint-disable-next-line
     return value;
   }
 }

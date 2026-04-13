@@ -211,7 +211,7 @@ const VotingSidebarTooltip = ({
       {presYears.map(year => {
         const rows = getPresidentialRows({
           voting,
-          year: year ? (year) : undefined,
+          year: year ? year : undefined,
           excludeOther
         });
         if (!rows) return null;

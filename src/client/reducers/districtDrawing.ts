@@ -1,7 +1,7 @@
 import { Cmd, Loop, loop } from "redux-loop";
 import { getType } from "typesafe-actions";
 
-import { Action, LoopAction } from "../actions";
+import { LoopAction } from "../actions";
 import { SavingState, EvaluateMetricWithValue } from "../types";
 
 import {
@@ -272,14 +272,14 @@ const districtDrawingReducer = (
         return !canSwitch
           ? loop(state, Cmd.none)
           : !advancedEditingEnabled &&
-            !skipModal &&
-            !isReadOnly &&
-            !isBaseLevelAlwaysVisible &&
-            index === geoLevelHierarchy.length - 1
-          ? loop(state, Cmd.action(showAdvancedEditingModal(true)))
-          : updateCurrentState(state, {
-              geoLevelIndex: index
-            });
+              !skipModal &&
+              !isReadOnly &&
+              !isBaseLevelAlwaysVisible &&
+              index === geoLevelHierarchy.length - 1
+            ? loop(state, Cmd.action(showAdvancedEditingModal(true)))
+            : updateCurrentState(state, {
+                geoLevelIndex: index
+              });
       }
       return state;
     }

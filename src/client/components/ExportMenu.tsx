@@ -28,8 +28,8 @@ const ExportMenu = (props: ExportProps) => {
           userMenuKey === UserMenuKeys.ExportCsv
             ? exportCsv
             : userMenuKey === UserMenuKeys.ExportShapefile
-            ? exportShp
-            : exportGeoJson;
+              ? exportShp
+              : exportGeoJson;
         store.dispatch(action(props.project));
       }}
     >

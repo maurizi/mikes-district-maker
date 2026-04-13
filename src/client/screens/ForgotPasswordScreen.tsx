@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Box, Button, Card, Flex, Heading} from "theme-ui";
+import { Box, Button, Card, Flex, Heading } from "theme-ui";
 import Logo from "../media/logos/logo.svg?react";
 
 import { initiateForgotPassword } from "../api";
@@ -23,7 +23,9 @@ export interface ResetPasswordLocationState {
 
 const ForgotPasswordScreen = () => {
   const location = useLocation();
-  const locationState = location.state as (AuthLocationState & ResetPasswordLocationState) | undefined;
+  const locationState = location.state as
+    | (AuthLocationState & ResetPasswordLocationState)
+    | undefined;
   const { email } = locationState || {};
   const [emailResource, setEmailResource] = useState<WriteResource<ForgotPasswordForm, void>>({
     data: {
@@ -109,21 +111,13 @@ const ForgotPasswordScreen = () => {
       </Card>
       <Box sx={{ fontSize: 1, textAlign: "center" }}>
         Know your password?{" "}
-        <Link
-          to={{ pathname: "/login" }}
-          state={location.state}
-          sx={{ color: "primary" }}
-        >
+        <Link to={{ pathname: "/login" }} state={location.state} sx={{ color: "primary" }}>
           Log in
         </Link>
       </Box>
       <Box sx={{ fontSize: 1, textAlign: "center" }}>
         Need an account?{" "}
-        <Link
-          to={{ pathname: "/register" }}
-          state={location.state}
-          sx={{ color: "primary" }}
-        >
+        <Link to={{ pathname: "/register" }} state={location.state} sx={{ color: "primary" }}>
           Sign up for free
         </Link>
       </Box>

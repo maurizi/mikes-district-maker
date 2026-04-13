@@ -18,7 +18,12 @@ const GEOSWKTWriterPtr = koffi.pointer(GEOSWKTWriter);
 function geojsonToWktScaled(geom: Polygon | MultiPolygon, scale: number): string {
   if (geom.type === "Polygon") {
     const rings = geom.coordinates
-      .map(ring => "(" + ring.map(p => `${Math.round(p[0] * scale)} ${Math.round(p[1] * scale)}`).join(", ") + ")")
+      .map(
+        ring =>
+          "(" +
+          ring.map(p => `${Math.round(p[0] * scale)} ${Math.round(p[1] * scale)}`).join(", ") +
+          ")"
+      )
       .join(", ");
     return `POLYGON (${rings})`;
   }
@@ -30,7 +35,11 @@ function geojsonToWktScaled(geom: Polygon | MultiPolygon, scale: number): string
           poly
             .map(
               ring =>
-                "(" + ring.map(p => `${Math.round(p[0] * scale)} ${Math.round(p[1] * scale)}`).join(", ") + ")"
+                "(" +
+                ring
+                  .map(p => `${Math.round(p[0] * scale)} ${Math.round(p[1] * scale)}`)
+                  .join(", ") +
+                ")"
             )
             .join(", ") +
           ")"
@@ -63,12 +72,7 @@ function geojsonToWkt(geom: Polygon | MultiPolygon): string {
       .map(
         poly =>
           "(" +
-          poly
-            .map(
-              ring =>
-                "(" + ring.map(p => `${p[0]} ${p[1]}`).join(", ") + ")"
-            )
-            .join(", ") +
+          poly.map(ring => "(" + ring.map(p => `${p[0]} ${p[1]}`).join(", ") + ")").join(", ") +
           ")"
       )
       .join(", ");
@@ -165,50 +169,94 @@ export class GeosHelper {
 
     // WKT Reader
     this._WKTReader_create = this.lib.func("GEOSWKTReader_create", GEOSWKTReaderPtr, []);
-    this._WKTReader_read = this.lib.func("GEOSWKTReader_read", GEOSGeometryPtr, [GEOSWKTReaderPtr, "str"]);
+    this._WKTReader_read = this.lib.func("GEOSWKTReader_read", GEOSGeometryPtr, [
+      GEOSWKTReaderPtr,
+      "str"
+    ]);
     this._WKTReader_destroy = this.lib.func("GEOSWKTReader_destroy", "void", [GEOSWKTReaderPtr]);
 
     // WKT Writer
     this._WKTWriter_create = this.lib.func("GEOSWKTWriter_create", GEOSWKTWriterPtr, []);
-    this._WKTWriter_write = this.lib.func("GEOSWKTWriter_write", "str", [GEOSWKTWriterPtr, GEOSGeometryPtr]);
+    this._WKTWriter_write = this.lib.func("GEOSWKTWriter_write", "str", [
+      GEOSWKTWriterPtr,
+      GEOSGeometryPtr
+    ]);
     this._WKTWriter_destroy = this.lib.func("GEOSWKTWriter_destroy", "void", [GEOSWKTWriterPtr]);
 
     // Prepared geometry
     this._Prepare = this.lib.func("GEOSPrepare", GEOSPreparedGeometryPtr, [GEOSGeometryPtr]);
-    this._PreparedContains = this.lib.func("GEOSPreparedContains", "int", [GEOSPreparedGeometryPtr, GEOSGeometryPtr]);
-    this._PreparedGeom_destroy = this.lib.func("GEOSPreparedGeom_destroy", "void", [GEOSPreparedGeometryPtr]);
+    this._PreparedContains = this.lib.func("GEOSPreparedContains", "int", [
+      GEOSPreparedGeometryPtr,
+      GEOSGeometryPtr
+    ]);
+    this._PreparedGeom_destroy = this.lib.func("GEOSPreparedGeom_destroy", "void", [
+      GEOSPreparedGeometryPtr
+    ]);
 
     // Spatial operations
     this._Contains = this.lib.func("GEOSContains", "int", [GEOSGeometryPtr, GEOSGeometryPtr]);
-    this._Intersection = this.lib.func("GEOSIntersection", GEOSGeometryPtr, [GEOSGeometryPtr, GEOSGeometryPtr]);
-    this._Area = this.lib.func("GEOSArea", "int", [GEOSGeometryPtr, koffi.out(koffi.pointer("double"))]);
+    this._Intersection = this.lib.func("GEOSIntersection", GEOSGeometryPtr, [
+      GEOSGeometryPtr,
+      GEOSGeometryPtr
+    ]);
+    this._Area = this.lib.func("GEOSArea", "int", [
+      GEOSGeometryPtr,
+      koffi.out(koffi.pointer("double"))
+    ]);
     this._Buffer = this.lib.func("GEOSBuffer", GEOSGeometryPtr, [GEOSGeometryPtr, "double", "int"]);
     this._isValid = this.lib.func("GEOSisValid", "int", [GEOSGeometryPtr]);
     this._isEmpty = this.lib.func("GEOSisEmpty", "int", [GEOSGeometryPtr]);
     this._Geom_destroy = this.lib.func("GEOSGeom_destroy", "void", [GEOSGeometryPtr]);
     this._Free = this.lib.func("GEOSFree", "void", [koffi.pointer("void")]);
     this._MinimumWidth = this.lib.func("GEOSMinimumWidth", GEOSGeometryPtr, [GEOSGeometryPtr]);
-    this._Length = this.lib.func("GEOSLength", "int", [GEOSGeometryPtr, koffi.out(koffi.pointer("double"))]);
+    this._Length = this.lib.func("GEOSLength", "int", [
+      GEOSGeometryPtr,
+      koffi.out(koffi.pointer("double"))
+    ]);
 
     // Noding + polygonize operations
     this._Boundary = this.lib.func("GEOSBoundary", GEOSGeometryPtr, [GEOSGeometryPtr]);
     this._Union = this.lib.func("GEOSUnion", GEOSGeometryPtr, [GEOSGeometryPtr, GEOSGeometryPtr]);
     this._Node = this.lib.func("GEOSNode", GEOSGeometryPtr, [GEOSGeometryPtr]);
     this._UnaryUnion = this.lib.func("GEOSUnaryUnion", GEOSGeometryPtr, [GEOSGeometryPtr]);
-    this._Polygonize = this.lib.func("GEOSPolygonize", GEOSGeometryPtr, [koffi.pointer(GEOSGeometryPtr), "uint"]);
+    this._Polygonize = this.lib.func("GEOSPolygonize", GEOSGeometryPtr, [
+      koffi.pointer(GEOSGeometryPtr),
+      "uint"
+    ]);
     this._GetNumGeometries = this.lib.func("GEOSGetNumGeometries", "int", [GEOSGeometryPtr]);
-    this._GetGeometryN = this.lib.func("GEOSGetGeometryN", GEOSGeometryPtr, [GEOSGeometryPtr, "int"]);
+    this._GetGeometryN = this.lib.func("GEOSGetGeometryN", GEOSGeometryPtr, [
+      GEOSGeometryPtr,
+      "int"
+    ]);
     this._PointOnSurface = this.lib.func("GEOSPointOnSurface", GEOSGeometryPtr, [GEOSGeometryPtr]);
     this._Intersects = this.lib.func("GEOSIntersects", "int", [GEOSGeometryPtr, GEOSGeometryPtr]);
-    this._Difference = this.lib.func("GEOSDifference", GEOSGeometryPtr, [GEOSGeometryPtr, GEOSGeometryPtr]);
-    this._SymDifference = this.lib.func("GEOSSymDifference", GEOSGeometryPtr, [GEOSGeometryPtr, GEOSGeometryPtr]);
+    this._Difference = this.lib.func("GEOSDifference", GEOSGeometryPtr, [
+      GEOSGeometryPtr,
+      GEOSGeometryPtr
+    ]);
+    this._SymDifference = this.lib.func("GEOSSymDifference", GEOSGeometryPtr, [
+      GEOSGeometryPtr,
+      GEOSGeometryPtr
+    ]);
     // GEOSGeom_setPrecision(geom, gridSize, flags) — snaps coords to grid
     // flags: 0 = default (may produce invalid geometry), 1 = NO_TOPO (keep topology)
-    this._SetPrecision = this.lib.func("GEOSGeom_setPrecision", GEOSGeometryPtr, [GEOSGeometryPtr, "double", "int"]);
+    this._SetPrecision = this.lib.func("GEOSGeom_setPrecision", GEOSGeometryPtr, [
+      GEOSGeometryPtr,
+      "double",
+      "int"
+    ]);
     // GEOSSnap(input, snapTo, tolerance) — snap vertices of input to snapTo
-    this._Snap = this.lib.func("GEOSSnap", GEOSGeometryPtr, [GEOSGeometryPtr, GEOSGeometryPtr, "double"]);
+    this._Snap = this.lib.func("GEOSSnap", GEOSGeometryPtr, [
+      GEOSGeometryPtr,
+      GEOSGeometryPtr,
+      "double"
+    ]);
     // type 7 = GEOS_GEOMETRYCOLLECTION
-    this._CreateCollection = this.lib.func("GEOSGeom_createCollection", GEOSGeometryPtr, ["int", koffi.pointer(GEOSGeometryPtr), "uint"]);
+    this._CreateCollection = this.lib.func("GEOSGeom_createCollection", GEOSGeometryPtr, [
+      "int",
+      koffi.pointer(GEOSGeometryPtr),
+      "uint"
+    ]);
   }
 
   /** Create a geometry collection from an array of geometries.
@@ -222,7 +270,7 @@ export class GeosHelper {
     return this._UnaryUnion(geom);
   }
 
-  async init(): Promise<void> {
+  init(): void {
     this._initGEOS(null, null);
     this.reader = this._WKTReader_create();
     this.writer = this._WKTWriter_create();
@@ -295,7 +343,7 @@ export class GeosHelper {
   }
 
   /** Compute intersection of two geometries */
-  intersection(a: any, b: any): any | null {
+  intersection(a: any, b: any): any {
     const result = this._Intersection(a, b);
     if (!result) return null;
     if (this._isEmpty(result) === 1) {

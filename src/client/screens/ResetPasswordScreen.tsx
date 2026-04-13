@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useParams } from "react-router-dom";
 import { Link, Navigate } from "react-router-dom";
-import { Box, Button, Card, Flex, Heading} from "theme-ui";
+import { Box, Button, Card, Flex, Heading } from "theme-ui";
 import Logo from "../media/logos/logo.svg?react";
 
 import { showPasswordResetNotice } from "../actions/auth";
@@ -17,10 +17,6 @@ const isFormInvalid = (form: ResetPasswordForm): boolean =>
 
 interface ResetPasswordForm {
   readonly password: string;
-}
-
-interface ResetPasswordScreenParams {
-  readonly token: string;
 }
 
 const ResetPasswordScreen = () => {

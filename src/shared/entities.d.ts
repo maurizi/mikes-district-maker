@@ -55,14 +55,12 @@ export interface AddUser {
 
 export type GeoUnitCollection = number | readonly GeoUnitCollection[];
 
-// eslint-disable-next-line
 export type MutableGeoUnitCollection = number | GeoUnitCollection[];
 
 export interface GeoUnitDefinition {
   readonly groups: ReadonlyArray<string>;
 }
 
-// eslint-disable-next-line
 export type DistrictsDefinition = MutableGeoUnitCollection[];
 
 type NestedArray<T> = ReadonlyArray<T | NestedArray<T>>;
@@ -86,7 +84,7 @@ export type DistrictProperties = {
   readonly compactness: number;
   readonly demographics: DemographicCounts;
   readonly voting?: DemographicCounts;
-  /* eslint-disable */
+
   // NOTE: These properties are set for styling purposes
   id?: number;
   color?: string;
@@ -98,7 +96,6 @@ export type DistrictProperties = {
   majorityRaceSplit?: number;
   majorityRaceFill?: string;
   outlineWidthScaleFactor?: number;
-  /* eslint-enable */
 };
 
 // Metadata stamped onto the in-memory DistrictsGeoJSON at merge time on the
@@ -353,7 +350,6 @@ export interface GeoUnits {
 }
 
 export interface MutableGeoUnits {
-  // eslint-disable-next-line
   [geoLevelId: string]: Map<FeatureId, GeoUnitIndices>;
 }
 

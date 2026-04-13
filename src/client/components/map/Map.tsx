@@ -245,7 +245,7 @@ interface Props {
   readonly map?: maplibregl.Map;
   readonly electionYear: ElectionYear;
   readonly populationKey: GroupTotal;
-  // eslint-disable-next-line
+
   readonly setMap: (map: maplibregl.Map) => void;
 }
 
@@ -390,7 +390,6 @@ const DistrictsMap = ({
   }, [expandedProjectMetrics, map]);
 
   useEffect(() => {
-    // eslint-disable-next-line
     if (mapRef.current === null) {
       return;
     }
@@ -456,7 +455,6 @@ const DistrictsMap = ({
     };
 
     // Everything in this effect should only happen on component load
-    // eslint-disable-next-line
   }, [mapRef]);
 
   const downHandler = useCallback(
@@ -543,9 +541,9 @@ const DistrictsMap = ({
     geojson.features.forEach((feature, id) => {
       // Add a color property to the geojson, so it can be used for styling
       const districtColor = getDistrictColor(id);
-      // eslint-disable-next-line functional/immutable-data
+
       feature.properties.id = id;
-      // eslint-disable-next-line functional/immutable-data
+
       feature.properties.findOutlineColor =
         findMenuOpen &&
         ((findTool === FindTool.Unassigned && id === 0) ||
@@ -555,7 +553,7 @@ const DistrictsMap = ({
           ? // Set pink outline to make unassigned/non-contiguous districts stand out
             "#F25DFE"
           : "transparent";
-      // eslint-disable-next-line functional/immutable-data
+
       feature.properties.color = districtColor;
 
       // The population goal for the unassigned district is 0,
@@ -563,7 +561,6 @@ const DistrictsMap = ({
       const targetPopulation = feature.id !== 0 ? popPerRep * project.numberOfMembers[id - 1] : 0;
       const populationDeviation = feature.properties.demographics.population - targetPopulation;
 
-      // eslint-disable-next-line functional/immutable-data
       feature.properties.percentDeviation =
         feature.properties.demographics.population !== 0 && feature.id !== 0
           ? // Special case - for 0% deviation, off-by-one counts as 0 when population is not evenly divisible
@@ -577,14 +574,13 @@ const DistrictsMap = ({
         evaluateMetric && "electionYear" in evaluateMetric
           ? evaluateMetric.electionYear
           : undefined;
-      // eslint-disable-next-line
+
       feature.properties.pvi = feature.properties.voting
         ? evaluateMetric && "electionYear" in evaluateMetric
           ? calculatePVI(feature.properties.voting, evaluateMetric.electionYear)
           : calculatePVI(feature.properties.voting, electionYear)
         : undefined;
 
-      // eslint-disable-next-line
       feature.properties.populationDeviation = populationDeviation;
       if (feature.properties.demographics.population !== 0) {
         const demographicsGroups = getDemographicsGroups(staticMetadata);
@@ -600,19 +596,17 @@ const DistrictsMap = ({
           ([, val]) => val
         );
         if (!majorityRace) {
-          // eslint-disable-next-line
           feature.properties.majorityRace = "minority coalition";
           const whiteSplit =
             feature.properties.demographics.white / feature.properties.demographics.population;
-          // eslint-disable-next-line
+
           feature.properties.majorityRaceSplit = (1 - whiteSplit) * 100;
         } else {
-          // eslint-disable-next-line
           feature.properties.majorityRace = majorityRace[0];
-          // eslint-disable-next-line
+
           feature.properties.majorityRaceSplit = majorityRace[1];
         }
-        // eslint-disable-next-line
+
         feature.properties.majorityRaceFill =
           feature.properties.majorityRace && feature.properties.majorityRaceSplit
             ? getMajorityRaceSplitFill(
@@ -622,7 +616,6 @@ const DistrictsMap = ({
             : "ffffff";
       }
 
-      // eslint-disable-next-line
       feature.properties.outlineWidthScaleFactor = findMenuOpen ? 1 : 2;
     });
 
@@ -787,17 +780,13 @@ const DistrictsMap = ({
       staticMetadata.geoLevelHierarchy[staticMetadata.geoLevelHierarchy.length - 1].id;
     project?.districtsDefinition.forEach((c, id) => {
       if (Array.isArray(c)) {
-        map.setFeatureState(
-          { source: GEOLEVELS_SOURCE_ID, id, sourceLayer },
-          { split: true }
-        );
+        map.setFeatureState({ source: GEOLEVELS_SOURCE_ID, id, sourceLayer }, { split: true });
       }
     });
   }, [map, staticMetadata, project?.districtsDefinition]);
 
   // @ts-ignore
   const generateLabelsGeojson = (geojson: DistrictsGeoJSON): Labels => {
-    // eslint-disable-next-line
     const labels: Label[] = geojson.features
       .filter((feature: DistrictGeoJSON) => {
         // @ts-ignore
@@ -807,13 +796,12 @@ const DistrictsMap = ({
         // @ts-ignore
         return {
           id: feature.id,
-          coords: feature.geometry.coordinates.flat(1).reduce(
-            // eslint-disable-next-line
-            (prev: Position[], current: Position[]) => {
+          coords: feature.geometry.coordinates
+            .flat(1)
+            .reduce((prev: Position[], current: Position[]) => {
               // If a district contains multiple polygons, label the polygon with the most vertices
               return prev.length > current.length ? prev : current;
-            }
-          )
+            })
         };
       })
       .map(({ id, coords }) => {
@@ -920,18 +908,16 @@ const DistrictsMap = ({
       (selectedDistrictId === 0
         ? removeSelectedFeatures(map, staticMetadata)
         : // When adding or changing the district to which a geounit is
-        // assigned, wait until districts GeoJSON is updated before removing
-        // selected state.
-        map.isStyleLoaded() && map.isSourceLoaded(DISTRICTS_SOURCE_ID)
-        ? removeSelectedFeatures(map, staticMetadata)
-        : map.once("idle", () => removeSelectedFeatures(map, staticMetadata)));
+          // assigned, wait until districts GeoJSON is updated before removing
+          // selected state.
+          map.isStyleLoaded() && map.isSourceLoaded(DISTRICTS_SOURCE_ID)
+          ? removeSelectedFeatures(map, staticMetadata)
+          : map.once("idle", () => removeSelectedFeatures(map, staticMetadata)));
     // We don't want to tigger this effect when `selectedDistrictId` changes
-    // eslint-disable-next-line
   }, [map, selectedGeounits, staticMetadata]);
 
   // Update labels when selection is changed
   useEffect(() => {
-    // eslint-disable-next-line
     if (map) {
       staticMetadata.geoLevelHierarchy.forEach(geoLevel =>
         map.setLayoutProperty(levelToLabelLayerId(geoLevel.id), "visibility", "none")
@@ -958,7 +944,6 @@ const DistrictsMap = ({
     if (map && zoomToDistrictId) {
       const districtGeoJSON = geojson.features[zoomToDistrictId];
       if (districtGeoJSON && districtGeoJSON.geometry.coordinates.length) {
-        // eslint-disable-next-line
         const boundingBox = bbox(districtGeoJSON) as BBox2d;
         map.fitBounds(boundingBox, { padding: 50 });
         store.dispatch(setZoomToDistrictId(null));
@@ -968,7 +953,6 @@ const DistrictsMap = ({
 
   // Update layer visibility when geolevel is selected
   useEffect(() => {
-    // eslint-disable-next-line
     if (map && staticMetadata) {
       const invertedGeoLevelIndex = staticMetadata.geoLevelHierarchy.length - geoLevelIndex - 1;
 
@@ -985,7 +969,7 @@ const DistrictsMap = ({
   // Keep track of when selected geounits change
   const prevSelectedGeoUnitsRef = useRef<typeof selectedGeounits | undefined>();
   useEffect(() => {
-    prevSelectedGeoUnitsRef.current = selectedGeounits; // eslint-disable-line
+    prevSelectedGeoUnitsRef.current = selectedGeounits;
   });
   const prevSelectedGeoUnits = prevSelectedGeoUnitsRef.current;
 
@@ -994,7 +978,6 @@ const DistrictsMap = ({
   // changed and then that needs to be reflected in state -- but this accounts for undo/redo actions
   // affecting state which then needs to be reflected in the map.
   useEffect(() => {
-    // eslint-disable-next-line
     if (map) {
       prevSelectedGeoUnits && setFeaturesSelectedFromGeoUnits(map, prevSelectedGeoUnits, false);
       selectedGeounits && setFeaturesSelectedFromGeoUnits(map, selectedGeounits, true);
@@ -1004,7 +987,7 @@ const DistrictsMap = ({
   // Keep track of when selected geolevel changes
   const prevGeoLevelIndexRef = useRef<typeof geoLevelIndex | undefined>();
   useEffect(() => {
-    prevGeoLevelIndexRef.current = geoLevelIndex; // eslint-disable-line
+    prevGeoLevelIndexRef.current = geoLevelIndex;
   });
   const prevGeoLevelIndex = prevGeoLevelIndexRef.current;
 
@@ -1016,7 +999,7 @@ const DistrictsMap = ({
         : null;
     const selectedGeounitsForPrevLevel =
       prevSelectedGeoLevel && selectedGeounits[prevSelectedGeoLevel.id];
-    // eslint-disable-next-line
+
     if (
       map &&
       prevGeoLevelIndex !== undefined &&
@@ -1027,12 +1010,12 @@ const DistrictsMap = ({
     ) {
       [...selectedGeounitsForPrevLevel.entries()].forEach(selectedGeoUnit => {
         const [featureId, geoUnitIndices] = selectedGeoUnit;
-        // eslint-disable-next-line
+
         if (geoUnitIndices.length === staticMetadata.geoLevelHierarchy.length) {
           // Don't do this for the smallest geounits since they have no sub-geounits
           return;
         }
-        // eslint-disable-next-line
+
         if (geoUnitIndices.length - 1 === geoLevelIndex) {
           // Don't do anything for previously selected geounits at this level
           return;
@@ -1093,7 +1076,7 @@ const DistrictsMap = ({
 
   useEffect(() => {
     // Handle enable and disable of selection tools in the map
-    /* eslint-disable */
+
     if (map && !isReadOnly) {
       // Disable any existing selection tools
       disableAllTools(map);
@@ -1138,7 +1121,6 @@ const DistrictsMap = ({
       // Disable any existing selection tools
       disableAllTools(map);
     }
-    /* eslint-enable */
   }, [
     map,
     selectionTool,

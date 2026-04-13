@@ -37,7 +37,7 @@ interface MapContext {
   readonly electionYear: ElectionYear;
   readonly availableElectionYears: readonly string[];
   readonly paintBrushSize: PaintBrushSize;
-  // eslint-disable-next-line
+
   readonly setTogglePan: (isSet: boolean) => void;
 }
 
@@ -51,7 +51,7 @@ interface KeyboardShortcut {
   readonly onlyForMultipleElections?: boolean;
   readonly onlyForPaintBrush?: boolean;
   readonly shift?: true | "optional";
-  // eslint-disable-next-line
+
   readonly action: (context: MapContext) => void;
 }
 

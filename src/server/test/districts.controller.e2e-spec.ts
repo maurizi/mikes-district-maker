@@ -3,7 +3,7 @@ import { Test } from "@nestjs/testing";
 import { getRepositoryToken } from "@nestjs/typeorm";
 import request from "supertest";
 
-import { IRegionConfig } from "../../shared/entities";
+import type { IRegionConfig } from "../../shared/entities";
 import { RegionConfig } from "../src/region-configs/entities/region-config.entity";
 import { RegionConfigsService } from "../src/region-configs/services/region-configs.service";
 import { DistrictsModule } from "../src/districts/districts.module";
@@ -15,7 +15,7 @@ describe("DistrictsController", () => {
     name: "Delaware",
     regionCode: "DE",
     countryCode: "US",
-    s3URI: "s3://global-districtbuilder-dev-us-east-1/regions/US/DE/2020-09-09T19:50:10.921Z/",
+    s3URI: "s3://districtbuilder-dev-238046523378/regions/US/DE/2026-04-12T18:16:43.000Z/",
     archived: false,
     version: new Date("2020-09-09T19:50:10.921Z")
   } as IRegionConfig;
@@ -51,7 +51,7 @@ describe("DistrictsController", () => {
         .post("/api/districts/import/csv")
         .attach("file", `${__dirname}/data/de.csv`)
         .expect(200)
-        .expect({ districtsDefinition: [2, 1, 3], maxDistrictId: 3 });
+        .expect({ districtsDefinition: [1, 3, 2], maxDistrictId: 3 });
     });
   });
 
@@ -62,7 +62,7 @@ describe("DistrictsController", () => {
         .attach("file", `${__dirname}/data/bad_blockid.csv`)
         .expect(200)
         .expect({
-          districtsDefinition: [2, 1, 3],
+          districtsDefinition: [1, 3, 2],
           maxDistrictId: 3,
           numFlags: 1,
           rowFlags: [

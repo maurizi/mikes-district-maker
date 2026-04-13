@@ -14,9 +14,8 @@ export class Chamber implements IChamber {
   numberOfDistricts: number;
 
   @Column({
-    type: "integer",
+    type: "simple-json",
     name: "number_of_members",
-    array: true,
     nullable: true
   })
   numberOfMembers?: readonly number[];

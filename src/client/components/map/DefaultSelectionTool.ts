@@ -64,12 +64,10 @@ const DefaultSelectionTool: ISelectionTool = {
     lockedDistricts: LockedDistricts,
     staticGeoLevels: TypedArrays
   ) {
-    /* eslint-disable */
     this.setCursor = () => (map.getCanvas().style.cursor = "pointer");
     this.unsetCursor = () => (map.getCanvas().style.cursor = "");
     map.on("mousemove", DISTRICTS_LAYER_ID, this.setCursor);
     map.on("mouseleave", DISTRICTS_LAYER_ID, this.unsetCursor);
-    /* eslint-enable */
 
     // Add a click event to the top geolevel that logs demographic information.
     // Note that the feature can't be directly selected under the cursor, so
@@ -84,7 +82,7 @@ const DefaultSelectionTool: ISelectionTool = {
 
       // Disabling 'functional/no-conditional-statement' without naming it.
       // See https://github.com/jonaskello/eslint-plugin-functional/issues/105
-      // eslint-disable-next-line
+
       if (features.length === 0 || typeof features[0].id !== "number") {
         return;
       }
@@ -109,19 +107,17 @@ const DefaultSelectionTool: ISelectionTool = {
         staticMetadata,
         staticGeoLevels
       );
-      // eslint-disable-next-line
+
       if (isSelected) {
         // Geounit is selected, so deselect it
         map.setFeatureState(featureStateGeoLevel(feature), { selected: false });
         store.dispatch(removeSelectedGeounits(unlockedGeoUnits));
-        // eslint-disable-next-line
       } else if (!isSelected && isPartiallyLocked && isPartiallySelected) {
         // We're in a situation where we need to deselect a partially selected feature. Partial
         // selection is where we only select the unlocked geounits within the selected feature, so
         // we want to deselect only those.
         setFeaturesSelectedFromGeoUnits(map, unlockedGeoUnits, false);
         store.dispatch(removeSelectedGeounits(unlockedGeoUnits));
-        // eslint-disable-next-line
       } else {
         // Geounit is not selected, so select it, making sure to remove the selection on any child
         // geounits since the parent selection supercedes any child selections
@@ -140,14 +136,12 @@ const DefaultSelectionTool: ISelectionTool = {
     };
     map.on("click", clickHandler);
     // Save the click handler function so it can be removed later
-    this.clickHandler = clickHandler; // eslint-disable-line
+    this.clickHandler = clickHandler;
   },
   disable: function (map: maplibregl.Map) {
-    /* eslint-disable */
     this.clickHandler && map.off("click", this.clickHandler);
     this.setCursor && map.off("mousemove", DISTRICTS_LAYER_ID, this.setCursor);
     this.unsetCursor && map.off("mouseleave", DISTRICTS_LAYER_ID, this.unsetCursor);
-    /* eslint-enable */
   }
 };
 

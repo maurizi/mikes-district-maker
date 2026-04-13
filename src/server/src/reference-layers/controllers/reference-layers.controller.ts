@@ -109,7 +109,10 @@ export class ReferenceLayersController implements CrudController<ReferenceLayer>
     return this;
   }
   private readonly logger = new Logger(ReferenceLayer.name);
-  constructor(public service: ReferenceLayersService, public projectsService: ProjectsService) {}
+  constructor(
+    public service: ReferenceLayersService,
+    public projectsService: ProjectsService
+  ) {}
 
   @UseInterceptors(CrudRequestInterceptor)
   @UseGuards(OptionalJwtAuthGuard)

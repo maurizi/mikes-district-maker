@@ -1,4 +1,4 @@
-name: Github CI
+name: CI
 
 on:
   push:
@@ -8,39 +8,144 @@ on:
   pull_request:
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: build
     runs-on: ubuntu-latest
     env:
-      DOCKER_BUILDKIT: 1
+      NODE_ENV: test
+      VITE_RUM_APP_MONITOR_ID: ${{ secrets.VITE_RUM_APP_MONITOR_ID }}
+      VITE_RUM_GUEST_ROLE_ARN: ${{ secrets.VITE_RUM_GUEST_ROLE_ARN }}
+      VITE_RUM_IDENTITY_POOL_ID: ${{ secrets.VITE_RUM_IDENTITY_POOL_ID }}
+      VITE_RUM_REGION: ${{ secrets.VITE_RUM_REGION }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: CI Build
-        run: ./scripts/cibuild
-        env:
-          NODE_ENV: test
-          VITE_ROLLBAR_CLIENT_ACCESS_TOKEN: ${{ secrets.VITE_ROLLBAR_CLIENT_ACCESS_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Enable Corepack and pin Yarn
+        run: corepack enable
+
+      - name: Install client deps
+        run: yarn install --frozen-lockfile
+
+      - name: Install server deps
+        working-directory: src/server
+        run: yarn install --frozen-lockfile
+
+      - name: Typecheck client
+        run: yarn typecheck
+
+      - name: Typecheck server
+        working-directory: src/server
+        run: npx tsc --noEmit --incremental false -p tsconfig.json
+
+      - name: Build client
+        run: yarn build
+
+      - name: Build server
+        working-directory: src/server
+        run: yarn build
+
+      - name: Run server tests
+        working-directory: src/server
+        run: yarn test
+
+      - name: Package server Lambda bundle
+        if: github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/test/')
+        working-directory: src/server
+        run: |
+          # node_modules are the bulk of the zip; install production only.
+          yarn install --frozen-lockfile --production
+          mkdir -p ../../build
+          zip -r ../../build/lambda.zip dist node_modules package.json
+          ls -lh ../../build/lambda.zip
+
+      - name: Upload client build artifact
+        if: github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/test/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-dist
+          path: dist
+          retention-days: 3
+
+      - name: Upload server lambda bundle
+        if: github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/test/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-bundle
+          path: build/lambda.zip
+          retention-days: 3
+
+  deploy:
+    name: deploy
+    needs: build
+    if: github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/test/')
+    runs-on: ubuntu-latest
+    env:
+      PROJECT: districtbuilder
+      AWS_REGION: us-east-1
+    steps:
+      - name: Derive environment name
+        id: env
+        run: |
+          if [ "${GITHUB_REF}" = "refs/heads/develop" ]; then
+            echo "name=staging" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=${GITHUB_REF##refs/heads/test/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: client-dist
+          path: dist
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: lambda-bundle
+          path: build
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: "us-east-1"
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: CI Publish
+      - name: Sync client build to S3
         run: |
-          unset AWS_PROFILE
-          ./scripts/cipublish
-        if: github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/test/')
+          BUCKET="${PROJECT}-${{ steps.env.outputs.name }}-static"
+          # Fingerprinted assets first with long cache, then index.html with
+          # short cache so the next release is visible immediately.
+          aws s3 sync dist/ "s3://${BUCKET}/" \
+            --delete \
+            --exclude "index.html" \
+            --cache-control "public, max-age=31536000, immutable"
+          aws s3 cp dist/index.html "s3://${BUCKET}/index.html" \
+            --cache-control "public, max-age=60, must-revalidate"
 
-      - name: Infra Plan and Apply
+      - name: Update Lambda function code
         run: |
-          docker compose -f docker-compose.yml -f docker-compose.ci.yml run --rm terraform -c "
-            unset AWS_PROFILE
-            ./scripts/infra plan
-            ./scripts/infra apply"
-        env:
-          DB_ROLLBAR_ACCESS_TOKEN: ${{ secrets.DB_ROLLBAR_ACCESS_TOKEN }}
-        if: github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/test/')
+          FUNCTION="${PROJECT}-${{ steps.env.outputs.name }}-api"
+          aws lambda update-function-code \
+            --function-name "$FUNCTION" \
+            --zip-file "fileb://build/lambda.zip" \
+            --publish \
+            --output json > /tmp/lambda-update.json
+          aws lambda wait function-updated-v2 --function-name "$FUNCTION"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          DIST_ID=$(aws cloudfront list-distributions \
+            --query "DistributionList.Items[?Aliases.Items != null] | [?contains(Aliases.Items, '${{ vars.DOMAIN_NAME }}')].Id | [0]" \
+            --output text)
+          if [ -n "$DIST_ID" ] && [ "$DIST_ID" != "None" ]; then
+            aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/index.html" "/" > /dev/null
+          else
+            echo "No CloudFront distribution found for ${{ vars.DOMAIN_NAME }}, skipping invalidation"
+          fi

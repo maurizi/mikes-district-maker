@@ -1,5 +1,4 @@
 import { Module } from "@nestjs/common";
-import { ServeStaticModule } from "@nestjs/serve-static";
 import { TerminusModule } from "@nestjs/terminus";
 import { TypeOrmModule } from "@nestjs/typeorm";
 
@@ -18,7 +17,7 @@ import { ProjectsModule } from "./projects/projects.module";
 import { ProjectTemplatesModule } from "./project-templates/project-templates.module";
 import { RegionConfigsModule } from "./region-configs/region-configs.module";
 import { ReferenceLayersModule } from "./reference-layers/reference-layers.module";
-import { RollbarModule } from "./rollbar/rollbar.module";
+import { ErrorReportingModule } from "./error-reporting/error-reporting.module";
 import { UsersModule } from "./users/users.module";
 
 import { join } from "path";
@@ -53,15 +52,8 @@ if (DEBUG) {
       }
     }),
     TypeOrmModule.forRoot(dataSourceOptions),
-    ServeStaticModule.forRoot({
-      rootPath: join(__dirname, "static"),
-      // https://github.com/nestjs/serve-static/blob/master/lib/interfaces/serve-static-options.interface.ts
-      serveStaticOptions: {
-        maxAge: 60000
-      }
-    }),
     TerminusModule,
-    RollbarModule,
+    ErrorReportingModule,
     AuthModule,
     HealthCheckModule,
     OrganizationsModule,

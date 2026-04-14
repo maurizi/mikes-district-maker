@@ -19,8 +19,14 @@ async function bootstrap(): Promise<void> {
   );
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
   app.useGlobalFilters(new BadRequestExceptionFilter());
-  app.use(bodyParser.json({ limit: "25mb" }));
-  app.use(bodyParser.urlencoded({ limit: "25mb", extended: true }));
+  // Lambda has a ~6MB sync-invoke payload ceiling; after base64 and event
+  // wrapper overhead the practical raw request body limit is ~5MB. A Texas-
+  // scale districtsDefinition (~1MB) plus a 3MB thumbnail plus metadata fits
+  // inside that. The previous 25MB limit was from when districts GeoJSON
+  // bodies existed; that column is gone and those endpoints no longer take
+  // full GeoJSON in the request body.
+  app.use(bodyParser.json({ limit: "5mb" }));
+  app.use(bodyParser.urlencoded({ limit: "5mb", extended: true }));
 
   // Save the output of 'listen' to a variable, which is a Node http.Server
   const server = await app.listen(3005);

@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { TypeOrmCrudService } from "@dataui/crud-typeorm";
 import { Repository } from "typeorm";
+import { Feature } from "geojson";
 
 import { ProjectTemplate } from "../entities/project-template.entity";
 import { ProjectVisibility } from "../../../../shared/constants";
@@ -15,6 +16,7 @@ import {
 } from "../../../../shared/entities";
 import { Organization } from "../../organizations/entities/organization.entity";
 import { Project } from "../../projects/entities/project.entity";
+import { MultiPolygon } from "geojson";
 
 export type ProjectExportRow = {
   readonly userId: UserId;
@@ -83,7 +85,7 @@ export class ProjectTemplatesService extends TypeOrmCrudService<ProjectTemplate>
     return rows.map(({ thumbnail, ...rest }) => ({
       ...rest,
       districtProperties: (thumbnail?.features ?? []).map(
-        f => f.properties as DistrictProperties
+        (f: Feature<MultiPolygon, DistrictProperties>) => f.properties as DistrictProperties
       )
     }));
   }

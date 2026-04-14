@@ -11,7 +11,6 @@ import {
   ParseIntPipe,
   Query,
   Body,
-  Res,
   UseGuards,
   UseInterceptors
 } from "@nestjs/common";
@@ -26,10 +25,7 @@ import {
   ParsedRequest
 } from "@dataui/crud";
 import stringify from "csv-stringify/lib/sync";
-import { Response } from "express";
-import { convert } from "geojson2shp";
 import * as _ from "lodash";
-import { Feature, MultiPolygon } from "geojson";
 
 import isUUID from "validator/lib/isUUID";
 import { Pagination } from "nestjs-typeorm-paginate";
@@ -41,9 +37,7 @@ import {
 } from "../../../../shared/constants";
 import { S3Client } from "@aws-sdk/client-s3";
 import type {
-  DistrictProperties,
   DistrictsDefinition,
-  DistrictsGeoJSON,
   GeoUnitHierarchy,
   IStaticMetadata,
   ProjectId,
@@ -320,37 +314,6 @@ export class ProjectsController implements CrudController<Project> {
   // Compute districts definition length from hierarchy
   private computeDistrictsDefLength(hierarchy: GeoUnitHierarchy): number {
     return hierarchy.length;
-  }
-
-  @Post("convert/shp")
-  async convertToShapefile(
-    @Body() geojson: DistrictsGeoJSON,
-    @Res() response: Response
-  ): Promise<void> {
-    await this.convertGeoJsonToShapefile(geojson, response);
-  }
-
-  private async convertGeoJsonToShapefile(
-    geojson: DistrictsGeoJSON,
-    response: Response
-  ): Promise<void> {
-    const formattedGeojson = {
-      ...geojson,
-      features: geojson.features.map((feature: Feature<MultiPolygon, DistrictProperties>) => ({
-        ...feature,
-        properties: {
-          ...feature.properties,
-          // Flatten nested demographics & voting objects so they are maintained when converting
-          demographics: undefined,
-          voting: undefined,
-          ...feature.properties.demographics,
-          ...feature.properties.voting,
-          // The feature ID doesn't seem to make its way over as part of 'convert' natively
-          id: feature.id
-        }
-      }))
-    };
-    await convert(formattedGeojson, response, { layer: "districts" });
   }
 
   @UseInterceptors(CrudRequestInterceptor)

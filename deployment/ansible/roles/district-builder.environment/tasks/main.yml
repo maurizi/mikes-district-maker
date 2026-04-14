@@ -1,6 +1,0 @@
----
-- name: Set AWS_PROFILE
-  lineinfile:
-    path: "/etc/environment"
-    regexp: "^AWS_PROFILE="
-    line: "AWS_PROFILE={{ aws_profile }}"

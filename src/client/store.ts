@@ -3,7 +3,7 @@ import { composeWithDevTools } from "@redux-devtools/extension";
 import { install, StoreCreator } from "redux-loop";
 import { getType } from "typesafe-actions";
 import { redo, undo } from "./actions/districtDrawing";
-import GTM from "./GTM";
+import rumMiddleware from "./rumMiddleware";
 import rootReducer, { initialState } from "./reducers";
 
 // redux-loop requires casting createStore to its StoreCreator type
@@ -26,5 +26,5 @@ export default enhancedCreateStore(
   // @ts-expect-error @redux-devtools/extension types composeWithDevTools return as
   // StoreEnhancer<{ dispatch: unknown }> which is narrower than what redux-loop's
   // StoreCreator expects, but the enhancer composition is correct at runtime
-  composeEnhancers(install(), applyMiddleware(GTM))
+  composeEnhancers(install(), applyMiddleware(rumMiddleware))
 );

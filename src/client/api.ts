@@ -1,5 +1,6 @@
 import axios, { AxiosResponse } from "axios";
 import { saveAs } from "file-saver";
+import * as shpwrite from "@mapbox/shp-write";
 import memoize from "memoizee";
 
 import {
@@ -258,16 +259,32 @@ export async function convertGeoJsonToShapefile(
   geojson: DistrictsGeoJSON,
   projectName: string
 ): Promise<void> {
-  return new Promise((resolve, reject) => {
-    apiAxios
-      .post("/api/projects/convert/shp", geojson, { responseType: "blob" })
-      .then(response => {
-        return resolve(
-          saveAs(new Blob([response.data], { type: "application/zip" }), `${projectName}.zip`)
-        );
-      })
-      .catch(error => reject(error.message));
+  // Shapefile conversion runs in the browser instead of the server: a full
+  // DistrictsGeoJSON at large-state scale can exceed Lambda's ~5MB request
+  // body ceiling, and keeping this client-side avoids a network round trip.
+  // Flatten nested demographics/voting objects into top-level properties
+  // since shapefile attribute tables are flat.
+  const formatted: GeoJSON.FeatureCollection = {
+    type: "FeatureCollection",
+    features: geojson.features.map(feature => {
+      const { demographics, voting, ...rest } = feature.properties;
+      return {
+        type: "Feature" as const,
+        geometry: feature.geometry,
+        properties: {
+          ...rest,
+          ...demographics,
+          ...voting,
+          id: feature.id
+        }
+      };
+    })
+  };
+  const blob = await shpwrite.zip<"blob">(formatted, {
+    outputType: "blob",
+    compression: "DEFLATE"
   });
+  saveAs(blob, `${projectName}.zip`);
 }
 
 export async function importCsv(

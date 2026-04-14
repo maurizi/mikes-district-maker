@@ -1,18 +1,26 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
 
-// Squashed baseline schema, DSQL-compatible. Replaces all prior migrations.
+// Squashed baseline schema. Targets DSQL in production and vanilla Postgres
+// for local dev. Both targets use gen_random_uuid() (Postgres 13+ built-in,
+// selected via uuidExtension: "pgcrypto" in src/data-source.ts) and the same
+// CHECK-constraint + bigint-IDENTITY shapes, so the only runtime divergence
+// is the index creation mode (DSQL requires ASYNC; vanilla Postgres rejects
+// it). That branch lives in the up() body below.
 //
-// Departures from what typeorm migration:generate emits for vanilla Postgres:
-// - built-in UUID generator instead of the uuid-ossp extension function
+// Departures from what typeorm migration:generate emits by default:
+// - gen_random_uuid() instead of uuid_generate_v4() (no uuid-ossp)
 // - bigint IDENTITY with explicit CACHE 1 instead of SERIAL
 // - varchar + CHECK instead of CREATE TYPE AS ENUM
-// - CREATE INDEX ASYNC instead of plain CREATE INDEX
 // - No foreign-key constraints (DSQL has none; the app has exactly one DELETE
 //   endpoint and no cascade semantics depend on the database)
 export class Squash1776135205138 implements MigrationInterface {
   name = "Squash1776135205138";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // DSQL requires CREATE INDEX ASYNC; vanilla Postgres rejects the ASYNC
+    // keyword. We pick the right one based on whether the data source was
+    // configured for DSQL (same flag used in src/server/src/data-source.ts).
+    const indexMode = process.env.DSQL_ENDPOINT ? "INDEX ASYNC" : "INDEX";
     await queryRunner.query(
       `CREATE TABLE "region_config" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -69,7 +77,7 @@ export class Squash1776135205138 implements MigrationInterface {
       )`
     );
     await queryRunner.query(
-      `CREATE INDEX ASYNC "IDX_110113f7f5d7d3b08d0c12f5b0" ON "project" ("updated_dt", "user_id")`
+      `CREATE ${indexMode} "IDX_110113f7f5d7d3b08d0c12f5b0" ON "project" ("updated_dt", "user_id")`
     );
     // Community-maps listing: replaces the old IDX_PUBLISHED_PROJECTS that was
     // orphaned when the districts column was dropped (commit dcd846e).
@@ -77,7 +85,7 @@ export class Squash1776135205138 implements MigrationInterface {
     // index cond; trailing columns support optional completed/region filters;
     // DSQL does backward scans so ORDER BY updated_dt DESC rides the index.
     await queryRunner.query(
-      `CREATE INDEX ASYNC "IDX_PUBLISHED_PROJECTS" ON "project" ("visibility", "archived", "updated_dt", "is_complete", "region_config_id")`
+      `CREATE ${indexMode} "IDX_PUBLISHED_PROJECTS" ON "project" ("visibility", "archived", "updated_dt", "is_complete", "region_config_id")`
     );
 
     await queryRunner.query(
@@ -168,10 +176,10 @@ export class Squash1776135205138 implements MigrationInterface {
       )`
     );
     await queryRunner.query(
-      `CREATE INDEX ASYNC "IDX_e1e28e472b43bbad7ff3cecdcd" ON "organization_users_user" ("organizationId")`
+      `CREATE ${indexMode} "IDX_e1e28e472b43bbad7ff3cecdcd" ON "organization_users_user" ("organizationId")`
     );
     await queryRunner.query(
-      `CREATE INDEX ASYNC "IDX_a02d820429038dce37d18f74b6" ON "organization_users_user" ("userId")`
+      `CREATE ${indexMode} "IDX_a02d820429038dce37d18f74b6" ON "organization_users_user" ("userId")`
     );
   }
 

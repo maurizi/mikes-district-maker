@@ -15,6 +15,7 @@
     "manage": "./bin/run"
   },
   "dependencies": {
+    "@aws-sdk/dsql-signer": "^3",
     "@nestjs/common": "11.1.17",
     "@nestjs/core": "11.1.17",
     "@nestjs/typeorm": "11.0.0",

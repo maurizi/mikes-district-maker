@@ -1,85 +1,94 @@
-#
-# Private DNS resources
-#
-resource "aws_route53_zone" "internal" {
-  name = var.r53_private_hosted_zone
-
-  vpc {
-    vpc_id     = module.vpc.id
-    vpc_region = var.aws_region
-  }
-
-  tags = {
-    Project     = var.project
-    Environment = var.environment
-  }
+# DNS is only wired up when route53_zone_name is supplied. If you manage DNS
+# outside Route53 set the variable empty and point records at the CloudFront
+# distribution + ALB manually.
+data "aws_route53_zone" "main" {
+  count        = var.route53_zone_name == "" ? 0 : 1
+  name         = var.route53_zone_name
+  private_zone = false
 }
 
-resource "aws_route53_record" "database" {
-  zone_id = aws_route53_zone.internal.zone_id
-  name    = "database.service.${var.r53_private_hosted_zone}"
-  type    = "CNAME"
-  ttl     = "10"
-  records = [module.database.hostname]
-}
-
-#
-# Public DNS resources
-#
-resource "aws_route53_zone" "external" {
-  name = var.r53_public_hosted_zone
-}
-
-resource "aws_route53_record" "origin" {
-  zone_id = aws_route53_zone.external.zone_id
-  name    = "origin.${var.r53_public_hosted_zone}"
+# Public domain → CloudFront
+resource "aws_route53_record" "app" {
+  count   = var.route53_zone_name == "" ? 0 : 1
+  zone_id = data.aws_route53_zone.main[0].zone_id
+  name    = var.domain_name
   type    = "A"
-
   alias {
-    name                   = aws_lb.app.dns_name
-    zone_id                = aws_lb.app.zone_id
+    name                   = aws_cloudfront_distribution.main.domain_name
+    zone_id                = aws_cloudfront_distribution.main.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "app_aaaa" {
+  count   = var.route53_zone_name == "" ? 0 : 1
+  zone_id = data.aws_route53_zone.main[0].zone_id
+  name    = var.domain_name
+  type    = "AAAA"
+  alias {
+    name                   = aws_cloudfront_distribution.main.domain_name
+    zone_id                = aws_cloudfront_distribution.main.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+# origin.<domain> → ALB, used by CloudFront as the api origin.
+resource "aws_route53_record" "origin" {
+  count   = var.route53_zone_name == "" ? 0 : 1
+  zone_id = data.aws_route53_zone.main[0].zone_id
+  name    = "origin.${var.domain_name}"
+  type    = "A"
+  alias {
+    name                   = aws_lb.main.dns_name
+    zone_id                = aws_lb.main.zone_id
     evaluate_target_health = true
   }
 }
 
-resource "aws_route53_record" "app" {
-  zone_id = aws_route53_zone.external.zone_id
-  name    = "app.${var.r53_public_hosted_zone}"
-  type    = "A"
-
-  alias {
-    name                   = aws_cloudfront_distribution.cdn.domain_name
-    zone_id                = aws_cloudfront_distribution.cdn.hosted_zone_id
-    evaluate_target_health = false
+# ACM DNS validation records for both certs.
+resource "aws_route53_record" "alb_cert_validation" {
+  for_each = var.route53_zone_name == "" ? {} : {
+    for dvo in aws_acm_certificate.alb.domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
   }
+
+  allow_overwrite = true
+  name            = each.value.name
+  records         = [each.value.record]
+  ttl             = 60
+  type            = each.value.type
+  zone_id         = data.aws_route53_zone.main[0].zone_id
 }
 
-resource "aws_route53_record" "app_ipv6" {
-  zone_id = aws_route53_zone.external.zone_id
-  name    = "app.${var.r53_public_hosted_zone}"
-  type    = "AAAA"
+resource "aws_acm_certificate_validation" "alb" {
+  count                   = var.route53_zone_name == "" ? 0 : 1
+  certificate_arn         = aws_acm_certificate.alb.arn
+  validation_record_fqdns = [for r in aws_route53_record.alb_cert_validation : r.fqdn]
+}
 
-  alias {
-    name                   = aws_cloudfront_distribution.cdn.domain_name
-    zone_id                = aws_cloudfront_distribution.cdn.hosted_zone_id
-    evaluate_target_health = false
+resource "aws_route53_record" "cloudfront_cert_validation" {
+  for_each = var.route53_zone_name == "" ? {} : {
+    for dvo in aws_acm_certificate.cloudfront.domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
   }
+
+  allow_overwrite = true
+  name            = each.value.name
+  records         = [each.value.record]
+  ttl             = 60
+  type            = each.value.type
+  zone_id         = data.aws_route53_zone.main[0].zone_id
 }
 
-resource "aws_route53_record" "ses_verification" {
-  zone_id = aws_route53_zone.external.zone_id
-  name    = "_amazonses.${var.r53_public_hosted_zone}"
-  type    = "TXT"
-  ttl     = "300"
-  records = [aws_ses_domain_identity.app.verification_token]
-}
-
-resource "aws_route53_record" "ses_dkim" {
-  count = 3
-
-  zone_id = aws_route53_zone.external.zone_id
-  name    = "${aws_ses_domain_dkim.app.dkim_tokens[count.index]}._domainkey.${var.r53_public_hosted_zone}"
-  type    = "CNAME"
-  ttl     = "300"
-  records = ["${aws_ses_domain_dkim.app.dkim_tokens[count.index]}.dkim.amazonses.com"]
+resource "aws_acm_certificate_validation" "cloudfront" {
+  provider                = aws.us_east_1
+  count                   = var.route53_zone_name == "" ? 0 : 1
+  certificate_arn         = aws_acm_certificate.cloudfront.arn
+  validation_record_fqdns = [for r in aws_route53_record.cloudfront_cert_validation : r.fqdn]
 }

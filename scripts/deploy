@@ -1,0 +1,179 @@
+#!/usr/bin/env bash
+# Master deploy: build and push server + client to the production stack.
+#
+# - Builds the NestJS server (nest build → esbuild bundle)
+# - Packages the bundle + native bcrypt + templates as a Lambda zip
+# - Pushes to Lambda (direct if under 50MB, otherwise via S3)
+# - Applies env vars from .env.deploy
+# - Builds the Vite client
+# - Syncs to the static S3 bucket with correct cache headers
+# - Invalidates CloudFront
+#
+# Usage: AWS_PROFILE=district-builder ./scripts/deploy
+#
+# Reads config from:
+#   deployment/terraform/   (terraform outputs: function name, buckets, dist id)
+#   .env.deploy             (gitignored runtime env vars, see .env.deploy.example)
+
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TF_DIR="$ROOT_DIR/deployment/terraform"
+SERVER_DIR="$ROOT_DIR/src/server"
+TF="${TF:-terraform}"
+
+say() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
+
+# Terraform outputs drive the deploy targets. One read, reused everywhere.
+say "Reading terraform outputs"
+LAMBDA_FUNCTION_NAME=$("$TF" -chdir="$TF_DIR" output -raw lambda_function_name)
+STATIC_BUCKET=$("$TF" -chdir="$TF_DIR" output -raw static_bucket)
+CLOUDFRONT_DIST_ID=$("$TF" -chdir="$TF_DIR" output -raw cloudfront_distribution_id)
+echo "  function:    $LAMBDA_FUNCTION_NAME"
+echo "  static:      $STATIC_BUCKET"
+echo "  cloudfront:  $CLOUDFRONT_DIST_ID"
+
+##########
+# Server #
+##########
+
+say "Building server (nest build)"
+(cd "$SERVER_DIR" && rm -rf dist && yarn build >/dev/null)
+
+say "Bundling server with esbuild"
+BUNDLE_DIR=$(mktemp -d)
+trap 'rm -rf "$BUNDLE_DIR"' EXIT
+# Bundle the compiled main.js into a single file. bcrypt is native and must
+# stay external; pg-native is optional and we never install it but esbuild
+# would warn without an exclude.
+# NestJS and @dataui/crud pull in optional peer deps via dynamic require()
+# for features we don't use (microservices, websockets, mongoose, mikro-orm,
+# sequelize, swagger, fastify). They fail to resolve at bundle time but would
+# only execute if we actually used those features. Externalize them so the
+# dynamic require stays in the bundle as a no-op path.
+# @css-inline/* is also external — it ships native prebuilds per architecture
+# and the deploy script fetches the matching one below.
+(cd "$SERVER_DIR" && ./node_modules/.bin/esbuild \
+  dist/server/src/main.js \
+  --bundle \
+  --platform=node \
+  --target=node24 \
+  --format=cjs \
+  --outfile="$BUNDLE_DIR/main.js" \
+  --external:bcrypt \
+  --external:pg-native \
+  --external:@css-inline/* \
+  --external:@nestjs/microservices \
+  --external:@nestjs/microservices/* \
+  --external:@nestjs/websockets \
+  --external:@nestjs/websockets/* \
+  --external:@nestjs/mongoose \
+  --external:@nestjs/sequelize \
+  --external:@nestjs/sequelize/* \
+  --external:@nestjs/swagger \
+  --external:@nestjs/swagger/* \
+  --external:@nestjs/platform-fastify \
+  --external:@mikro-orm/core \
+  --external:@mikro-orm/nestjs \
+  --external:@fastify/static \
+  --external:class-transformer/storage \
+  --log-level=warning)
+
+# Lambda bundle layout:
+#   main.js                ← esbuild output
+#   run.sh                 ← LWA bootstrap entry
+#   templates/*.hbs        ← mailer templates (read from disk at runtime)
+#   node_modules/bcrypt/** ← native module (external from the bundle)
+cp -r "$SERVER_DIR/src/templates" "$BUNDLE_DIR/templates"
+mkdir -p "$BUNDLE_DIR/node_modules"
+cp -r "$SERVER_DIR/node_modules/bcrypt" "$BUNDLE_DIR/node_modules/bcrypt"
+# bcrypt has transitive runtime deps (node-addon-api, node-gyp-build, etc.)
+for dep in node-addon-api node-gyp-build; do
+  if [[ -d "$SERVER_DIR/node_modules/$dep" ]]; then
+    cp -r "$SERVER_DIR/node_modules/$dep" "$BUNDLE_DIR/node_modules/$dep"
+  fi
+done
+
+# @css-inline/css-inline ships per-architecture native prebuilds as separate
+# optional-dep packages. yarn install only pulls the one matching the host's
+# platform, which won't match Lambda if we're cross-compiling. Target arch is
+# read from production.tfvars. For Lambda's Amazon Linux 2023 base we want the
+# glibc variant (-gnu), not musl.
+LAMBDA_ARCH=$(awk -F'"' '/lambda_architecture/{print $2}' "$TF_DIR/production.tfvars" 2>/dev/null || echo "arm64")
+case "$LAMBDA_ARCH" in
+  arm64)  CSS_INLINE_ARCH="linux-arm64-gnu" ;;
+  x86_64) CSS_INLINE_ARCH="linux-x64-gnu" ;;
+  *) echo "ERROR: unsupported lambda_architecture: $LAMBDA_ARCH" >&2; exit 1 ;;
+esac
+CSS_INLINE_VERSION=$(node -p "require('$SERVER_DIR/node_modules/@css-inline/css-inline/package.json').version")
+echo "  css-inline: $CSS_INLINE_ARCH@$CSS_INLINE_VERSION"
+
+# Ship the dispatcher package (its index.js picks a native binding at runtime).
+mkdir -p "$BUNDLE_DIR/node_modules/@css-inline"
+cp -r "$SERVER_DIR/node_modules/@css-inline/css-inline" "$BUNDLE_DIR/node_modules/@css-inline/css-inline"
+# Fetch the target-arch prebuild directly from npm — it's not in our host's
+# node_modules because yarn skipped the cross-arch optional dep.
+CSS_INLINE_FETCH=$(mktemp -d)
+(cd "$CSS_INLINE_FETCH" && npm pack "@css-inline/css-inline-$CSS_INLINE_ARCH@$CSS_INLINE_VERSION" --silent)
+tar -xzf "$CSS_INLINE_FETCH"/*.tgz -C "$CSS_INLINE_FETCH"
+mkdir -p "$BUNDLE_DIR/node_modules/@css-inline/css-inline-$CSS_INLINE_ARCH"
+cp -r "$CSS_INLINE_FETCH/package/." "$BUNDLE_DIR/node_modules/@css-inline/css-inline-$CSS_INLINE_ARCH/"
+rm -rf "$CSS_INLINE_FETCH"
+
+cat > "$BUNDLE_DIR/run.sh" <<'EOF'
+#!/bin/bash
+exec node main.js
+EOF
+chmod +x "$BUNDLE_DIR/run.sh"
+
+say "Zipping lambda bundle"
+ZIP_PATH="$BUNDLE_DIR/lambda.zip"
+(cd "$BUNDLE_DIR" && zip -qr lambda.zip main.js run.sh templates node_modules)
+ZIP_SIZE=$(stat -c%s "$ZIP_PATH")
+echo "  size: $(numfmt --to=iec --suffix=B $ZIP_SIZE)"
+
+say "Uploading lambda code"
+# Direct upload limit is 50 MiB. Above that, stage via the static bucket.
+if (( ZIP_SIZE < 50 * 1024 * 1024 )); then
+  aws lambda update-function-code \
+    --function-name "$LAMBDA_FUNCTION_NAME" \
+    --zip-file "fileb://$ZIP_PATH" >/dev/null
+else
+  S3_KEY="lambda-deploys/$(date -u +%Y%m%dT%H%M%SZ).zip"
+  aws s3 cp "$ZIP_PATH" "s3://$STATIC_BUCKET/$S3_KEY" >/dev/null
+  aws lambda update-function-code \
+    --function-name "$LAMBDA_FUNCTION_NAME" \
+    --s3-bucket "$STATIC_BUCKET" \
+    --s3-key "$S3_KEY" >/dev/null
+  aws s3 rm "s3://$STATIC_BUCKET/$S3_KEY" >/dev/null
+fi
+
+# Wait for the function to leave the "Pending" state before proceeding.
+aws lambda wait function-updated --function-name "$LAMBDA_FUNCTION_NAME"
+# Env vars (including secrets) are managed by terraform — see
+# deployment/terraform/lambda.tf + production.tfvars.
+
+##########
+# Client #
+##########
+
+say "Building client (vite)"
+(cd "$ROOT_DIR" && yarn build >/dev/null)
+
+say "Syncing client to s3://$STATIC_BUCKET"
+# Fingerprinted assets under /assets get long cache; everything else (index.html,
+# manifest, favicons) gets short cache.
+aws s3 sync "$ROOT_DIR/build/" "s3://$STATIC_BUCKET/" \
+  --delete \
+  --exclude "index.html" \
+  --cache-control "public, max-age=31536000, immutable" >/dev/null
+aws s3 cp "$ROOT_DIR/build/index.html" "s3://$STATIC_BUCKET/index.html" \
+  --cache-control "public, max-age=0, must-revalidate" \
+  --content-type "text/html; charset=utf-8" >/dev/null
+
+say "Invalidating CloudFront"
+aws cloudfront create-invalidation \
+  --distribution-id "$CLOUDFRONT_DIST_ID" \
+  --paths "/*" >/dev/null
+
+say "Deploy complete"

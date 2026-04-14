@@ -38,7 +38,11 @@ data "aws_iam_policy_document" "api_inline" {
     resources = [aws_dsql_cluster.main.arn]
   }
 
-  # Read-only access to the region artifacts bucket.
+  # Read-only access to the region artifacts bucket. The legacy dev bucket
+  # (districtbuilder-dev-238046523378) that the current region_config rows
+  # point at has a bucket-wide public-read policy, so no IAM grant is needed
+  # for the Lambda to fetch from it. When that bucket is locked down we'll
+  # need to re-add a scoped IAM grant here.
   statement {
     sid     = "S3ReadArtifacts"
     actions = ["s3:GetObject", "s3:ListBucket"]
@@ -46,6 +50,17 @@ data "aws_iam_policy_document" "api_inline" {
       aws_s3_bucket.region_artifacts.arn,
       "${aws_s3_bucket.region_artifacts.arn}/*"
     ]
+  }
+
+  # Send transactional email via SES. Used by @nestjs-modules/mailer for
+  # registration verification + password reset. Scope to identities we own
+  # so a leak of these credentials can't be used to spam from arbitrary
+  # senders. `SendRawEmail` is what nodemailer's SES transport actually
+  # calls; `SendEmail` is added for any direct uses.
+  statement {
+    sid       = "SESSend"
+    actions   = ["ses:SendRawEmail", "ses:SendEmail"]
+    resources = ["arn:aws:ses:${var.aws_region}:*:identity/*"]
   }
 }
 
@@ -61,7 +76,7 @@ resource "aws_lambda_function" "api" {
   architectures    = [var.lambda_architecture]
   memory_size      = var.lambda_memory_mb
   timeout          = var.lambda_timeout_seconds
-  handler          = "index.handler"
+  handler          = "run.sh"
   filename         = data.archive_file.stub.output_path
   source_code_hash = data.archive_file.stub.output_base64sha256
 
@@ -71,6 +86,9 @@ resource "aws_lambda_function" "api" {
 
   environment {
     variables = {
+      # LWA's bootstrap is invoked as a wrapper; it execs $_HANDLER (run.sh).
+      AWS_LAMBDA_EXEC_WRAPPER = "/opt/bootstrap"
+
       # Lambda Web Adapter config: NestJS listens on 3005 (see
       # src/server/src/main.ts) and exposes /healthcheck for readiness.
       AWS_LWA_PORT                 = "3005"
@@ -85,6 +103,15 @@ resource "aws_lambda_function" "api" {
       REGION_ARTIFACTS_BUCKET = aws_s3_bucket.region_artifacts.bucket
 
       NODE_ENV = var.environment
+
+      # Application secrets and config. Sourced from production.tfvars which
+      # is gitignored. JWT_SECRET is marked sensitive so it won't appear in
+      # terraform plan output.
+      JWT_SECRET           = var.jwt_secret
+      JWT_EXPIRATION_IN_MS = tostring(var.jwt_expiration_ms)
+      CLIENT_URL           = "https://${var.domain_name}"
+      DEFAULT_FROM_EMAIL   = var.default_from_email
+      PLAN_SCORE_API_TOKEN = var.plan_score_api_token
     }
   }
 
@@ -102,10 +129,13 @@ resource "aws_lambda_function" "api" {
   ]
 }
 
-resource "aws_lambda_permission" "alb" {
-  statement_id  = "AllowALBInvoke"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.api.function_name
-  principal     = "elasticloadbalancing.amazonaws.com"
-  source_arn    = aws_lb_target_group.api.arn
+resource "aws_lambda_function_url" "api" {
+  function_name      = aws_lambda_function.api.function_name
+  authorization_type = "NONE"
+  invoke_mode        = "BUFFERED"
+}
+
+locals {
+  # CloudFront needs just the hostname, not the full URL.
+  lambda_url_host = replace(replace(aws_lambda_function_url.api.function_url, "https://", ""), "/", "")
 }

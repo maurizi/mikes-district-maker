@@ -31,7 +31,7 @@ export async function fetchStaticMetadata(path: S3URI): Promise<IStaticMetadata>
   });
 }
 
-async function fetchGeoUnitHierarchy(path: S3URI): Promise<GeoUnitHierarchy> {
+export async function fetchGeoUnitHierarchy(path: S3URI): Promise<GeoUnitHierarchy> {
   return new Promise((resolve, reject) => {
     s3Axios
       .get(staticDataUri(path, "geounit-hierarchy.json"))

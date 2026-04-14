@@ -1,3 +1,4 @@
+import "reflect-metadata";
 import { BadRequestException, ClassSerializerInterceptor, ValidationPipe } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import { NestFactory } from "@nestjs/core";

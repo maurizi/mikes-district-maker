@@ -1,5 +1,5 @@
 resource "aws_dsql_cluster" "main" {
-  deletion_protection_enabled = var.environment == "production"
+  deletion_protection_enabled = var.enable_production_safeguards
 
   tags = {
     Name = "${var.project}-${var.environment}"

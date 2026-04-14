@@ -273,6 +273,7 @@ export interface CreateProjectData {
   readonly districtsDefinition?: DistrictsDefinition;
   readonly populationDeviation?: number;
   readonly projectTemplate?: Pick<IProjectTemplate, "id">;
+  readonly thumbnail?: ThumbnailGeoJSON;
 }
 
 export interface CreateReferenceLayerData {

@@ -2,7 +2,6 @@ import { Module, forwardRef } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 
 import { ChambersModule } from "../chambers/chambers.module";
-import { DistrictsModule } from "../districts/districts.module";
 import { OrganizationsModule } from "../organizations/organizations.module";
 import { RegionConfigsModule } from "../region-configs/region-configs.module";
 import { UsersModule } from "../users/users.module";
@@ -17,7 +16,6 @@ import { ReferenceLayersModule } from "../reference-layers/reference-layers.modu
 @Module({
   imports: [
     TypeOrmModule.forFeature([Project]),
-    DistrictsModule,
     RegionConfigsModule,
     ChambersModule,
     OrganizationsModule,

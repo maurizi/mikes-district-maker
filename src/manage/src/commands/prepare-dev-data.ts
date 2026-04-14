@@ -5,12 +5,14 @@ import {
   mkdirSync,
   existsSync,
   createWriteStream,
-  createReadStream
+  createReadStream,
+  writeSync
 } from "fs";
-import { JsonStreamStringify } from "json-stream-stringify";
 import { dirname, join } from "path";
 import { tmpdir } from "os";
 import RBush from "rbush";
+import { MultiPolygon, Polygon } from "geojson";
+
 import { GeosHelper } from "../lib/geos-helper";
 import {
   extractZipToDir,
@@ -21,11 +23,15 @@ import {
   apportion,
   reprojectFeature
 } from "../lib/voting-data";
+import { createInterface } from "readline";
 
 // Simple bbox from GeoJSON coordinates (no library needed)
 function featureBbox(f: GeoJSON.Feature): [number, number, number, number] {
   const coords = (f.geometry as any).coordinates;
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
   function walk(c: any) {
     if (typeof c[0] === "number") {
       if (c[0] < minX) minX = c[0];
@@ -38,145 +44,6 @@ function featureBbox(f: GeoJSON.Feature): [number, number, number, number] {
   }
   walk(coords);
   return [minX, minY, maxX, maxY];
-}
-
-// Simple centroid from GeoJSON coordinates
-function featureCentroid(f: GeoJSON.Feature): [number, number] {
-  const coords = (f.geometry as any).coordinates;
-  let sumX = 0, sumY = 0, count = 0;
-  function walk(c: any) {
-    if (typeof c[0] === "number") {
-      sumX += c[0]; sumY += c[1]; count++;
-    } else {
-      for (const sub of c) walk(sub);
-    }
-  }
-  walk(coords);
-  return [sumX / count, sumY / count];
-}
-
-import {
-  Feature,
-  FeatureCollection,
-  MultiPolygon,
-  Polygon
-} from "geojson";
-
-// Normalize an edge key so both directions map to the same key
-function edgeKey(x1: number, y1: number, x2: number, y2: number): string {
-  if (x1 < x2 || (x1 === x2 && y1 < y2)) return `${x1},${y1}|${x2},${y2}`;
-  return `${x2},${y2}|${x1},${y1}`;
-}
-
-// Check if point P lies on segment A-B (within tolerance), and if so return
-// the parametric t value (0..1) for sorting multiple points on the same edge
-function pointOnSegmentT(
-  px: number, py: number,
-  ax: number, ay: number,
-  bx: number, by: number,
-  tol: number = 1e-8
-): number | null {
-  const dx = bx - ax, dy = by - ay;
-  const lenSq = dx * dx + dy * dy;
-  if (lenSq === 0) return null;
-  const t = ((px - ax) * dx + (py - ay) * dy) / lenSq;
-  if (t < tol || t > 1 - tol) return null; // Exclude endpoints
-  const projX = ax + t * dx, projY = ay + t * dy;
-  const dist = Math.sqrt((px - projX) ** 2 + (py - projY) ** 2);
-  return dist < tol ? t : null;
-}
-
-// Find intersection points: vertices of sub-block geometry that lie on the
-// original block boundary but aren't original block vertices.
-// Returns a map of edge keys to arrays of { point, t } to insert.
-function findIntersectionPoints(
-  subGeom: Polygon | MultiPolygon,
-  blockGeom: Polygon | MultiPolygon
-): Map<string, { point: number[]; t: number }[]> {
-  // Collect original block boundary vertices for fast lookup
-  const blockVertSet = new Set<string>();
-  const blockRings: number[][][] = blockGeom.type === "Polygon"
-    ? [blockGeom.coordinates[0]]
-    : blockGeom.coordinates.map(p => p[0]);
-  for (const ring of blockRings) {
-    for (const pt of ring) blockVertSet.add(`${pt[0]},${pt[1]}`);
-  }
-
-  // Collect sub-block vertices that aren't original block vertices
-  const subRings: number[][][] = subGeom.type === "Polygon"
-    ? [subGeom.coordinates[0]]
-    : subGeom.coordinates.flatMap(p => [p[0]]);
-  const candidates: number[][] = [];
-  for (const ring of subRings) {
-    for (const pt of ring) {
-      if (!blockVertSet.has(`${pt[0]},${pt[1]}`)) candidates.push(pt);
-    }
-  }
-
-  // For each candidate, check if it lies on a block boundary edge
-  const result = new Map<string, { point: number[]; t: number }[]>();
-  for (const pt of candidates) {
-    for (const ring of blockRings) {
-      for (let i = 0; i < ring.length - 1; i++) {
-        const t = pointOnSegmentT(pt[0], pt[1], ring[i][0], ring[i][1], ring[i + 1][0], ring[i + 1][1]);
-        if (t !== null) {
-          const key = edgeKey(ring[i][0], ring[i][1], ring[i + 1][0], ring[i + 1][1]);
-          if (!result.has(key)) result.set(key, []);
-          // Avoid duplicates
-          const existing = result.get(key)!;
-          if (!existing.some(e => Math.abs(e.t - t) < 1e-10)) {
-            existing.push({ point: pt, t });
-          }
-          break;
-        }
-      }
-    }
-  }
-  return result;
-}
-
-// Insert intersection points into a GeoJSON geometry's boundary edges.
-// For each edge that has intersection points, insert them in parametric order.
-function insertPointsIntoGeometry(
-  geom: Polygon | MultiPolygon,
-  edgePoints: Map<string, { point: number[]; t: number }[]>
-): Polygon | MultiPolygon {
-  if (edgePoints.size === 0) return geom;
-
-  function processRing(ring: number[][]): number[][] {
-    const result: number[][] = [];
-    for (let i = 0; i < ring.length - 1; i++) {
-      result.push(ring[i]);
-      const key = edgeKey(ring[i][0], ring[i][1], ring[i + 1][0], ring[i + 1][1]);
-      const inserts = edgePoints.get(key);
-      if (inserts) {
-        // Compute t relative to this edge direction (may be reversed from key)
-        const ax = ring[i][0], ay = ring[i][1];
-        const bx = ring[i + 1][0], by = ring[i + 1][1];
-        const dx = bx - ax, dy = by - ay;
-        const lenSq = dx * dx + dy * dy;
-        const withT = inserts.map(ins => {
-          const t = lenSq > 0
-            ? ((ins.point[0] - ax) * dx + (ins.point[1] - ay) * dy) / lenSq
-            : 0;
-          return { point: ins.point, t };
-        });
-        withT.sort((a, b) => a.t - b.t);
-        for (const ins of withT) result.push(ins.point);
-      }
-    }
-    // Close ring
-    result.push([...result[0]]);
-    return result;
-  }
-
-  if (geom.type === "Polygon") {
-    return { type: "Polygon", coordinates: geom.coordinates.map(processRing) };
-  }
-  return {
-    type: "MultiPolygon",
-    coordinates: geom.coordinates.map(poly => poly.map(processRing))
-  };
 }
 
 // R-tree item for spatial index
@@ -210,8 +77,7 @@ export default class PrepareDevData extends Command {
     }),
     censusCache: Flags.string({
       char: "c",
-      description:
-        "Path to cache Census blocks+demographics GeoJSON (skips download if exists)"
+      description: "Path to cache Census blocks+demographics GeoJSON (skips download if exists)"
     }),
     additionalVest: Flags.string({
       char: "a",
@@ -259,7 +125,7 @@ export default class PrepareDevData extends Command {
       this.log("\n1. Loading Census data from cache...");
       // Read features line by line (geojsonseq) to avoid string length limit
       blockFeatures = [];
-      const rl = require("readline").createInterface({ // eslint-disable-line
+      const rl = createInterface({
         input: createReadStream(cacheFeaturesPath),
         crlfDelay: Infinity
       });
@@ -269,18 +135,17 @@ export default class PrepareDevData extends Command {
       // Demographics and county names are small enough for JSON.parse
       blockDemographics = new Map(Object.entries(JSON.parse(readFileSync(cacheDemoPath, "utf-8"))));
       countyNames = new Map(Object.entries(JSON.parse(readFileSync(cacheCountyPath, "utf-8"))));
-      this.log(`   ${blockFeatures.length} blocks, ${blockDemographics.size} demographics loaded from cache`);
+      this.log(
+        `   ${blockFeatures.length} blocks, ${blockDemographics.size} demographics loaded from cache`
+      );
     } else {
       // Download Census block shapefile
       this.log("\n1a. Downloading Census 2020 block shapefile...");
       const tigerUrl = `https://www2.census.gov/geo/tiger/TIGER2020/TABBLOCK20/tl_2020_${stateFips}_tabblock20.zip`;
       const tigerResp = await fetch(tigerUrl);
-      if (!tigerResp.ok)
-        throw new Error(`Failed to download TIGER data: ${tigerResp.status}`);
+      if (!tigerResp.ok) throw new Error(`Failed to download TIGER data: ${tigerResp.status}`);
       const tigerBuffer = Buffer.from(await tigerResp.arrayBuffer());
-      this.log(
-        `   Downloaded ${(tigerBuffer.length / 1024 / 1024).toFixed(1)}MB`
-      );
+      this.log(`   Downloaded ${(tigerBuffer.length / 1024 / 1024).toFixed(1)}MB`);
 
       const tigerDir = join(tmp, "tiger");
       await extractZipToDir(tigerBuffer, tigerDir);
@@ -293,16 +158,27 @@ export default class PrepareDevData extends Command {
       this.log("\n1b. Fetching demographics from Census API...");
       const censusUrl = `https://api.census.gov/data/2020/dec/pl?get=P1_001N,P1_003N,P1_004N,P1_006N,P2_002N,P3_001N,P3_003N,P3_004N,P3_006N,P4_002N&for=block:*&in=state:${stateFips}&in=county:*&in=tract:*`;
       const censusResp = await fetch(censusUrl);
-      if (!censusResp.ok)
-        throw new Error(`Census API failed: ${censusResp.status}`);
+      if (!censusResp.ok) throw new Error(`Census API failed: ${censusResp.status}`);
       const censusData: string[][] = await censusResp.json();
 
       blockDemographics = new Map();
       for (let i = 1; i < censusData.length; i++) {
-        const [pop, white, black, asian, hispanic,
-               vap, vapWhite, vapBlack, vapAsian, vapHispanic,
-               state, county, tract, block] =
-          censusData[i];
+        const [
+          pop,
+          white,
+          black,
+          asian,
+          hispanic,
+          vap,
+          vapWhite,
+          vapBlack,
+          vapAsian,
+          vapHispanic,
+          state,
+          county,
+          tract,
+          block
+        ] = censusData[i];
         const geoId = `${state}${county}${tract}${block}`;
         const popN = parseInt(pop) || 0;
         const whiteN = parseInt(white) || 0;
@@ -358,19 +234,29 @@ export default class PrepareDevData extends Command {
         { prefix: "B05003D", key: "cvapAsian" },
         { prefix: "B05003I", key: "cvapHispanic" }
       ];
-      const cvapVars = cvapTables
-        .flatMap(t => [`${t.prefix}_009E`, `${t.prefix}_011E`, `${t.prefix}_020E`, `${t.prefix}_022E`]);
+      const cvapVars = cvapTables.flatMap(t => [
+        `${t.prefix}_009E`,
+        `${t.prefix}_011E`,
+        `${t.prefix}_020E`,
+        `${t.prefix}_022E`
+      ]);
       const acsUrl = `https://api.census.gov/data/2022/acs/acs5?get=${cvapVars.join(",")}&for=tract:*&in=state:${stateFips}&in=county:*`;
       const acsResp = await fetch(acsUrl);
-      if (!acsResp.ok)
-        throw new Error(`ACS API failed: ${acsResp.status}`);
+      if (!acsResp.ok) throw new Error(`ACS API failed: ${acsResp.status}`);
       const acsData: string[][] = await acsResp.json();
 
       // Parse CVAP by tract
-      const tractCvap = new Map<string, {
-        cvapTotal: number; cvapWhite: number; cvapBlack: number;
-        cvapAsian: number; cvapHispanic: number; cvapOther: number;
-      }>();
+      const tractCvap = new Map<
+        string,
+        {
+          cvapTotal: number;
+          cvapWhite: number;
+          cvapBlack: number;
+          cvapAsian: number;
+          cvapHispanic: number;
+          cvapOther: number;
+        }
+      >();
       for (let i = 1; i < acsData.length; i++) {
         const row = acsData[i];
         // Each table has 4 vars: _009E, _011E, _020E, _022E
@@ -388,7 +274,10 @@ export default class PrepareDevData extends Command {
         const tCounty = row[colIdx++];
         const tTract = row[colIdx++];
         const tractId = `${tState}${tCounty}${tTract}`;
-        const cvapOther = Math.max(0, vals.cvapTotal - vals.cvapWhite - vals.cvapBlack - vals.cvapAsian - vals.cvapHispanic);
+        const cvapOther = Math.max(
+          0,
+          vals.cvapTotal - vals.cvapWhite - vals.cvapBlack - vals.cvapAsian - vals.cvapHispanic
+        );
         tractCvap.set(tractId, {
           cvapTotal: vals.cvapTotal,
           cvapWhite: vals.cvapWhite,
@@ -481,10 +370,7 @@ export default class PrepareDevData extends Command {
       number,
       {
         precinctId: string;
-        votes: Record<
-          string,
-          { democrat: number; republican: number; other: number }
-        >;
+        votes: Record<string, { democrat: number; republican: number; other: number }>;
         totalVotes: Record<string, number>;
       }
     >();
@@ -503,12 +389,8 @@ export default class PrepareDevData extends Command {
       }
       precinctVoting.set(i, { precinctId, votes: byOffice, totalVotes });
     }
-    this.log(
-      `   Election year: 20${detectedYear}`
-    );
-    this.log(
-      `   Offices found: ${Array.from(officesFound).sort().join(", ")}`
-    );
+    this.log(`   Election year: 20${detectedYear}`);
+    this.log(`   Offices found: ${Array.from(officesFound).sort().join(", ")}`);
 
     // ── Step 3: Node everything ──
     // Union ALL block + precinct boundaries, polygonize, assign faces.
@@ -520,7 +402,7 @@ export default class PrepareDevData extends Command {
     // Scaled back to WGS84 for output.
     this.log("\n3. Noding all boundaries...");
     const geosHelper = new GeosHelper();
-    await geosHelper.init();
+    geosHelper.init();
     const COORD_SCALE = 1e7; // 1e-7 degrees ≈ 1cm precision
 
     // Extract block boundaries, keeping only the boundaries (not full polygons)
@@ -543,7 +425,9 @@ export default class PrepareDevData extends Command {
         geosHelper.free(g); // Free polygon — only keep boundary
         allBoundaries.push(boundary);
         validBlocks.add(bi);
-      } catch { /* skip */ }
+      } catch {
+        /* skip */
+      }
     }
 
     // Build R-tree over blocks for spatial lookup (uses original GeoJSON bboxes)
@@ -576,7 +460,10 @@ export default class PrepareDevData extends Command {
     for (let pi = 0; pi < vestFeatures.length; pi++) {
       if (pi % 100 === 0 && pi > 0) this.log(`   ${pi}/${vestFeatures.length} precincts...`);
       const geom = vestFeatures[pi].geometry;
-      if (!geom) { precinctGeoms.push(null); continue; }
+      if (!geom) {
+        precinctGeoms.push(null);
+        continue;
+      }
       try {
         let g = geosHelper.fromGeoJSONScaled(geom as Polygon | MultiPolygon, COORD_SCALE);
         if (!geosHelper.isValid(g)) {
@@ -587,8 +474,10 @@ export default class PrepareDevData extends Command {
         // Find nearby blocks via R-tree and build a local snap target
         const [pMinX, pMinY, pMaxX, pMaxY] = featureBbox(vestFeatures[pi]);
         const nearby = snapTree.search({
-          minX: pMinX - 0.001, minY: pMinY - 0.001,
-          maxX: pMaxX + 0.001, maxY: pMaxY + 0.001
+          minX: pMinX - 0.001,
+          minY: pMinY - 0.001,
+          maxX: pMaxX + 0.001,
+          maxY: pMaxY + 0.001
         });
         if (nearby.length > 0) {
           // Build snap target from cached boundary WKT (no re-extraction)
@@ -596,7 +485,9 @@ export default class PrepareDevData extends Command {
           for (const n of nearby) {
             const wkt = blockBoundaryWkt[n.index];
             if (wkt) {
-              nearbyBoundaries.push((geosHelper as any)._WKTReader_read((geosHelper as any).reader, wkt));
+              nearbyBoundaries.push(
+                (geosHelper as any)._WKTReader_read((geosHelper as any).reader, wkt)
+              );
             }
           }
           if (nearbyBoundaries.length > 0) {
@@ -652,7 +543,9 @@ export default class PrepareDevData extends Command {
           g = fixed;
         }
         blockGeoms[bi] = g;
-      } catch { /* skip */ }
+      } catch {
+        /* skip */
+      }
     }
 
     // Build spatial index over blocks for fast face assignment
@@ -707,8 +600,10 @@ export default class PrepareDevData extends Command {
         const rpx = rpxScaled / COORD_SCALE;
         const rpy = rpyScaled / COORD_SCALE;
         const blockCands = blockTree.search({
-          minX: rpx - 0.001, minY: rpy - 0.001,
-          maxX: rpx + 0.001, maxY: rpy + 0.001
+          minX: rpx - 0.001,
+          minY: rpy - 0.001,
+          maxX: rpx + 0.001,
+          maxY: rpy + 0.001
         });
         for (const bc of blockCands) {
           if ((geosHelper as any)._Contains(blockGeoms[bc.index], rp) === 1) {
@@ -726,8 +621,10 @@ export default class PrepareDevData extends Command {
         const rpx = rpxScaled / COORD_SCALE;
         const rpy = rpyScaled / COORD_SCALE;
         const precCands = precinctTree.search({
-          minX: rpx - 0.001, minY: rpy - 0.001,
-          maxX: rpx + 0.001, maxY: rpy + 0.001
+          minX: rpx - 0.001,
+          minY: rpy - 0.001,
+          maxX: rpx + 0.001,
+          maxY: rpy + 0.001
         });
         for (const pc of precCands) {
           if ((geosHelper as any)._Contains(precinctGeoms[pc.index], rp) === 1) {
@@ -743,8 +640,11 @@ export default class PrepareDevData extends Command {
         unassigned++;
         unassignedBlock++;
         if (unassignedBlock + unassignedPrecinct <= 20) {
-          this.log(`   Unassigned face: block=-1 precinct=${precinctIdx} rp=(${rpMatch ? (parseFloat(rpMatch[0]) / COORD_SCALE).toFixed(6) : "?"
-          },${rpMatch ? (parseFloat(rpMatch[1]) / COORD_SCALE).toFixed(6) : "?"}) area=${areaOut[0].toExponential(3)}`);
+          this.log(
+            `   Unassigned face: block=-1 precinct=${precinctIdx} rp=(${
+              rpMatch ? (parseFloat(rpMatch[0]) / COORD_SCALE).toFixed(6) : "?"
+            },${rpMatch ? (parseFloat(rpMatch[1]) / COORD_SCALE).toFixed(6) : "?"}) area=${areaOut[0].toExponential(3)}`
+          );
         }
         continue;
       }
@@ -752,22 +652,21 @@ export default class PrepareDevData extends Command {
       if (precinctIdx === -1) {
         // Defer — will try to assign via block's dominant precinct in second pass
         const wkt = geosHelper.toWkt(face);
-        const cloned = (geosHelper as any)._WKTReader_read(
-          (geosHelper as any).reader, wkt
-        );
+        const cloned = (geosHelper as any)._WKTReader_read((geosHelper as any).reader, wkt);
         deferredFaces.push({ geom: cloned, area: areaOut[0], blockIdx });
         continue;
       }
 
       // Clone face
       const wkt = geosHelper.toWkt(face);
-      const cloned = (geosHelper as any)._WKTReader_read(
-        (geosHelper as any).reader, wkt
-      );
+      const cloned = (geosHelper as any)._WKTReader_read((geosHelper as any).reader, wkt);
 
       if (!facesByBlock.has(blockIdx)) facesByBlock.set(blockIdx, []);
       facesByBlock.get(blockIdx)!.push({
-        geom: cloned, area: areaOut[0], blockIdx, precinctIdx
+        geom: cloned,
+        area: areaOut[0],
+        blockIdx,
+        precinctIdx
       });
       assigned++;
     }
@@ -785,11 +684,18 @@ export default class PrepareDevData extends Command {
       for (const df of deferredFaces) {
         // Check if the face intersects any precinct geometry
         let intersectingPrecinct = -1;
+        let fMinX = Infinity,
+          fMinY = Infinity,
+          fMaxX = -Infinity,
+          fMaxY = -Infinity;
         const dfGJ = geosHelper.toGeoJSONScaled(df.geom, COORD_SCALE);
         if (dfGJ) {
-          // Get face bbox in WGS84 for R-tree search
-          let fMinX = Infinity, fMinY = Infinity, fMaxX = -Infinity, fMaxY = -Infinity;
-          const rings = dfGJ.type === "Polygon" ? dfGJ.coordinates : dfGJ.type === "MultiPolygon" ? dfGJ.coordinates.flat() : [];
+          const rings =
+            dfGJ.type === "Polygon"
+              ? dfGJ.coordinates
+              : dfGJ.type === "MultiPolygon"
+                ? dfGJ.coordinates.flat()
+                : [];
           for (const ring of rings) {
             for (const [x, y] of ring as number[][]) {
               if (x < fMinX) fMinX = x;
@@ -799,8 +705,10 @@ export default class PrepareDevData extends Command {
             }
           }
           const precCands = precinctTree.search({
-            minX: fMinX - 0.001, minY: fMinY - 0.001,
-            maxX: fMaxX + 0.001, maxY: fMaxY + 0.001
+            minX: fMinX - 0.001,
+            minY: fMinY - 0.001,
+            maxX: fMaxX + 0.001,
+            maxY: fMaxY + 0.001
           });
           let bestArea = 0;
           for (const pc of precCands) {
@@ -824,30 +732,160 @@ export default class PrepareDevData extends Command {
           }
         }
 
+        // Fallback: nearest precinct by R-tree bbox center distance. Keeps
+        // water/offshore blocks in the output (assigned to the nearest
+        // on-land precinct) so they contribute to geometry / contiguity /
+        // compactness downstream.
+        if (intersectingPrecinct === -1) {
+          const cx = (fMinX + fMaxX) / 2;
+          const cy = (fMinY + fMaxY) / 2;
+          let bestDist = Infinity;
+          const allCands = precinctTree.search({
+            minX: cx - 1.0, minY: cy - 1.0,
+            maxX: cx + 1.0, maxY: cy + 1.0
+          });
+          for (const pc of allCands) {
+            const pcx = (pc.minX + pc.maxX) / 2;
+            const pcy = (pc.minY + pc.maxY) / 2;
+            const d = (pcx - cx) ** 2 + (pcy - cy) ** 2;
+            if (d < bestDist) {
+              bestDist = d;
+              intersectingPrecinct = pc.index;
+            }
+          }
+        }
+
         if (intersectingPrecinct >= 0) {
-          // Face intersects a precinct — assign it
           if (!facesByBlock.has(df.blockIdx)) facesByBlock.set(df.blockIdx, []);
           facesByBlock.get(df.blockIdx)!.push({
-            geom: df.geom, area: df.area, blockIdx: df.blockIdx, precinctIdx: intersectingPrecinct
+            geom: df.geom,
+            area: df.area,
+            blockIdx: df.blockIdx,
+            precinctIdx: intersectingPrecinct
           });
           recovered++;
         } else {
-          // Face doesn't intersect any precinct — genuinely outside coverage (ocean/lake)
+          // Should be unreachable given the nearest-precinct fallback, but
+          // kept for safety.
           unassigned++;
           unassignedPrecinct++;
           outsidePrecinct++;
-          if (unassignedBlock + unassignedPrecinct <= 20) {
-            this.log(`   Unassigned face: block=${df.blockIdx} precinct=-1 (outside precinct coverage) area=${df.area.toExponential(3)}`);
-          }
           geosHelper.free(df.geom);
           stillUnassigned++;
         }
       }
       assigned += recovered;
-      this.log(`   Second pass: recovered ${recovered}, outside precinct coverage ${outsidePrecinct}, still unassigned ${stillUnassigned}`);
+      this.log(
+        `   Second pass: recovered ${recovered}, outside precinct coverage ${outsidePrecinct}, still unassigned ${stillUnassigned}`
+      );
     }
 
     this.log(`   Assigned: ${assigned}, Unassigned: ${unassigned}`);
+
+    // ── Third pass (fallback): rescue blocks with zero faces ──
+    // Some blocks end up with zero faces because the face-to-block point-on-
+    // surface test failed (e.g. TIGER overlap or irregular geometry). This
+    // uses the block's own census geometry as a synthetic face to preserve
+    // every block in the output.
+    // (kept for edge cases; second pass now handles outside-precinct faces)
+    // Some blocks get no face assigned during the first/second pass because
+    // the polygonize output doesn't contain a face whose point-on-surface is
+    // inside the block (e.g. due to TIGER geometry irregularities, boundary
+    // snapping, or overlapping blocks). Recover these by using the block's
+    // original census geometry as a synthetic face. Populated blocks matter
+    // most; zero-pop coastal water blocks are less critical but preserving
+    // them avoids CSV-import errors on downstream consumers.
+    {
+      let rescued = 0;
+      let rescuedPopulated = 0;
+      let stillMissing = 0;
+      let missNoGeom = 0;
+      let missNoRP = 0;
+      let missNoPrec = 0;
+      let missNoWKT = 0;
+      let missNoDemo = 0;
+      for (const bi of validBlocks) {
+        if (facesByBlock.has(bi)) continue;
+        const blockProps = blockFeatures[bi].properties as Record<string, any>;
+        const geoId = blockProps.GEOID20 as string;
+        const demo = blockDemographics.get(geoId);
+        if (!demo) { missNoDemo++; continue; }
+        const g = blockGeoms[bi];
+        if (!g) { stillMissing++; missNoGeom++; continue; }
+
+        // Find a precinct for this block. Try containment first, then
+        // intersection, then nearest by bbox center. These blocks are
+        // typically offshore/water where VEST precincts don't extend.
+        let precinctIdx = -1;
+        const rp = geosHelper.pointOnSurface(g);
+        if (!rp) { stillMissing++; missNoRP++; continue; }
+        const rpWkt = geosHelper.toWkt(rp);
+        const rpMatch = rpWkt?.match(/-?\d+\.?\d*/g);
+        let rpx = 0, rpy = 0;
+        if (rpMatch && rpMatch.length >= 2) {
+          rpx = parseFloat(rpMatch[0]) / COORD_SCALE;
+          rpy = parseFloat(rpMatch[1]) / COORD_SCALE;
+          const precCands = precinctTree.search({
+            minX: rpx - 0.001, minY: rpy - 0.001,
+            maxX: rpx + 0.001, maxY: rpy + 0.001
+          });
+          for (const pc of precCands) {
+            if ((geosHelper as any)._Contains(precinctGeoms[pc.index], rp) === 1) {
+              precinctIdx = pc.index;
+              break;
+            }
+          }
+        }
+        geosHelper.free(rp);
+
+        // Fallback: intersection test with an expanded search, then nearest
+        if (precinctIdx === -1 && rpMatch && rpMatch.length >= 2) {
+          const precCands = precinctTree.search({
+            minX: rpx - 0.1, minY: rpy - 0.1,
+            maxX: rpx + 0.1, maxY: rpy + 0.1
+          });
+          for (const pc of precCands) {
+            if ((geosHelper as any)._Intersects(precinctGeoms[pc.index], g) === 1) {
+              precinctIdx = pc.index;
+              break;
+            }
+          }
+        }
+        if (precinctIdx === -1 && rpMatch && rpMatch.length >= 2) {
+          // Nearest-precinct fallback: use precinct R-tree bbox center distance
+          let bestDist = Infinity;
+          const allCands = precinctTree.search({
+            minX: rpx - 1.0, minY: rpy - 1.0,
+            maxX: rpx + 1.0, maxY: rpy + 1.0
+          });
+          for (const pc of allCands) {
+            const cx = (pc.minX + pc.maxX) / 2;
+            const cy = (pc.minY + pc.maxY) / 2;
+            const d = (cx - rpx) ** 2 + (cy - rpy) ** 2;
+            if (d < bestDist) {
+              bestDist = d;
+              precinctIdx = pc.index;
+            }
+          }
+        }
+        if (precinctIdx === -1) { stillMissing++; missNoPrec++; continue; }
+
+        // Clone the block's own geometry as a synthetic face
+        const wkt = geosHelper.toWkt(g);
+        if (!wkt) { stillMissing++; missNoWKT++; continue; }
+        const cloned = (geosHelper as any)._WKTReader_read(
+          (geosHelper as any).reader, wkt
+        );
+        const areaOut = [0];
+        (geosHelper as any)._Area(cloned, areaOut);
+        facesByBlock.set(bi, [{
+          geom: cloned, area: areaOut[0], blockIdx: bi, precinctIdx
+        }]);
+        rescued++;
+        if ((demo.population || 0) > 0) rescuedPopulated++;
+      }
+      this.log(`   Third pass (rescue): recovered ${rescued} (${rescuedPopulated} populated), still-missing ${stillMissing} [noDemo=${missNoDemo} noGeom=${missNoGeom} noRP=${missNoRP} noPrec=${missNoPrec} noWKT=${missNoWKT}]`);
+    }
 
     // ── Build output features from faces ──
     // Write geometry to temp file as we go — never accumulate full features in memory.
@@ -933,7 +971,17 @@ export default class PrepareDevData extends Command {
         geosHelper.free(merged);
         singlePrecinct++;
         {
-          const props = buildBlockProps(geoId, pData.precinctId, countyFp, countyNames, demo, pData.votes, pData.totalVotes, officesFound, detectedYear);
+          const props = buildBlockProps(
+            geoId,
+            pData.precinctId,
+            countyFp,
+            countyNames,
+            demo,
+            pData.votes,
+            pData.totalVotes,
+            officesFound,
+            detectedYear
+          );
           require("fs").writeSync(geomFd, JSON.stringify(geoJSON || blockFeature.geometry) + "\n"); // eslint-disable-line
           trackAssignment(pi, featureProps.length, demo.population || 0);
           featureProps.push(props);
@@ -945,15 +993,74 @@ export default class PrepareDevData extends Command {
       const blockArea = faces.reduce((s, f) => s + f.area, 0);
       const MIN_AREA_RATIO = demo.population === 0 ? 0.05 : 0.005;
 
+      // Sub-blocks must be large enough AND thick enough to survive topojson
+      // presimplify + quantize. Sub-blocks that fail either check collapse to
+      // zero area in the topology ("topo-degenerates") — invisible on the map
+      // but present as degenerate rings.
+      //   MIN_SUB_AREA_M2: comfortably above the largest state's quantization
+      //     grid cell area (CA at 1e5 quantization ≈ 144 m²).
+      //   MIN_SUB_WIDTH_M:  approximated as 2·area/perimeter (short side of a
+      //     thin rectangle). Thin shapes collapse even when they have large
+      //     area because every vertex triangle falls below the simplification
+      //     threshold.
+      const MIN_SUB_AREA_M2 = 200;
+      const MIN_SUB_WIDTH_M = 20;
+      // Convert scaled-coord area to m² using this block's centroid latitude.
+      const [, bMinY, , bMaxY] = featureBbox(blockFeature);
+      const latRad = (((bMinY + bMaxY) / 2) * Math.PI) / 180;
+      const M2_PER_SCALED_DEG2 = (111320 * 111320 * Math.cos(latRad)) / (COORD_SCALE * COORD_SCALE);
+      const M_PER_DEG_X = 111320 * Math.cos(latRad);
+      const M_PER_DEG_Y = 111320;
+
+      // Width estimate per precinct: fit the sub-block's faces in their
+      // combined bbox, then approximate width as area / max(bboxW, bboxH).
+      // This is an upper bound on a rectangle's minor dimension (the short
+      // side of the tightest enclosing rectangle), which is what actually
+      // determines whether the shape survives simplify+quantize.
       const precinctAreas = new Map<number, number>();
+      const precinctWidthsM = new Map<number, number>();
       for (const [pi, pFaces] of byPrecinct) {
-        precinctAreas.set(pi, pFaces.reduce((s, f) => s + f.area, 0));
+        const pArea = pFaces.reduce((s, f) => s + f.area, 0);
+        precinctAreas.set(pi, pArea);
+
+        let pMinX = Infinity,
+          pMinY = Infinity,
+          pMaxX = -Infinity,
+          pMaxY = -Infinity;
+        for (const f of pFaces) {
+          const fgj = geosHelper.toGeoJSONScaled(f.geom, COORD_SCALE);
+          if (!fgj) continue;
+          const rings = fgj.type === "Polygon" ? fgj.coordinates : fgj.coordinates.flat();
+          for (const ring of rings) {
+            for (const [x, y] of ring as number[][]) {
+              if (x < pMinX) pMinX = x;
+              if (y < pMinY) pMinY = y;
+              if (x > pMaxX) pMaxX = x;
+              if (y > pMaxY) pMaxY = y;
+            }
+          }
+        }
+        if (!Number.isFinite(pMinX)) {
+          precinctWidthsM.set(pi, 0);
+          continue;
+        }
+        const bboxWM = (pMaxX - pMinX) * M_PER_DEG_X;
+        const bboxHM = (pMaxY - pMinY) * M_PER_DEG_Y;
+        const longSide = Math.max(bboxWM, bboxHM);
+        const pAreaM2 = pArea * M2_PER_SCALED_DEG2;
+        const widthM = longSide > 0 ? pAreaM2 / longSide : 0;
+        precinctWidthsM.set(pi, widthM);
       }
 
       const viablePrecincts: number[] = [];
       const sliverPrecincts: number[] = [];
       for (const [pi, area] of precinctAreas) {
-        if (blockArea > 0 && area / blockArea >= MIN_AREA_RATIO) {
+        const areaM2 = area * M2_PER_SCALED_DEG2;
+        const widthM = precinctWidthsM.get(pi) || 0;
+        const ratioOK = blockArea > 0 && area / blockArea >= MIN_AREA_RATIO;
+        const absoluteOK = areaM2 >= MIN_SUB_AREA_M2;
+        const widthOK = widthM >= MIN_SUB_WIDTH_M;
+        if (ratioOK && absoluteOK && widthOK) {
           viablePrecincts.push(pi);
         } else {
           sliverPrecincts.push(pi);
@@ -961,9 +1068,10 @@ export default class PrepareDevData extends Command {
       }
 
       if (viablePrecincts.length <= 1) {
-        const bestPi = viablePrecincts.length === 1
-          ? viablePrecincts[0]
-          : [...precinctAreas.entries()].reduce((a, b) => a[1] > b[1] ? a : b)[0];
+        const bestPi =
+          viablePrecincts.length === 1
+            ? viablePrecincts[0]
+            : [...precinctAreas.entries()].reduce((a, b) => (a[1] > b[1] ? a : b))[0];
         const pData = precinctVoting.get(bestPi)!;
         let merged = faces[0].geom;
         for (let fi = 1; fi < faces.length; fi++) {
@@ -976,7 +1084,17 @@ export default class PrepareDevData extends Command {
         geosHelper.free(merged);
         singlePrecinct++;
         {
-          const props = buildBlockProps(geoId, pData.precinctId, countyFp, countyNames, demo, pData.votes, pData.totalVotes, officesFound, detectedYear);
+          const props = buildBlockProps(
+            geoId,
+            pData.precinctId,
+            countyFp,
+            countyNames,
+            demo,
+            pData.votes,
+            pData.totalVotes,
+            officesFound,
+            detectedYear
+          );
           require("fs").writeSync(geomFd, JSON.stringify(geoJSON || blockFeature.geometry) + "\n"); // eslint-disable-line
           trackAssignment(bestPi, featureProps.length, demo.population || 0);
           featureProps.push(props);
@@ -1008,9 +1126,10 @@ export default class PrepareDevData extends Command {
         }
 
         const pFaces = byPrecinct.get(pi)!;
-        const facesToMerge = si === largestIdx
-          ? [...pFaces, ...sliverPrecincts.flatMap(sp => byPrecinct.get(sp) || [])]
-          : pFaces;
+        const facesToMerge =
+          si === largestIdx
+            ? [...pFaces, ...sliverPrecincts.flatMap(sp => byPrecinct.get(sp) || [])]
+            : pFaces;
 
         // Collect face coordinates directly into a MultiPolygon — no GEOS union.
         // Union introduces vertex drift that creates slivers extending into
@@ -1020,15 +1139,29 @@ export default class PrepareDevData extends Command {
           const faceGJ = geosHelper.toGeoJSONScaled(f.geom, COORD_SCALE);
           if (!faceGJ) continue;
           if (faceGJ.type === "Polygon") polys.push(faceGJ.coordinates);
-          else if (faceGJ.type === "MultiPolygon") for (const p of faceGJ.coordinates) polys.push(p);
+          else if (faceGJ.type === "MultiPolygon")
+            for (const p of faceGJ.coordinates) polys.push(p);
         }
-        const subGeoJSON: Polygon | MultiPolygon | null = polys.length === 0 ? null
-          : polys.length === 1 ? { type: "Polygon", coordinates: polys[0] }
-          : { type: "MultiPolygon", coordinates: polys };
+        const subGeoJSON: Polygon | MultiPolygon | null =
+          polys.length === 0
+            ? null
+            : polys.length === 1
+              ? { type: "Polygon", coordinates: polys[0] }
+              : { type: "MultiPolygon", coordinates: polys };
 
         {
-          const props = buildBlockProps(subBlockId, pData.precinctId, countyFp, countyNames, subDemo, pData.votes, pData.totalVotes, officesFound, detectedYear);
-          require("fs").writeSync(geomFd, JSON.stringify(subGeoJSON || blockFeature.geometry) + "\n"); // eslint-disable-line
+          const props = buildBlockProps(
+            subBlockId,
+            pData.precinctId,
+            countyFp,
+            countyNames,
+            subDemo,
+            pData.votes,
+            pData.totalVotes,
+            officesFound,
+            detectedYear
+          );
+          writeSync(geomFd, JSON.stringify(subGeoJSON || blockFeature.geometry) + "\n");
           trackAssignment(pi, featureProps.length, subDemo.population || 0);
           featureProps.push(props);
         }
@@ -1036,7 +1169,11 @@ export default class PrepareDevData extends Command {
 
       // Free remaining face geoms
       for (const f of faces) {
-        try { geosHelper.free(f.geom); } catch { /* already freed */ }
+        try {
+          geosHelper.free(f.geom);
+        } catch {
+          /* already freed */
+        }
       }
     }
 
@@ -1069,8 +1206,9 @@ export default class PrepareDevData extends Command {
       const libc = require("koffi").load("libc.so.6"); // eslint-disable-line
       const mallocTrim = libc.func("malloc_trim", "int", ["int"]);
       mallocTrim(0);
-    } catch { /* non-critical */ }
-
+    } catch {
+      /* non-critical */
+    }
 
     this.log(`\n   Spatial join complete:`);
     this.log(`     Single precinct: ${singlePrecinct}`);
@@ -1109,13 +1247,16 @@ export default class PrepareDevData extends Command {
     this.log(`\nWriting ${featureProps.length} features to ${outputPath}...`);
     const outStream = createWriteStream(outputPath);
     outStream.write('{"type":"FeatureCollection","features":[\n');
-    const geomRL = require("readline").createInterface({ // eslint-disable-line
+    const geomRL = createInterface({
       input: createReadStream(geomTempPath),
       crlfDelay: Infinity
     });
     let featureIdx = 0;
     for await (const line of geomRL) {
-      if (!line.trim()) { featureIdx++; continue; }
+      if (!line.trim()) {
+        featureIdx++;
+        continue;
+      }
       const geometry = JSON.parse(line);
       const feature = { type: "Feature", geometry, properties: featureProps[featureIdx] };
       if (featureIdx > 0) outStream.write(",\n");
@@ -1134,10 +1275,7 @@ export default class PrepareDevData extends Command {
     const fileSizeMB = (statSyncFn(outputPath).size / 1024 / 1024).toFixed(1);
     this.log(`Wrote ${fileSizeMB}MB`);
 
-    const totalPop = featureProps.reduce(
-      (sum, p) => sum + (p.population || 0),
-      0
-    );
+    const totalPop = featureProps.reduce((sum, p) => sum + (p.population || 0), 0);
     const counties = new Set(featureProps.map(p => p.county));
     const precincts = new Set(featureProps.map(p => p.precinct));
     this.log(`\nSummary:`);
@@ -1145,9 +1283,7 @@ export default class PrepareDevData extends Command {
     this.log(`  Counties: ${counties.size}`);
     this.log(`  Precincts: ${precincts.size}`);
     this.log(`  Features: ${featureProps.length}`);
-    this.log(
-      `  Offices: ${Array.from(officesFound).sort().join(", ")}`
-    );
+    this.log(`  Offices: ${Array.from(officesFound).sort().join(", ")}`);
   }
 
   /**
@@ -1183,10 +1319,13 @@ export default class PrepareDevData extends Command {
     }
 
     // Extract voting data and detect year
-    const precinctData = new Map<number, {
-      votes: Record<string, { democrat: number; republican: number; other: number }>;
-      totalVotes: Record<string, number>;
-    }>();
+    const precinctData = new Map<
+      number,
+      {
+        votes: Record<string, { democrat: number; republican: number; other: number }>;
+        totalVotes: Record<string, number>;
+      }
+    >();
     const officesFound = new Set<string>();
     let electionYear = "";
 
@@ -1210,25 +1349,43 @@ export default class PrepareDevData extends Command {
 
     for (let i = 0; i < vestFeatures.length; i++) {
       const geom = vestFeatures[i].geometry;
-      if (!geom) { precinctGeoms.push(null); preparedPrecincts.push(null); precinctBboxes.push([0, 0, 0, 0]); continue; }
+      if (!geom) {
+        precinctGeoms.push(null);
+        preparedPrecincts.push(null);
+        precinctBboxes.push([0, 0, 0, 0]);
+        continue;
+      }
       try {
         let g = geosHelper.fromGeoJSON(geom as Polygon | MultiPolygon);
-        if (!geosHelper.isValid(g)) { const f = geosHelper.makeValid(g); geosHelper.free(g); g = f; }
+        if (!geosHelper.isValid(g)) {
+          const f = geosHelper.makeValid(g);
+          geosHelper.free(g);
+          g = f;
+        }
         precinctGeoms.push(g);
         const buffered = geosHelper.buffer(g, 0.0001);
         preparedPrecincts.push(geosHelper.prepare(buffered));
         // Don't free buffered — prepared geometry holds a reference to it
         precinctBboxes.push(featureBbox(vestFeatures[i]));
-      } catch { precinctGeoms.push(null); preparedPrecincts.push(null); precinctBboxes.push([0, 0, 0, 0]); }
+      } catch {
+        precinctGeoms.push(null);
+        preparedPrecincts.push(null);
+        precinctBboxes.push([0, 0, 0, 0]);
+      }
     }
 
     // Build grid index over precincts using precinct bboxes for grid extent
     const GRID_SIZE = 200;
-    let gsMinX = Infinity, gsMinY = Infinity, gsMaxX = -Infinity, gsMaxY = -Infinity;
+    let gsMinX = Infinity,
+      gsMinY = Infinity,
+      gsMaxX = -Infinity,
+      gsMaxY = -Infinity;
     for (const [pMinX, pMinY, pMaxX, pMaxY] of precinctBboxes) {
       if (pMinX === 0 && pMaxX === 0) continue;
-      if (pMinX < gsMinX) gsMinX = pMinX; if (pMinY < gsMinY) gsMinY = pMinY;
-      if (pMaxX > gsMaxX) gsMaxX = pMaxX; if (pMaxY > gsMaxY) gsMaxY = pMaxY;
+      if (pMinX < gsMinX) gsMinX = pMinX;
+      if (pMinY < gsMinY) gsMinY = pMinY;
+      if (pMaxX > gsMaxX) gsMaxX = pMaxX;
+      if (pMaxY > gsMaxY) gsMaxY = pMaxY;
     }
     const gW = (gsMaxX - gsMinX) / GRID_SIZE;
     const gH = (gsMaxY - gsMinY) / GRID_SIZE;
@@ -1242,18 +1399,22 @@ export default class PrepareDevData extends Command {
       const x1 = Math.max(0, Math.min(GRID_SIZE - 1, Math.floor((pMaxX - gsMinX) / gW)));
       const y1 = Math.max(0, Math.min(GRID_SIZE - 1, Math.floor((pMaxY - gsMinY) / gH)));
       for (let gy = y0; gy <= y1; gy++)
-        for (let gx = x0; gx <= x1; gx++)
-          grid[gy * GRID_SIZE + gx].push(pi);
+        for (let gx = x0; gx <= x1; gx++) grid[gy * GRID_SIZE + gx].push(pi);
     }
 
     // Join: stream geometry from disk, one feature at a time.
     // No pre-scan of geometry needed — bbox is computed inline per feature.
     this.log(`   Joining ${featureProps.length} features...`);
     const yy = electionYear;
-    let single = 0, blended = 0, noMatchCount = 0;
+    let single = 0,
+      blended = 0,
+      noMatchCount = 0;
 
     // Track for reconciliation: precinctIdx → office → [{featureIdx, weight}]
-    const precinctAssigned = new Map<number, Map<string, { featureIdx: number; weight: number }[]>>();
+    const precinctAssigned = new Map<
+      number,
+      Map<string, { featureIdx: number; weight: number }[]>
+    >();
 
     // Read geometry file line-by-line synchronously using a buffered reader.
     // Can't use readFileSync (string too long for TX) or async readline
@@ -1348,7 +1509,9 @@ export default class PrepareDevData extends Command {
             containingPi = pi;
             break;
           }
-        } catch { /* skip */ }
+        } catch {
+          /* skip */
+        }
       }
 
       if (containingPi !== null) {
@@ -1392,7 +1555,9 @@ export default class PrepareDevData extends Command {
             geosHelper.free(inter);
             if (a > 0) intersections.push({ pi, area: a });
           }
-        } catch { /* skip */ }
+        } catch {
+          /* skip */
+        }
       }
       geosHelper.free(featGeom);
 
@@ -1411,7 +1576,9 @@ export default class PrepareDevData extends Command {
       const totalArea = intersections.reduce((s, i) => s + i.area, 0);
 
       for (const office of Array.from(officesFound)) {
-        let bDem = 0, bRep = 0, bOther = 0;
+        let bDem = 0,
+          bRep = 0,
+          bOther = 0;
         const prefix = office === "PRE" ? "" : `${office}_`;
         for (const int of intersections) {
           const pd = precinctData.get(int.pi)!;
@@ -1511,7 +1678,9 @@ function buildBlockProps(
 function reconcilePrecinctVotes(
   featureProps: Record<string, any>[],
   precinctAssigned: Map<number, Map<string, { featureIdx: number; weight: number }[]>>,
-  getPrecinctVotes: (pi: number) => Record<string, { democrat: number; republican: number; other: number }>,
+  getPrecinctVotes: (
+    pi: number
+  ) => Record<string, { democrat: number; republican: number; other: number }>,
   electionYear: string
 ): number {
   const yy = electionYear;
@@ -1524,8 +1693,10 @@ function reconcilePrecinctVotes(
       for (const party of ["democrat", "republican", "other"] as const) {
         const fieldName = `${prefix}${party}${yy}`;
         const expected = v[party];
-        const actual = assignments.reduce((sum, a) =>
-          sum + ((featureProps[a.featureIdx])[fieldName] || 0), 0);
+        const actual = assignments.reduce(
+          (sum, a) => sum + (featureProps[a.featureIdx][fieldName] || 0),
+          0
+        );
         const diff = expected - actual;
         if (diff === 0) continue;
         reconciled++;
@@ -1533,7 +1704,7 @@ function reconcilePrecinctVotes(
         const adjustments = apportion(Math.abs(diff), weights);
         const sign = diff > 0 ? 1 : -1;
         for (let i = 0; i < assignments.length; i++) {
-          (featureProps[assignments[i].featureIdx])[fieldName] += sign * adjustments[i];
+          featureProps[assignments[i].featureIdx][fieldName] += sign * adjustments[i];
         }
       }
     }

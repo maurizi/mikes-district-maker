@@ -4,23 +4,32 @@ import bbox from "@turf/bbox";
 
 import {
   DemographicCounts,
+  DistrictImportField,
   DistrictsDefinition,
+  DistrictsImportApiResponse,
   GeoUnits,
   GeoUnitIndices,
   GeoUnitHierarchy,
+  ImportRowFlag,
   IProject,
   IStaticMetadata,
   NestedArray,
   S3URI,
   ThumbnailGeoJSON
 } from "../shared/entities";
+import { FIPS, MAX_IMPORT_ERRORS } from "../shared/constants";
 import { StaticCounts, DistrictsGeoJSON } from "../client/types";
 import {
   getDemographics as getDemographicsBase,
   getVoting as getVotingBase
 } from "../shared/functions";
 import { allGeoUnitIndices } from "./functions";
-import { fetchWorkerStaticData, fetchAdjacencyData, fetchBlockIds } from "./s3";
+import {
+  fetchWorkerStaticData,
+  fetchAdjacencyData,
+  fetchBlockIds,
+  fetchGeoUnitHierarchy
+} from "./s3";
 import { WorkerProjectData } from "./types";
 import {
   AdjacencyData,
@@ -202,6 +211,148 @@ function importCsvToDefinition(
   return walk(geoUnitHierarchy) as DistrictsDefinition;
 }
 
+// Parse a simple two-column `BLOCKID,DISTRICT` CSV (header row + data rows).
+// This intentionally does not handle quoted fields — BEF files are flat
+// integer/string pairs. Empty trailing lines are skipped.
+function parseBlockDistrictCsv(csvText: string): [string, string][] {
+  const lines = csvText.split(/\r?\n/);
+  const records: [string, string][] = [];
+  // Skip the header row (line 0).
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line) continue;
+    const commaIdx = line.indexOf(",");
+    if (commaIdx === -1) continue;
+    records.push([line.slice(0, commaIdx), line.slice(commaIdx + 1)]);
+  }
+  return records;
+}
+
+// Full CSV → DistrictsImportApiResponse pipeline, ported from the former
+// server endpoint at src/server/src/districts/controllers/districts.controller.ts.
+// Runs entirely in the worker so large-state CSVs (TX ~13MB) don't hit
+// Lambda's 6 MB sync-invoke payload ceiling.
+function runCsvImport(
+  csvText: string,
+  blockIds: readonly string[],
+  geoUnitHierarchy: GeoUnitHierarchy
+): DistrictsImportApiResponse {
+  const records = parseBlockDistrictCsv(csvText);
+  if (records.length === 0) {
+    return { error: "CSV is empty or contains only a header row" };
+  }
+
+  const flaggedRows: ImportRowFlag[] = [];
+  const setFlag = (
+    row: readonly string[],
+    rowNumber: number,
+    field: DistrictImportField,
+    errorText: string
+  ): void => {
+    // eslint-disable-next-line functional/immutable-data
+    flaggedRows[rowNumber] = { rowNumber, errorText, rowValue: row, field };
+  };
+
+  const stateFips = records[0][0]?.slice(0, 2);
+  if (!stateFips || !(stateFips in FIPS)) {
+    return { error: "First row has an invalid FIPS code; cannot determine state" };
+  }
+  const regionCode = FIPS[stateFips];
+
+  // Pass 1: per-row validation (FIPS match, duplicates, district numeric).
+  const blockIdCounts: { [blockId: string]: number } = {};
+  records.forEach((record, i) => {
+    const rowFips = record[0]?.slice(0, 2);
+    const blockId = record[0];
+    // eslint-disable-next-line functional/immutable-data
+    blockIdCounts[blockId] = blockIdCounts[blockId] ? blockIdCounts[blockId] + 1 : 1;
+
+    if (!rowFips || !(rowFips in FIPS)) {
+      setFlag(record, i, "BLOCKID", "Invalid FIPS code");
+    }
+    if (rowFips !== stateFips && !flaggedRows[i]) {
+      setFlag(record, i, "BLOCKID", "All geounits in an import must be within the same state");
+    }
+    if (blockIdCounts[blockId] > 1 && !flaggedRows[i]) {
+      setFlag(record, i, "BLOCKID", "Duplicate BLOCKID included in import");
+    }
+    if (isNaN(Number(record[1])) && !flaggedRows[i]) {
+      setFlag(record, i, "DISTRICT", "Invalid district ID, must be numeric");
+    }
+  });
+
+  // Build split-block lookup: base block → its sub-block variants
+  // (e.g. "42001..." → ["42001...-1", "42001...-2"]). When a CSV references
+  // the base block but the region data has split it during processing, we
+  // expand the assignment across all sub-blocks.
+  const allBlockIds: Set<string> = new Set(blockIds);
+  const splitBlockMap: Map<string, string[]> = new Map();
+  blockIds.forEach(id => {
+    const dashIdx = id.indexOf("-");
+    if (dashIdx === -1) return;
+    const baseId = id.substring(0, dashIdx);
+    const existing = splitBlockMap.get(baseId);
+    if (existing) {
+      // eslint-disable-next-line functional/immutable-data
+      existing.push(id);
+    } else {
+      splitBlockMap.set(baseId, [id]);
+    }
+  });
+
+  // Pass 2: flag unknown block IDs (not present as real or split-parent).
+  const invalidRecords = records.filter((record, i) => {
+    if (flaggedRows[i]) return false;
+    if (allBlockIds.has(record[0])) return false;
+    if (splitBlockMap.has(record[0])) return false;
+    setFlag(record, i, "BLOCKID", "Invalid block ID");
+    return true;
+  });
+
+  // Heuristic: if nearly every row is invalid the user probably uploaded a
+  // CSV for the wrong census year. Bail early with a human-readable error.
+  if (invalidRecords.length > MAX_IMPORT_ERRORS) {
+    return {
+      error: `There were ${invalidRecords.length} invalid block IDs for ${regionCode}, ensure the CSV uploaded is for the correct census year`
+    };
+  }
+
+  // Build block → district, expanding split parents to all their sub-blocks.
+  const unflaggedRows = records.filter((_, i) => !flaggedRows[i]);
+  const blockToDistricts: { [blockId: string]: number } = {};
+  unflaggedRows.forEach(([block, district]) => {
+    const d = Number(district);
+    if (allBlockIds.has(block)) {
+      // eslint-disable-next-line functional/immutable-data
+      blockToDistricts[block] = d;
+    }
+    const splits = splitBlockMap.get(block);
+    if (splits) {
+      splits.forEach(splitId => {
+        // eslint-disable-next-line functional/immutable-data
+        blockToDistricts[splitId] = d;
+      });
+    }
+  });
+
+  const districtsDefinition = importCsvToDefinition(
+    blockIds,
+    geoUnitHierarchy,
+    blockToDistricts
+  );
+
+  const maxDistrictId = Object.values(blockToDistricts).reduce((a, b) => Math.max(a, b), 0);
+  const rowFlags = flaggedRows.filter((r): r is ImportRowFlag => !!r);
+  const numFlags = rowFlags.length;
+
+  return {
+    districtsDefinition,
+    maxDistrictId,
+    numFlags: numFlags || undefined,
+    rowFlags: numFlags > 0 ? rowFlags.slice(0, MAX_IMPORT_ERRORS) : undefined
+  };
+}
+
 // Thumbnail serialized JSON size cap. The /api/projects PATCH carries
 // districtsDefinition + thumbnail + metadata; Nest's default body limit is
 // ~5MB, leave headroom for the rest of the payload.
@@ -305,15 +456,14 @@ const functions = {
     return exportDistrictsToCsv(blockIds, districtsDefinition, data.geoUnitHierarchy);
   },
   importCsv: async (
-    staticMetadata: IStaticMetadata,
     regionURI: S3URI,
-    blockToDistrict: { readonly [blockId: string]: number }
-  ): Promise<DistrictsDefinition> => {
-    const [data, blockIds] = await Promise.all([
-      fetchRegionData(regionURI, staticMetadata).data,
+    csvText: string
+  ): Promise<DistrictsImportApiResponse> => {
+    const [geoUnitHierarchy, blockIds] = await Promise.all([
+      fetchGeoUnitHierarchy(regionURI),
       getBlockIds(regionURI)
     ]);
-    return importCsvToDefinition(blockIds, data.geoUnitHierarchy, blockToDistrict);
+    return runCsvImport(csvText, blockIds, geoUnitHierarchy);
   },
   getTotalSelectedDemographics: async (
     staticMetadata: IStaticMetadata,

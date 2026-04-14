@@ -20,6 +20,7 @@ import {
   RegionConfigId,
   ProjectNest,
   DistrictsImportApiResponse,
+  S3URI,
   IReferenceLayer,
   ReferenceLayerId,
   CreateReferenceLayerData,
@@ -37,6 +38,7 @@ import {
 } from "./types";
 import { getJWT, setJWT } from "./jwt";
 import { fetchStaticMetadata } from "./s3";
+import { importCsv as workerImportCsv } from "./worker-functions";
 
 const apiAxios = axios.create();
 
@@ -289,24 +291,17 @@ export async function convertGeoJsonToShapefile(
 
 export async function importCsv(
   file: Blob,
-  regionConfigId?: RegionConfigId
+  regionURI: S3URI
 ): Promise<DistrictsImportApiResponse> {
-  const formData = new FormData();
-  formData.append("file", file);
-  return new Promise((resolve, reject) => {
-    apiAxios
-      .post(
-        `/api/districts/import/csv${regionConfigId ? `?regionConfigId=${regionConfigId}` : ""}`,
-        formData,
-        {
-          headers: { "Content-Type": "multipart/form-data" }
-        }
-      )
-      .then(response => {
-        return resolve(response.data);
-      })
-      .catch(error => reject(error.message));
-  });
+  // CSV parsing + validation runs entirely in the client worker. Previously
+  // POSTed to /api/districts/import/csv on the server, but block-level CSVs
+  // for large states (TX ~13MB) exceeded Lambda's 6 MB sync-invoke ceiling.
+  // The client already has the region data cached for map rendering, so
+  // running validation here adds no network cost and eliminates a server
+  // endpoint. See ADR-06 "Shapefile export runs in the browser now" for the
+  // same pattern applied in the opposite direction.
+  const csvText = await file.text();
+  return workerImportCsv(regionURI, csvText);
 }
 
 export async function createReferenceLayer(

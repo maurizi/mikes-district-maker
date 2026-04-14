@@ -34,6 +34,8 @@ import { regionConfigsFetch } from "../actions/regionConfig";
 import { setImportFlagsModal } from "../actions/projectModals";
 
 import { createProject, importCsv, fetchTotalPopulation } from "../api";
+import { fetchStaticMetadata } from "../s3";
+import { mergeDistricts } from "../worker-functions";
 import Field, { InputField } from "../components/Field";
 import Icon from "../components/Icon";
 import ImportFlagsModal from "../components/ImportFlagsModal";
@@ -414,8 +416,17 @@ const ImportProjectScreen = ({ organization, regionConfigs, user }: StateProps) 
         importNumberRef.current = importNumberRef.current + 1;
         const importNumber = importNumberRef.current;
         setImportResource({ data: regionConfig, isPending: true });
-        const regionConfigId = templateData?.regionConfig.id || regionConfig?.id;
-        const importResponse = await importCsv(file, regionConfigId);
+        // templateData.regionConfig is only a {id} reference — resolve it
+        // against the full regionConfigs list so we can read the s3URI.
+        const chosenRegionId = templateData?.regionConfig.id || regionConfig?.id;
+        const chosenRegion = chosenRegionId
+          ? regionConfigs.resource.find(r => r.id === chosenRegionId) || null
+          : null;
+        if (!chosenRegion) {
+          setImportResource({ data: null });
+          return;
+        }
+        const importResponse = await importCsv(file, chosenRegion.s3URI);
 
         // Don't set the districtsDefinition if upload was cancelled while we were fetching it
         if (importNumberRef.current === importNumber) {
@@ -530,14 +541,44 @@ const ImportProjectScreen = ({ organization, regionConfigs, user }: StateProps) 
                 setCreateProjectResource({ data: formData, isPending: true });
                 // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 const { isCustom, isMultiMember, valid, ...validatedData } = validatedForm;
-                createProject(
-                  "name" in validatedForm.regionConfig
-                    ? {
-                        ...validatedData,
-                        name: validatedForm.regionConfig.name
-                      }
-                    : validatedData
-                )
+                // Compute a thumbnail from the imported districtsDefinition
+                // so the project has a preview on the home page immediately.
+                // The template path doesn't carry numberOfDistricts at this
+                // level (it's inherited from the template server-side), so
+                // thumbnail generation only runs on the custom-import branch.
+                // Template imports rely on the auto-PATCH in
+                // localMergeComplete on the user's first project view.
+                const regionForThumbnail =
+                  "resource" in importResource ? importResource.data : null;
+                const numberOfDistricts =
+                  "numberOfDistricts" in validatedData ? validatedData.numberOfDistricts : undefined;
+                const definitionForThumbnail =
+                  "districtsDefinition" in validatedData
+                    ? validatedData.districtsDefinition
+                    : undefined;
+                const thumbnailPromise =
+                  regionForThumbnail && definitionForThumbnail && numberOfDistricts
+                    ? fetchStaticMetadata(regionForThumbnail.s3URI)
+                        .then(staticMetadata =>
+                          mergeDistricts(
+                            staticMetadata,
+                            regionForThumbnail.s3URI,
+                            definitionForThumbnail,
+                            numberOfDistricts
+                          )
+                        )
+                        .then(({ thumbnail }) => thumbnail)
+                        .catch(() => undefined)
+                    : Promise.resolve(undefined);
+
+                thumbnailPromise
+                  .then(thumbnail => {
+                    const baseData =
+                      "name" in validatedForm.regionConfig
+                        ? { ...validatedData, name: validatedForm.regionConfig.name }
+                        : validatedData;
+                    return createProject(thumbnail ? { ...baseData, thumbnail } : baseData);
+                  })
                   .then((project: IProject) =>
                     setCreateProjectResource({ data: formData, resource: project })
                   )

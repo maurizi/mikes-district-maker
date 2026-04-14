@@ -33,9 +33,9 @@ output "cloudfront_domain_name" {
   value       = aws_cloudfront_distribution.main.domain_name
 }
 
-output "alb_dns_name" {
-  description = "ALB DNS name — point `origin.<domain>` here."
-  value       = aws_lb.main.dns_name
+output "lambda_function_url" {
+  description = "Lambda Function URL — the CloudFront api origin and a useful direct target for debugging."
+  value       = aws_lambda_function_url.api.function_url
 }
 
 output "rum_app_monitor_id" {

@@ -2,7 +2,6 @@ import {
   ArgumentsHost,
   Catch,
   HttpException,
-  Logger,
   NotFoundException,
   ServiceUnavailableException,
   UnauthorizedException
@@ -39,8 +38,6 @@ function parseIp(req: IGetUserAuthInfoRequest): string | undefined {
 
 @Catch()
 export class StructuredLoggerExceptionFilter extends BaseExceptionFilter {
-  private readonly logger = new Logger("UnhandledException");
-
   catch(exception: unknown, host: ArgumentsHost): void {
     if (
       (exception instanceof HttpException && !isWhitelisted(exception)) ||
@@ -49,7 +46,11 @@ export class StructuredLoggerExceptionFilter extends BaseExceptionFilter {
       const ctx = host.switchToHttp();
       const request = ctx.getRequest<IGetUserAuthInfoRequest>();
       const err = exception as Error;
-      // Single-line JSON so CloudWatch Logs metric filters can match `{ $.level = "error" }`
+      // Emit a single root-level JSON object, one per line. Bypasses the
+      // NestJS Logger because Logger.error() wraps output in `[Nest] ... ERROR
+      // [Context] <msg>` plus ANSI escapes, which CloudWatch Logs metric
+      // filters can't parse with `{ $.level = "error" }`. Writing raw to
+      // stdout preserves structure so the filter matches.
       const payload = JSON.stringify({
         level: "error",
         message: err.message,
@@ -59,7 +60,8 @@ export class StructuredLoggerExceptionFilter extends BaseExceptionFilter {
         userId: request.user?.id,
         ip: parseIp(request)
       });
-      this.logger.error(payload);
+      // eslint-disable-next-line functional/no-expression-statement
+      process.stdout.write(payload + "\n");
     }
 
     // Delegate response formatting to the default global exception filter

@@ -4,7 +4,7 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 
 import { MailerModule } from "@nestjs-modules/mailer";
 import { HandlebarsAdapter } from "@nestjs-modules/mailer/adapters/handlebars.adapter";
-import { SES } from "@aws-sdk/client-ses";
+import { SES, SendRawEmailCommand } from "@aws-sdk/client-ses";
 import * as SESTransport from "nodemailer/lib/ses-transport";
 import * as StreamTransport from "nodemailer/lib/stream-transport";
 
@@ -31,8 +31,13 @@ if (DEBUG) {
     newline: "unix"
   };
 } else {
+  // nodemailer's SES transport expects different shapes for SDK v2 vs v3.
+  // For v3 it expects `aws: { SendRawEmailCommand }` and internally calls
+  // `ses.send(new SendRawEmailCommand(...))`. Passing the `SES` class (v2
+  // pattern) makes it fall back to `.sendRawEmail(...).promise()` which
+  // doesn't exist in v3.
   mailTransportOptions = {
-    SES: { ses: new SES({}), aws: { SES } }
+    SES: { ses: new SES({}), aws: { SendRawEmailCommand } }
   } as unknown as SESTransport.Options;
 }
 
@@ -44,7 +49,7 @@ if (DEBUG) {
         from: '"nest-modules" <modules@nestjs.com>'
       },
       template: {
-        dir: join(__dirname, "..", "..", "templates"),
+        dir: join(__dirname, "templates"),
         adapter: new HandlebarsAdapter(),
         options: {
           strict: true

@@ -13,11 +13,10 @@ terraform {
   }
 
   backend "s3" {
-    # Fill in via `terraform init -backend-config=...` or edit before first apply.
-    # key     = "districtbuilder/terraform-v2.tfstate"
-    # region  = "us-east-1"
-    # bucket  = "<your-state-bucket>"
-    # encrypt = true
+    bucket  = "districtbuilder-tf-state-238046523378"
+    key     = "districtbuilder/production/terraform.tfstate"
+    region  = "us-east-1"
+    encrypt = true
   }
 }
 

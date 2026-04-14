@@ -1,6 +1,14 @@
 import { join } from "path";
 import { DataSource, DataSourceOptions } from "typeorm";
 import { DsqlSigner } from "@aws-sdk/dsql-signer";
+import { EmailVerification } from "./auth/entities/email-verification.entity";
+import { Chamber } from "./chambers/entities/chamber.entity";
+import { Organization } from "./organizations/entities/organization.entity";
+import { Project } from "./projects/entities/project.entity";
+import { ProjectTemplate } from "./project-templates/entities/project-template.entity";
+import { ReferenceLayer } from "./reference-layers/entities/reference-layer.entity";
+import { RegionConfig } from "./region-configs/entities/region-config.entity";
+import { User } from "./users/entities/user.entity";
 
 // Shared TypeORM data source for both DSQL (prod) and vanilla Postgres
 // (local docker-compose dev). DSQL is selected when DSQL_ENDPOINT is set:
@@ -39,7 +47,16 @@ const sharedOptions = {
   installExtensions: false,
   uuidExtension: "pgcrypto" as const,
   migrationsTransactionMode: "none" as const,
-  entities: [join(__dirname, "**/*.entity.{js,ts}")],
+  entities: [
+    EmailVerification,
+    Chamber,
+    Organization,
+    Project,
+    ProjectTemplate,
+    ReferenceLayer,
+    RegionConfig,
+    User
+  ],
   migrations: [join(__dirname, "../migrations/*.{js,ts}")]
 };
 

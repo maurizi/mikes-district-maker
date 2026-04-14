@@ -1,7 +1,7 @@
 # S3 bucket serving the Vite client build through CloudFront.
 resource "aws_s3_bucket" "static" {
   bucket        = "${var.project}-${var.environment}-static"
-  force_destroy = var.environment != "production"
+  force_destroy = !var.enable_production_safeguards
 }
 
 resource "aws_s3_bucket_public_access_block" "static" {
@@ -53,7 +53,7 @@ resource "aws_s3_bucket_policy" "static" {
 # these on demand and caches to /tmp. Populated locally via `manage` commands.
 resource "aws_s3_bucket" "region_artifacts" {
   bucket        = "${var.project}-${var.environment}-region-artifacts"
-  force_destroy = var.environment != "production"
+  force_destroy = !var.enable_production_safeguards
 }
 
 resource "aws_s3_bucket_public_access_block" "region_artifacts" {
@@ -64,43 +64,3 @@ resource "aws_s3_bucket_public_access_block" "region_artifacts" {
   restrict_public_buckets = true
 }
 
-# Access logs for the ALB.
-resource "aws_s3_bucket" "logs" {
-  bucket        = "${var.project}-${var.environment}-logs"
-  force_destroy = var.environment != "production"
-}
-
-resource "aws_s3_bucket_lifecycle_configuration" "logs" {
-  bucket = aws_s3_bucket.logs.id
-  rule {
-    id     = "expire-alb-logs"
-    status = "Enabled"
-    filter {}
-    expiration {
-      days = var.log_retention_days
-    }
-  }
-}
-
-data "aws_elb_service_account" "main" {}
-
-data "aws_iam_policy_document" "logs_bucket" {
-  statement {
-    sid     = "AllowALBLogDelivery"
-    actions = ["s3:PutObject"]
-    resources = [
-      "${aws_s3_bucket.logs.arn}/ALB/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
-    ]
-    principals {
-      type        = "AWS"
-      identifiers = [data.aws_elb_service_account.main.arn]
-    }
-  }
-}
-
-resource "aws_s3_bucket_policy" "logs" {
-  bucket = aws_s3_bucket.logs.id
-  policy = data.aws_iam_policy_document.logs_bucket.json
-}
-
-data "aws_caller_identity" "current" {}

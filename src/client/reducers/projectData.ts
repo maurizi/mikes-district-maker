@@ -585,10 +585,15 @@ const projectDataReducer = (
           }
         };
         const findCoords = getFindCoords(state.findTool, geojson);
-        // Only persist the thumbnail when this merge was triggered by a save
-        // the user initiated (saving === "saving") — we don't want to re-POST
-        // identical bytes every time the user opens a project.
+        // Persist the thumbnail in two cases:
+        //  1. The user just saved — state.saving === "saving".
+        //  2. The project has no server-side thumbnail yet (new project from
+        //     the create or import flow that didn't supply one). Without this
+        //     the home-page preview stays blank until the first save. The
+        //     check reads the pre-merge project from state, so it only fires
+        //     once per project — subsequent views already have a thumbnail.
         const wasTriggeredBySave = state.saving === "saving";
+        const needsInitialThumbnail = !project.thumbnail;
         const nextState = updateCurrentState(
           {
             ...state,
@@ -605,7 +610,7 @@ const projectDataReducer = (
             districtsDefinition: project.districtsDefinition
           }
         );
-        return wasTriggeredBySave
+        return wasTriggeredBySave || needsInitialThumbnail
           ? loop(
               nextState,
               Cmd.run(() => patchProject(project.id, { thumbnail, isComplete }))

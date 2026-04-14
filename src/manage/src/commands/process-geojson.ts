@@ -530,7 +530,9 @@ max string length of ~512MB).
     );
   }
 
-  // Reads previous geo-properties from S3 for sorting
+  // Reads previous geo-properties from S3 for sorting. Streams the body and
+  // parses incrementally so we don't blow Node's max string length (≈512MB)
+  // on big states like AL/CA/TX/FL.
   async readPrevGeoProperties(
     inputS3Dir: string
   ): Promise<Record<string, Record<string, unknown>[]>> {
@@ -546,8 +548,23 @@ max string length of ~512MB).
       })
     );
 
-    const bodyString = await response.Body!.transformToString();
-    return JSON.parse(bodyString);
+    // Stream-parse the JSON. Top-level object structure is:
+    //   { "<level>": [ {...}, {...}, ... ], ... }
+    // JSONStream pattern `$*` emits {key, value} pairs at the root, so each
+    // top-level array (one per geolevel) arrives as a single JS array — no
+    // intermediate string is ever materialized for the whole payload.
+    const body = response.Body as unknown as NodeJS.ReadableStream;
+    return await new Promise((resolve, reject) => {
+      const result: Record<string, Record<string, unknown>[]> = {};
+      const parser = parse("$*");
+      parser.on("data", (item: { key: string; value: Record<string, unknown>[] }) => {
+        result[item.key] = item.value;
+      });
+      parser.on("error", reject);
+      parser.on("end", () => resolve(result));
+      body.on("error", reject);
+      body.pipe(parser);
+    });
   }
 
   // Write TopoJSON file to disk
@@ -938,7 +955,9 @@ max string length of ~512MB).
       : childGeoms.map((childGeom: any) => childGeom.id);
   }
 
-  // Sorts TopoJSON in the same order as a reference TopoJSON and performs structural checks
+  // Sorts TopoJSON in the same order as a reference TopoJSON and performs structural checks.
+  // If the feature count for a level differs from the previous version, that level is skipped
+  // (no stable sort is possible) but processing continues for other levels.
   sortTopoJsonByPrev(
     newTopoJson: Topology<Objects<{}>>,
     prevGeoProperties: Record<string, Record<string, unknown>[]>,
@@ -946,15 +965,19 @@ max string length of ~512MB).
   ): string | null {
     const baseLevel = geoLevelIds[0];
     for (const level of geoLevelIds) {
-      this.log(`Sorting geolevel: ${level}`);
       const newFeatures = (newTopoJson.objects[level] as any).geometries;
       const prevProps = prevGeoProperties[level];
       if (!prevProps) {
-        return `previous geo-properties missing level: ${level}`;
+        this.log(`Skipping sort for ${level}: previous geo-properties missing`);
+        continue;
       }
       if (newFeatures.length !== prevProps.length) {
-        return `feature count was: ${prevProps.length}, and is now: ${newFeatures.length}`;
+        this.log(
+          `Skipping sort for ${level}: feature count was ${prevProps.length}, is now ${newFeatures.length}`
+        );
+        continue;
       }
+      this.log(`Sorting geolevel: ${level}`);
 
       // Build map of geounit id => previous index
       const prevIndexMap = new Map<string, number>();

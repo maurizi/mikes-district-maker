@@ -11,7 +11,11 @@ import {
   ValidateIf
 } from "class-validator";
 
-import { CreateProjectData, DistrictsDefinition } from "../../../../shared/entities";
+import {
+  CreateProjectData,
+  DistrictsDefinition,
+  ThumbnailGeoJSON
+} from "../../../../shared/entities";
 import { ChamberIdDto } from "../../chambers/entities/chamber-id.dto";
 import { ProjectTemplateIdDto } from "../../project-templates/entities/project-template-id.dto";
 import { RegionConfigIdDto } from "../../region-configs/entities/region-config-id.dto";
@@ -51,4 +55,10 @@ export class CreateProjectDto implements CreateProjectData {
 
   @IsOptional()
   readonly projectTemplate?: ProjectTemplateIdDto;
+
+  // Optional thumbnail generated client-side (see worker.ts simplifyForThumbnail).
+  // Supplied by the import flow so the project has a visible preview on the
+  // home-page list without needing a user save first.
+  @IsOptional()
+  readonly thumbnail?: ThumbnailGeoJSON;
 }

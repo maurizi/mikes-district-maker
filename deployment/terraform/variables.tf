@@ -76,3 +76,33 @@ variable "alarm_email" {
   type        = string
   default     = ""
 }
+
+variable "jwt_secret" {
+  description = "Secret used to sign auth JWTs. Generate with `openssl rand -hex 32`."
+  type        = string
+  sensitive   = true
+}
+
+variable "jwt_expiration_ms" {
+  description = "JWT expiry in milliseconds."
+  type        = number
+  default     = 604800000 # 1 week
+}
+
+variable "default_from_email" {
+  description = "Sender address for transactional email. Must be verified in SES while the account is in sandbox."
+  type        = string
+}
+
+variable "plan_score_api_token" {
+  description = "Bearer token for PlanScore API. Leave blank to disable PlanScore integration."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "enable_production_safeguards" {
+  description = "When true, enables DSQL deletion protection and disables S3 force_destroy. Keep false during initial bring-up; flip to true after verification."
+  type        = bool
+  default     = true
+}

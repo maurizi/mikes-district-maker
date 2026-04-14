@@ -5,6 +5,7 @@ import memoize from "memoizee";
 import {
   DemographicCounts,
   DistrictsDefinition,
+  DistrictsImportApiResponse,
   GeoUnits,
   IProject,
   IStaticMetadata,
@@ -56,11 +57,10 @@ export async function exportCsv(
 }
 
 export async function importCsv(
-  staticMetadata: IStaticMetadata,
   regionURI: S3URI,
-  blockToDistrict: { readonly [blockId: string]: number }
-): Promise<DistrictsDefinition> {
-  return worker.importCsv(staticMetadata, regionURI, blockToDistrict);
+  csvText: string
+): Promise<DistrictsImportApiResponse> {
+  return worker.importCsv(regionURI, csvText);
 }
 
 export const getTotalSelectedDemographics = memoize(

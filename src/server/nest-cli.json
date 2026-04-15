@@ -3,7 +3,7 @@
   "sourceRoot": "src",
   "entryFile": "server/src/main",
   "compilerOptions": {
-    "assets": ["templates/**/*"],
+    "assets": [{ "include": "templates/**/*", "outDir": "dist/server/src" }],
     "watchAssets": true
   }
 }

@@ -703,6 +703,7 @@ const ImportProjectScreen = ({ organization, regionConfigs, user }: StateProps) 
                           </Box>
                           {regionConfig &&
                             [...regionConfig.chambers]
+                              .filter(chamber => chamber.numberOfDistricts > 1)
                               .sort((a, b) => a.numberOfDistricts - b.numberOfDistricts)
                               .map(chamber => (
                                 <Label

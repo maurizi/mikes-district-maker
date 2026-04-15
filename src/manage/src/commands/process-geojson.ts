@@ -193,7 +193,7 @@ max string length of ~512MB).
     }
 
     ux.action.start(`Reading base GeoJSON: ${args.file}`);
-    const baseGeoJson = await (flags.big
+    let baseGeoJson = await (flags.big
       ? this.readBigGeoJson(args.file)
       : this.readSmallGeoJson(args.file));
     ux.action.stop();
@@ -265,6 +265,11 @@ max string length of ~512MB).
       bbox[0] = minLon;
       bbox[2] = maxLon;
     }
+
+    // Release the raw GeoJSON — the topology holds all data from here on.
+    // For large states (TX, CA) this frees 10+ GB before sorting begins.
+    baseGeoJson = undefined as any;
+    global.gc?.();
 
     if (!flags.inputS3Dir) {
       this.log("No inputS3Dir provided, no sorting needed");

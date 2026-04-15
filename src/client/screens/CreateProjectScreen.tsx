@@ -391,6 +391,7 @@ const CreateProjectScreen = ({ regionConfigs, user, organization }: StateProps) 
                           </Box>
                           {data.regionConfig &&
                             [...data.regionConfig.chambers]
+                              .filter(chamber => chamber.numberOfDistricts > 1)
                               .sort((a, b) => a.numberOfDistricts - b.numberOfDistricts)
                               .map(chamber => (
                                 <Label

@@ -481,14 +481,6 @@ const LandingScreen = ({ user }: StateProps) => {
               Project
             </Heading>
             <a
-              href="https://github.com/PublicMapping/districtbuilder"
-              target="_blank"
-              rel="noreferrer noopener"
-              sx={style.footerLink as unknown as ThemeUIStyleObject}
-            >
-              Source on GitHub
-            </a>
-            <a
               href="mailto:michael@maurizi.org"
               sx={style.footerLink as unknown as ThemeUIStyleObject}
             >

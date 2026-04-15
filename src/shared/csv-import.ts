@@ -45,13 +45,15 @@ export function expandBlockToDistrict(
   records: readonly (readonly [string, string])[],
   allBlockIds: ReadonlySet<string>,
   splitBlockMap: ReadonlyMap<string, readonly string[]>
-): { blockToDistrict: { [blockId: string]: number }; maxDistrictId: number } {
+): { blockToDistrict: { [blockId: string]: number }; maxDistrictId: number; isComplete: boolean } {
   const blockToDistrict: { [blockId: string]: number } = {};
   let maxDistrictId = 0;
+  let isComplete = true;
   for (const [block, districtStr] of records) {
     const d = Number(districtStr);
     if (isNaN(d)) continue;
     if (d > maxDistrictId) maxDistrictId = d;
+    if (d === 0) isComplete = false;
     if (allBlockIds.has(block)) {
       blockToDistrict[block] = d;
     }
@@ -62,7 +64,7 @@ export function expandBlockToDistrict(
       }
     }
   }
-  return { blockToDistrict, maxDistrictId };
+  return { blockToDistrict, maxDistrictId, isComplete };
 }
 
 // Convert a flat block → district map into the compact nested

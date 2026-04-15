@@ -1,9 +1,23 @@
 import React, { useEffect } from "react";
 import { connect } from "react-redux";
-import { Flex, Spinner, Box, Heading, Text, Label, Select, ThemeUIStyleObject } from "theme-ui";
-import { IProject, ProjectNest, IRegionConfig, PaginationMetadata } from "../../shared/entities";
+import {
+  Flex,
+  Spinner,
+  Box,
+  Heading,
+  Text,
+  Label,
+  Select,
+  type ThemeUIStyleObject
+} from "theme-ui";
+import {
+  type IProject,
+  type ProjectNest,
+  type IRegionConfig,
+  type PaginationMetadata
+} from "../../shared/entities";
 import "../App.css";
-import { State } from "../reducers";
+import { type State } from "../reducers";
 import store from "../store";
 import SiteHeader from "../components/SiteHeader";
 import {
@@ -11,14 +25,14 @@ import {
   globalProjectsFetchPage,
   globalProjectsSetRegion
 } from "../actions/projects";
-import { UserState } from "../reducers/user";
+import { type UserState } from "../reducers/user";
 import { userFetch } from "../actions/user";
 import { isUserLoggedIn } from "../jwt";
 import FeaturedProjectCard from "../components/FeaturedProjectCard";
 import PaginationFooter from "../components/PaginationFooter";
 import { regionConfigsFetch } from "../actions/regionConfig";
 import { capitalizeFirstLetter } from "../functions";
-import { Resource } from "../resource";
+import { type Resource } from "../resource";
 import { useQueryParam, StringParam } from "use-query-params";
 
 interface StateProps {
@@ -90,7 +104,8 @@ const PublishedMapsListScreen = ({
   }, [isLoggedIn]);
 
   useEffect(() => {
-    document.title = "DistrictBuilder | Community Maps " + (regionCode ? `| ${regionCode}` : "");
+    document.title =
+      "Mike's District Maker | Community Maps " + (regionCode ? `| ${regionCode}` : "");
   });
 
   const regionConfigOptions = regionConfigs
@@ -112,7 +127,9 @@ const PublishedMapsListScreen = ({
               <Heading as="h1" sx={{ my: "3" }}>
                 <span>Community maps</span>
               </Heading>
-              <Text>Explore published maps from across the entire DistrictBuilder community</Text>
+              <Text>
+                Explore published maps from across the entire Mike&rsquo;s District Maker community
+              </Text>
             </Box>
 
             <Flex sx={{ alignItems: "baseline", my: "3" }}>

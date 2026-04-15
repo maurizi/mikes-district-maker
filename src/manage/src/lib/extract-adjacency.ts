@@ -1,11 +1,11 @@
 import { writeFileSync, openSync, writeSync, closeSync } from "fs";
 import { join } from "path";
 import {
-  GeometryCollection,
-  GeometryObject,
-  Polygon,
-  MultiPolygon,
-  Topology
+  type GeometryCollection,
+  type GeometryObject,
+  type Polygon,
+  type MultiPolygon,
+  type Topology
 } from "topojson-specification";
 
 function* walkArcs(geometry: GeometryObject): Generator<number> {

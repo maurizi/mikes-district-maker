@@ -1,8 +1,8 @@
-import { Cmd, Loop, loop } from "redux-loop";
+import { Cmd, type Loop, loop } from "redux-loop";
 import { getType } from "typesafe-actions";
 
-import { LoopAction } from "../actions";
-import { SavingState, EvaluateMetricWithValue } from "../types";
+import { type LoopAction } from "../actions";
+import { type SavingState, type EvaluateMetricWithValue } from "../types";
 
 import {
   addSelectedGeounits,
@@ -30,7 +30,7 @@ import {
   selectEvaluationMetric,
   setZoomToDistrictId,
   setMapLabel,
-  PaintBrushSize,
+  type PaintBrushSize,
   setPaintBrushSize,
   toggleExpandedMetrics,
   toggleReferenceLayer
@@ -40,18 +40,18 @@ import { showAdvancedEditingModal } from "../actions/projectModals";
 import { SelectionTool } from "../actions/districtDrawing";
 import { resetProjectState } from "../actions/root";
 import {
-  DistrictId,
-  GeoUnits,
-  GeoUnitsForLevel,
-  LockedDistricts,
-  ReferenceLayerId
+  type DistrictId,
+  type GeoUnits,
+  type GeoUnitsForLevel,
+  type LockedDistricts,
+  type ReferenceLayerId
 } from "../../shared/entities";
-import { ProjectState, initialProjectState } from "./project";
+import { type ProjectState, initialProjectState } from "./project";
 import {
   pushEffect,
   pushStateUpdate,
-  UndoHistory,
-  UndoableState,
+  type UndoHistory,
+  type UndoableState,
   updateCurrentState
 } from "./undoRedo";
 import { canSwitchGeoLevels, isBaseGeoLevelAlwaysVisible } from "../functions";

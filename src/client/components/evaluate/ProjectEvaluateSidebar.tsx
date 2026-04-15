@@ -1,7 +1,12 @@
-import { ThemeUIStyleObject, Container, Box } from "theme-ui";
+import { type ThemeUIStyleObject, Container, Box } from "theme-ui";
 
-import { IProject, IStaticMetadata } from "../../../shared/entities";
-import { DistrictsGeoJSON, EvaluateMetricWithValue, ElectionYear, PviBucket } from "../../types";
+import { type IProject, type IStaticMetadata } from "../../../shared/entities";
+import {
+  type DistrictsGeoJSON,
+  type EvaluateMetricWithValue,
+  type ElectionYear,
+  type PviBucket
+} from "../../types";
 import store from "../../store";
 import {
   hasMultipleElections,

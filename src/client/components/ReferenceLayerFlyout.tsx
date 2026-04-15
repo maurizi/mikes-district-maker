@@ -1,6 +1,6 @@
 import { Box, IconButton } from "theme-ui";
 import { Button as MenuButton, Wrapper, Menu, MenuItem } from "react-aria-menubutton";
-import { IReferenceLayer, UpdateReferenceLayer } from "../../shared/entities";
+import { type IReferenceLayer, type UpdateReferenceLayer } from "../../shared/entities";
 import { style, invertStyles } from "./MenuButton.styles";
 import Icon from "./Icon";
 import store from "../store";

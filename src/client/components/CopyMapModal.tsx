@@ -2,18 +2,18 @@ import React, { useState } from "react";
 import AriaModal from "react-aria-modal";
 import { connect } from "react-redux";
 import { Navigate } from "react-router-dom";
-import { Box, Button, Flex, Heading, ThemeUIStyleObject } from "theme-ui";
+import { Box, Button, Flex, Heading, type ThemeUIStyleObject } from "theme-ui";
 
 import { isUserLoggedIn } from "../jwt";
-import { IProject, IUser } from "../../shared/entities";
+import { type IProject, type IUser } from "../../shared/entities";
 import { showCopyMapModal } from "../actions/projectModals";
 import { resetProjectState } from "../actions/root";
 import { copyProject } from "../api";
 import { showActionFailedToast } from "../functions";
-import { State } from "../reducers";
+import { type State } from "../reducers";
 import store from "../store";
 import { AuthModalContent } from "./AuthComponents";
-import { Resource } from "../resource";
+import { type Resource } from "../resource";
 
 const style: Record<string, ThemeUIStyleObject> = {
   footer: {

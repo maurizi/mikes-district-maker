@@ -7,7 +7,7 @@ import SuccessIllustration from "../media/successfully-registered-illustration.s
 import { activateAccount } from "../api";
 import { isUserLoggedIn } from "../jwt";
 import CenteredContent from "../components/CenteredContent";
-import { Resource } from "../resource";
+import { type Resource } from "../resource";
 
 const ActivateAccountScreen = () => {
   const { token, organizationSlug } = useParams();

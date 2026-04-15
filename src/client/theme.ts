@@ -1,5 +1,5 @@
 import { darken } from "@theme-ui/color";
-import { Theme } from "theme-ui";
+import { type Theme } from "theme-ui";
 
 export const heights = {
   header: "48px"

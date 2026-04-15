@@ -7,10 +7,10 @@ import Logo from "../media/logos/logo.svg?react";
 import { isUserLoggedIn } from "../jwt";
 import RegisterContent from "../components/RegisterContent";
 import CenteredContent from "../components/CenteredContent";
-import { IUser } from "../../shared/entities";
-import { State } from "../reducers";
-import { AuthLocationState } from "../types";
-import { Resource } from "../resource";
+import { type IUser } from "../../shared/entities";
+import { type State } from "../reducers";
+import { type AuthLocationState } from "../types";
+import { type Resource } from "../resource";
 import RegisterTermsText from "../components/RegisterTermsText";
 
 interface StateProps {

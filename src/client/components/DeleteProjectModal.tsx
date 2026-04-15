@@ -3,9 +3,9 @@ import { connect } from "react-redux";
 import { Box, Button, Flex, Heading } from "theme-ui";
 
 import Icon from "./Icon";
-import { IProject } from "../../shared/entities";
+import { type IProject } from "../../shared/entities";
 import { projectArchive, setDeleteProject } from "../actions/projects";
-import { State } from "../reducers";
+import { type State } from "../reducers";
 import store from "../store";
 
 const DeleteProjectModal = ({

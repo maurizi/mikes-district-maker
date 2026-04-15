@@ -41,12 +41,12 @@ import {
   // UseRowStateOptions,
   // UseRowStateRowProps,
   // UseRowStateState,
-  UseSortByColumnOptions,
-  UseSortByColumnProps,
-  UseSortByHooks,
-  UseSortByInstanceProps,
-  UseSortByOptions,
-  UseSortByState
+  type UseSortByColumnOptions,
+  type UseSortByColumnProps,
+  type UseSortByHooks,
+  type UseSortByInstanceProps,
+  type UseSortByOptions,
+  type UseSortByState
 } from "react-table";
 
 declare module "react-table" {

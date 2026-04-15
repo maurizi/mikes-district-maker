@@ -1,0 +1,20 @@
+services:
+  shellcheck:
+    image: koalaman/shellcheck-alpine:stable
+    volumes:
+      - ./:/usr/local/src
+    working_dir: /usr/local/src
+    entrypoint: shellcheck
+
+  terraform:
+    image: hashicorp/terraform:1.9
+    volumes:
+      - ./:/usr/local/src
+      - $HOME/.aws:/root/.aws:ro
+    environment:
+      - AWS_PROFILE=${AWS_PROFILE:-district-builder}
+      - AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY
+      - AWS_SESSION_TOKEN
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+    working_dir: /usr/local/src/deployment/terraform

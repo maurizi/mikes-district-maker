@@ -1,9 +1,9 @@
-import { Box, ThemeUIStyleObject, Divider } from "theme-ui";
+import { Box, type ThemeUIStyleObject, Divider } from "theme-ui";
 
 import { demographicsColors } from "../constants/colors";
 import { getDemographicLabel } from "../../shared/functions";
 import { DEMOGRAPHIC_FIELDS_ORDER } from "../../shared/constants";
-import { GroupTotal, DemographicsGroup } from "../../shared/entities";
+import { type GroupTotal, type DemographicsGroup } from "../../shared/entities";
 import { getDemographicsPercentages } from "../functions";
 
 const style: Record<string, ThemeUIStyleObject> = {

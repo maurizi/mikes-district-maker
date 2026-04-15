@@ -4,17 +4,17 @@ import { toast } from "react-toastify";
 import { connect } from "react-redux";
 import { Link, useLocation } from "react-router-dom";
 
-import { Register, IOrganization } from "../../shared/entities";
-import { State } from "../reducers";
+import { type Register, type IOrganization } from "../../shared/entities";
+import { type State } from "../reducers";
 
 import { registerUser } from "../api";
 import { InputField, PasswordField } from "./Field";
 import FormError from "./FormError";
-import { WriteResource } from "../resource";
+import { type WriteResource } from "../resource";
 import { userFetch } from "../actions/user";
 import { showCopyMapModal } from "../actions/projectModals";
 import store from "../store";
-import { Resource } from "../resource";
+import { type Resource } from "../resource";
 
 const RegisterContent = ({
   children,

@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Button, Flex, Box, Heading, ThemeUIStyleObject, Checkbox, Label } from "theme-ui";
+import { Button, Flex, Box, Heading, type ThemeUIStyleObject, Checkbox, Label } from "theme-ui";
 
-import { IReferenceLayer, ReferenceLayerId } from "../../shared/entities";
+import { type IReferenceLayer, type ReferenceLayerId } from "../../shared/entities";
 import Icon from "./Icon";
 
 import store from "../store";

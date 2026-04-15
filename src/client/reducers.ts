@@ -1,37 +1,37 @@
 import { combineReducers } from "redux-loop";
 import { getType } from "typesafe-actions";
 
-import { LoopAction } from "./actions";
+import { type LoopAction } from "./actions";
 import { resetState } from "./actions/root";
-import authReducer, { AuthState, initialState as initialAuthState } from "./reducers/auth";
+import authReducer, { type AuthState, initialState as initialAuthState } from "./reducers/auth";
 import organizationReducer, {
-  OrganizationState,
+  type OrganizationState,
   initialState as initialOrganizationState
 } from "./reducers/organization";
 import organizationJoinReducer, {
-  OrganizationJoinState,
+  type OrganizationJoinState,
   initialState as initialOrganizationJoinState
 } from "./reducers/organizationJoin";
 import projectsReducer, {
   initialState as initialProjectsState,
-  ProjectsState
+  type ProjectsState
 } from "./reducers/projects";
 import regionConfigReducer, {
   initialState as initialRegionConfigState,
-  RegionConfigState
+  type RegionConfigState
 } from "./reducers/regionConfig";
 import organizationProjectsReducer, {
   initialState as intialOrganizationProjectsState,
-  OrganizationProjectsState
+  type OrganizationProjectsState
 } from "./reducers/organizationProjects";
-import userReducer, { initialState as initialUserState, UserState } from "./reducers/user";
-import projectReducer, { ProjectState, initialProjectState } from "./reducers/project";
+import userReducer, { initialState as initialUserState, type UserState } from "./reducers/user";
+import projectReducer, { type ProjectState, initialProjectState } from "./reducers/project";
 import projectOptionsReducer, {
-  ProjectOptionsState,
+  type ProjectOptionsState,
   initialProjectOptionsState
 } from "./reducers/projectOptions";
 import projectModalsReducer, {
-  ProjectModalsState,
+  type ProjectModalsState,
   initialProjectModalsState
 } from "./reducers/projectModals";
 

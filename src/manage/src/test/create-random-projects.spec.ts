@@ -1,6 +1,6 @@
-import { DataType, IBackup, newDb } from "pg-mem";
+import { DataType, type IBackup, newDb } from "pg-mem";
 import { v4 } from "uuid";
-import * as typeorm from "typeorm";
+import type * as typeorm from "typeorm";
 
 import CreateRandomProjects from "../commands/create-random-projects";
 import { RegionConfig } from "../../../server/src/region-configs/entities/region-config.entity";

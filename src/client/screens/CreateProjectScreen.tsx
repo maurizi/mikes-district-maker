@@ -11,17 +11,17 @@ import {
   Heading,
   Label,
   Radio,
-  ThemeUIStyleObject
+  type ThemeUIStyleObject
 } from "theme-ui";
 
 import { DEFAULT_POPULATION_DEVIATION } from "../../shared/constants";
 import {
-  CreateProjectData,
-  IChamber,
-  IOrganization,
-  IProject,
-  IRegionConfig,
-  OrganizationNest
+  type CreateProjectData,
+  type IChamber,
+  type IOrganization,
+  type IProject,
+  type IRegionConfig,
+  type OrganizationNest
 } from "../../shared/entities";
 
 import { regionConfigsFetch } from "../actions/regionConfig";
@@ -32,10 +32,10 @@ import FormError from "../components/FormError";
 import MultiMemberForm from "../components/MultiMemberForm";
 import OrganizationTemplateForm from "../components/OrganizationTemplateForm";
 import Logo from "../media/logos/mark-white.svg?react";
-import { State } from "../reducers";
-import { OrganizationState } from "../reducers/organization";
-import { UserState } from "../reducers/user";
-import { Resource, WriteResource } from "../resource";
+import { type State } from "../reducers";
+import { type OrganizationState } from "../reducers/organization";
+import { type UserState } from "../reducers/user";
+import { type Resource, type WriteResource } from "../resource";
 import store from "../store";
 import { updateNumberOfMembers, extractErrors } from "../functions";
 
@@ -232,7 +232,7 @@ const CreateProjectScreen = ({ regionConfigs, user, organization }: StateProps) 
   }, [data.regionConfig]);
 
   useEffect(() => {
-    document.title = "DistrictBuilder | New Map";
+    document.title = "Mike's District Maker | New Map";
   });
 
   return "resource" in createProjectResource ? (
@@ -340,15 +340,7 @@ const CreateProjectScreen = ({ regionConfigs, user, organization }: StateProps) 
                     }
                     description={
                       <Box as="span" sx={style.cardHint}>
-                        What state do you want to map? If you don’t see it in the list,{" "}
-                        <a
-                          href="https://districtbuilder.us1.list-manage.com/subscribe?u=61da999c9897859f1c1fff262&id=70fdf1ae35"
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          sign up for our mailing list
-                        </a>{" "}
-                        to know when new states are available!
+                        What state do you want to map?
                       </Box>
                     }
                     resource={createProjectResource}

@@ -1,10 +1,10 @@
 import { reduceReducers } from "redux-loop";
 
 import districtDrawingReducer, {
-  DistrictDrawingState,
+  type DistrictDrawingState,
   initialDistrictDrawingState
 } from "./districtDrawing";
-import projectDataReducer, { ProjectDataState, initialProjectDataState } from "./projectData";
+import projectDataReducer, { type ProjectDataState, initialProjectDataState } from "./projectData";
 
 export const initialProjectState = { ...initialProjectDataState, ...initialDistrictDrawingState };
 

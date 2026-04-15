@@ -1,11 +1,11 @@
 import { connect } from "react-redux";
-import { Box, Flex, Heading, ThemeUIStyleObject } from "theme-ui";
+import { Box, Flex, Heading, type ThemeUIStyleObject } from "theme-ui";
 
-import { GroupTotal, IStaticMetadata } from "../../../../shared/entities";
+import { type GroupTotal, type IStaticMetadata } from "../../../../shared/entities";
 
 import { getMajorityRaceDisplay, isMajorityMinority } from "../../../functions";
-import { State } from "../../../reducers";
-import { DistrictsGeoJSON, EvaluateMetricWithValue } from "../../../types";
+import { type State } from "../../../reducers";
+import { type DistrictsGeoJSON, type EvaluateMetricWithValue } from "../../../types";
 
 import DemographicsChart from "../../DemographicsChart";
 import DemographicsTooltip from "../../DemographicsTooltip";

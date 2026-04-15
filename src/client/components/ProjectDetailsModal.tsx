@@ -2,15 +2,24 @@ import React, { useState } from "react";
 import AriaModal from "react-aria-modal";
 import { connect } from "react-redux";
 import { InputField } from "./Field";
-import { Box, Button, Flex, Heading, ThemeUIStyleObject, Label, Checkbox, Divider } from "theme-ui";
+import {
+  Box,
+  Button,
+  Flex,
+  Heading,
+  type ThemeUIStyleObject,
+  Label,
+  Checkbox,
+  Divider
+} from "theme-ui";
 
-import { IProject } from "../../shared/entities";
-import { State } from "../reducers";
+import { type IProject } from "../../shared/entities";
+import { type State } from "../reducers";
 import store from "../store";
 import { toggleProjectDetailsModal, updateProjectDetailsSuccess } from "../actions/projectData";
-import { WriteResource } from "../resource";
+import { type WriteResource } from "../resource";
 import FormError from "./FormError";
-import { DistrictsGeoJSON } from "../types";
+import { type DistrictsGeoJSON } from "../types";
 import MultiMemberForm from "./MultiMemberForm";
 import { patchProject } from "../api";
 import { extractErrors } from "../functions";

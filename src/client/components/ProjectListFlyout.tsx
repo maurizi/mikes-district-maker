@@ -1,6 +1,6 @@
 import { Box } from "theme-ui";
 import { Button as MenuButton, Wrapper, Menu, MenuItem } from "react-aria-menubutton";
-import { IProject } from "../../shared/entities";
+import { type IProject } from "../../shared/entities";
 import { style, invertStyles } from "./MenuButton.styles";
 import Icon from "./Icon";
 import store from "../store";

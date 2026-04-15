@@ -1,13 +1,13 @@
-import { Cmd, Loop, loop } from "redux-loop";
+import { Cmd, type Loop, loop } from "redux-loop";
 import { getType } from "typesafe-actions";
 
-import { LoopAction } from "../actions";
+import { type LoopAction } from "../actions";
 import { userFetch, userFetchFailure, userFetchSuccess } from "../actions/user";
 
-import { IUser } from "../../shared/entities";
+import { type IUser } from "../../shared/entities";
 import { fetchUser } from "../api";
 import { showResourceFailedToast } from "../functions";
-import { Resource } from "../resource";
+import { type Resource } from "../resource";
 
 export type UserState = Resource<IUser>;
 

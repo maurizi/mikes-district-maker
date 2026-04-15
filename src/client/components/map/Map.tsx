@@ -1,13 +1,13 @@
 import { maxBy } from "lodash";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Box, Flex, Text, ThemeUIStyleObject } from "theme-ui";
+import { Box, Flex, Text, type ThemeUIStyleObject } from "theme-ui";
 import bbox from "@turf/bbox";
 type BBox2d = [number, number, number, number];
 
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import polylabel from "polylabel";
-import { Feature, FeatureCollection, Point, Position } from "geojson";
+import { type Feature, type FeatureCollection, type Point, type Position } from "geojson";
 import mapPinUrl from "../../media/map-pin.png";
 
 import {
@@ -16,24 +16,24 @@ import {
   replaceSelectedGeounits,
   FindTool,
   setZoomToDistrictId,
-  PaintBrushSize
+  type PaintBrushSize
 } from "../../actions/districtDrawing";
 import { getDistrictColor } from "../../constants/colors";
 import {
-  TypedArrays,
-  GeoUnits,
-  IProject,
-  IStaticMetadata,
-  LockedDistricts,
-  ReferenceLayerId,
-  IReferenceLayer,
-  GroupTotal
+  type TypedArrays,
+  type GeoUnits,
+  type IProject,
+  type IStaticMetadata,
+  type LockedDistricts,
+  type ReferenceLayerId,
+  type IReferenceLayer,
+  type GroupTotal
 } from "../../../shared/entities";
 import {
-  DistrictsGeoJSON,
-  DistrictGeoJSON,
-  ElectionYear,
-  EvaluateMetricWithValue
+  type DistrictsGeoJSON,
+  type DistrictGeoJSON,
+  type ElectionYear,
+  type EvaluateMetricWithValue
 } from "../../types";
 import {
   areAnyGeoUnitsSelected,
@@ -91,14 +91,14 @@ import MapTooltip from "./MapTooltip";
 import PaintBrushSelectionTool from "./PaintBrushSelectionTool";
 import RectangleSelectionTool from "./RectangleSelectionTool";
 import store from "../../store";
-import { State } from "../../reducers";
+import { type State } from "../../reducers";
 import { connect } from "react-redux";
 import { MAP_STYLE } from "../../constants/map";
 import { KEYBOARD_SHORTCUTS } from "./keyboardShortcuts";
 import Icon from "../Icon";
 import { ReferenceLayerTypes } from "../../../shared/constants";
 import { REFERENCE_LAYER_COLOR_CODES } from "../../constants/colors";
-import { Resource } from "../../resource";
+import { type Resource } from "../../resource";
 import { getColor } from "@theme-ui/color";
 import theme from "../../theme";
 import { getDemographicsGroups } from "../../../shared/functions";

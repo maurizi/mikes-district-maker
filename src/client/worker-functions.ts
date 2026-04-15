@@ -3,17 +3,17 @@ import stringify from "json-stable-stringify";
 import memoize from "memoizee";
 
 import {
-  DemographicCounts,
-  DistrictsDefinition,
-  DistrictsImportApiResponse,
-  GeoUnits,
-  IProject,
-  IStaticMetadata,
-  S3URI,
-  ThumbnailGeoJSON
+  type DemographicCounts,
+  type DistrictsDefinition,
+  type DistrictsImportApiResponse,
+  type GeoUnits,
+  type IProject,
+  type IStaticMetadata,
+  type S3URI,
+  type ThumbnailGeoJSON
 } from "../shared/entities";
-import { DistrictsGeoJSON, StaticCounts } from "../client/types";
-import { WorkerFunctions } from "./worker";
+import { type DistrictsGeoJSON, type StaticCounts } from "../client/types";
+import { type WorkerFunctions } from "./worker";
 
 const worker = Comlink.wrap<WorkerFunctions>(
   new Worker(new URL("./worker.ts", import.meta.url), { type: "module" })

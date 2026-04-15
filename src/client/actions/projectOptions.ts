@@ -1,6 +1,6 @@
 import { createAction } from "typesafe-actions";
-import { ElectionYear } from "../types";
-import { GroupTotal } from "../../shared/entities";
+import { type ElectionYear } from "../types";
+import { type GroupTotal } from "../../shared/entities";
 
 export const toggleLimitDrawingToWithinCounty = createAction("Limit drawing to within county")();
 

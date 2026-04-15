@@ -1,6 +1,6 @@
 import { createReducer } from "typesafe-actions";
 
-import { LoopAction } from "../actions";
+import { type LoopAction } from "../actions";
 import { showPasswordResetNotice } from "../actions/auth";
 
 export interface AuthState {

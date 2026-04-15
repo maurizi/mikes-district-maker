@@ -4,15 +4,15 @@ import { Link, Navigate, useLocation } from "react-router-dom";
 import { Alert, Box, Card, Close, Flex, Heading } from "theme-ui";
 import Logo from "../media/logos/logo.svg?react";
 
-import { IUser } from "../../shared/entities";
+import { type IUser } from "../../shared/entities";
 import { isUserLoggedIn } from "../jwt";
 import { showPasswordResetNotice } from "../actions/auth";
 import { LoginContent } from "../components/AuthComponents";
 import CenteredContent from "../components/CenteredContent";
-import { State } from "../reducers";
-import { Resource } from "../resource";
+import { type State } from "../reducers";
+import { type Resource } from "../resource";
 import store from "../store";
-import { AuthLocationState } from "../types";
+import { type AuthLocationState } from "../types";
 
 interface StateProps {
   readonly passwordResetNoticeShown: boolean;

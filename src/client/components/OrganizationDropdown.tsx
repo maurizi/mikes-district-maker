@@ -1,6 +1,6 @@
 import { Button as MenuButton, Wrapper, Menu, MenuItem } from "react-aria-menubutton";
 import { invertStyles, style } from "./MenuButton.styles";
-import { OrganizationNest } from "../../shared/entities";
+import { type OrganizationNest } from "../../shared/entities";
 import { useNavigate, type NavigateFunction } from "react-router-dom";
 
 interface Props {

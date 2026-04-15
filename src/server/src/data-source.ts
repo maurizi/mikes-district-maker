@@ -1,5 +1,5 @@
 import { join } from "path";
-import { DataSource, DataSourceOptions } from "typeorm";
+import { DataSource, type DataSourceOptions } from "typeorm";
 import { DsqlSigner } from "@aws-sdk/dsql-signer";
 import { EmailVerification } from "./auth/entities/email-verification.entity";
 import { Chamber } from "./chambers/entities/chamber.entity";

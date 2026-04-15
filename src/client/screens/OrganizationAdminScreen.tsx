@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { connect } from "react-redux";
 import { Link, useParams } from "react-router-dom";
-import { Box, Flex, Heading, ThemeUIStyleObject } from "theme-ui";
+import { Box, Flex, Heading, type ThemeUIStyleObject } from "theme-ui";
 
 import { organizationFetch } from "../actions/organization";
 import { organizationProjectsFetch } from "../actions/organizationProjects";
@@ -9,10 +9,10 @@ import { userFetch } from "../actions/user";
 import OrganizationAdminProjectsTable from "../components/OrganizationAdminProjectsTable";
 import OrganizationExportMenu from "../components/OrganizationExportMenu";
 import SiteHeader from "../components/SiteHeader";
-import { State } from "../reducers";
-import { OrganizationState } from "../reducers/organization";
-import { OrganizationProjectsState } from "../reducers/organizationProjects";
-import { UserState } from "../reducers/user";
+import { type State } from "../reducers";
+import { type OrganizationState } from "../reducers/organization";
+import { type OrganizationProjectsState } from "../reducers/organizationProjects";
+import { type UserState } from "../reducers/user";
 import store from "../store";
 
 import PageNotFoundScreen from "./PageNotFoundScreen";

@@ -4,12 +4,12 @@ import { connect } from "react-redux";
 import { Box, Button, Flex, Heading } from "theme-ui";
 
 import Icon from "../Icon";
-import { GeoLevelInfo, ProjectId } from "../../../shared/entities";
+import { type GeoLevelInfo, type ProjectId } from "../../../shared/entities";
 import { setGeoLevelIndex } from "../../actions/districtDrawing";
 import { showAdvancedEditingModal } from "../../actions/projectModals";
 import { projectFetch } from "../../actions/projectData";
 import { patchProject } from "../../api";
-import { State } from "../../reducers";
+import { type State } from "../../reducers";
 import store from "../../store";
 
 const AdvancedEditingModal = ({

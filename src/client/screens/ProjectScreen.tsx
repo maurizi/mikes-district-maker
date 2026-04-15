@@ -1,18 +1,18 @@
-import maplibregl from "maplibre-gl";
+import type maplibregl from "maplibre-gl";
 import React, { useEffect, useRef, useState } from "react";
 import { useBeforeunload } from "react-beforeunload";
 import { connect } from "react-redux";
 import { Navigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
-import { Flex, Spinner, ThemeUIStyleObject } from "theme-ui";
+import { Flex, Spinner, type ThemeUIStyleObject } from "theme-ui";
 
 import {
-  GeoUnitHierarchy,
-  IProject,
-  IReferenceLayer,
-  IStaticMetadata,
-  IUser,
-  TypedArrays
+  type GeoUnitHierarchy,
+  type IProject,
+  type IReferenceLayer,
+  type IStaticMetadata,
+  type IUser,
+  type TypedArrays
 } from "../../shared/entities";
 
 import {
@@ -41,12 +41,12 @@ import SubmitMapModal from "../components/SubmitMapModal";
 import Tour from "../components/Tour";
 import { areAnyGeoUnitsSelected, destructureResource, isProjectReadOnly } from "../functions";
 import { isUserLoggedIn } from "../jwt";
-import { State } from "../reducers";
-import { DistrictDrawingState } from "../reducers/districtDrawing";
-import { ProjectOptionsState } from "../reducers/projectOptions";
-import { Resource } from "../resource";
+import { type State } from "../reducers";
+import { type DistrictDrawingState } from "../reducers/districtDrawing";
+import { type ProjectOptionsState } from "../reducers/projectOptions";
+import { type Resource } from "../resource";
 import store from "../store";
-import { DistrictsGeoJSON, EvaluateMetricWithValue } from "../types";
+import { type DistrictsGeoJSON, type EvaluateMetricWithValue } from "../types";
 
 import PageNotFoundScreen from "./PageNotFoundScreen";
 
@@ -170,7 +170,7 @@ const ProjectScreen = ({
   }, [projectId, isLoggedIn]);
 
   useEffect(() => {
-    document.title = "DistrictBuilder " + (project ? `| ${project.name}` : "");
+    document.title = "Mike's District Maker " + (project ? `| ${project.name}` : "");
   });
 
   return isFirstLoadPending ? (

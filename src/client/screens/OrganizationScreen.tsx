@@ -10,7 +10,7 @@ import {
   Spinner,
   Text,
   Link,
-  ThemeUIStyleObject
+  type ThemeUIStyleObject
 } from "theme-ui";
 import { formatDate } from "../functions";
 
@@ -20,18 +20,18 @@ import { leaveOrganization } from "../actions/organizationJoin";
 import { userFetch } from "../actions/user";
 import { organizationFeaturedProjectsFetch } from "../actions/organizationProjects";
 import { isUserLoggedIn } from "../jwt";
-import { State } from "../reducers";
-import { OrganizationState } from "../reducers/organization";
-import { UserState } from "../reducers/user";
-import { OrganizationProjectsState } from "../reducers/organizationProjects";
+import { type State } from "../reducers";
+import { type OrganizationState } from "../reducers/organization";
+import { type UserState } from "../reducers/user";
+import { type OrganizationProjectsState } from "../reducers/organizationProjects";
 import store from "../store";
 
 import {
-  CreateProjectData,
-  IOrganization,
-  IUser,
-  ProjectNest,
-  IProject
+  type CreateProjectData,
+  type IOrganization,
+  type IUser,
+  type ProjectNest,
+  type IProject
 } from "../../shared/entities";
 
 import Icon from "../components/Icon";
@@ -202,7 +202,8 @@ const OrganizationScreen = ({ organization, organizationProjects, user }: StateP
 
   useEffect(() => {
     document.title =
-      "DistrictBuilder " + ("resource" in organization ? `| ${organization.resource.name}` : "");
+      "Mike's District Maker " +
+      ("resource" in organization ? `| ${organization.resource.name}` : "");
   });
 
   function signupAndJoinOrg() {

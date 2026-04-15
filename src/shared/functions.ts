@@ -1,12 +1,12 @@
 import {
-  TypedArray,
-  DemographicCounts,
-  IStaticMetadata,
-  IStaticFile,
-  MetricsList,
-  VotingMetricsList,
-  VotingMetricField,
-  DemographicsGroup
+  type TypedArray,
+  type DemographicCounts,
+  type IStaticMetadata,
+  type IStaticFile,
+  type MetricsList,
+  type VotingMetricsList,
+  type VotingMetricField,
+  type DemographicsGroup
 } from "../shared/entities";
 import { CORE_METRIC_FIELDS, DEMOGRAPHIC_FIELDS_ORDER } from "./constants";
 

@@ -1,18 +1,18 @@
-import React, { RefAttributes } from "react";
+import React, { type RefAttributes } from "react";
 import {
   Box,
   Flex,
   Input,
-  InputProps,
+  type InputProps,
   Label,
   Select,
-  SelectProps,
-  ThemeUIStyleObject
+  type SelectProps,
+  type ThemeUIStyleObject
 } from "theme-ui";
 
 import { validate as validatePassword } from "../../shared/password-validator";
-import { ErrorMap } from "../../shared/types";
-import { WriteResource } from "../resource";
+import { type ErrorMap } from "../../shared/types";
+import { type WriteResource } from "../resource";
 
 function getFieldErrors<D, T>(resource: WriteResource<D, T>): ErrorMap<D> {
   return "errors" in resource && resource.errors && typeof resource.errors.message !== "string"

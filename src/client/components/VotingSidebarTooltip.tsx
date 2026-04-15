@@ -1,5 +1,5 @@
 import { mapValues, sum } from "lodash";
-import { Box, Divider, ThemeUIStyleObject, Heading } from "theme-ui";
+import { Box, Divider, type ThemeUIStyleObject, Heading } from "theme-ui";
 
 import {
   getPartyColor,
@@ -9,8 +9,8 @@ import {
   officeName,
   parseVotingId
 } from "../functions";
-import { DemographicCounts } from "../../shared/entities";
-import { ElectionYear } from "../types";
+import { type DemographicCounts } from "../../shared/entities";
+import { type ElectionYear } from "../types";
 
 import React from "react";
 

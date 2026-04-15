@@ -1,3 +1,4 @@
+/* eslint-disable no-console, functional/no-loop-statements, functional/immutable-data */
 // Post-processes a TypeORM-generated migration file to make it DSQL-compatible.
 //
 // TypeORM's `migration:generate` diffs entities against a dev Postgres shadow
@@ -132,10 +133,7 @@ const WARNINGS: readonly Warning[] = [
 // Extract each backtick-delimited template literal from the source, transform
 // only the SQL inside, and splice it back. This keeps the script from rewriting
 // TypeScript comments or string literals outside the query-runner calls.
-function forEachSqlString(
-  source: string,
-  fn: (sql: string) => string
-): string {
+function forEachSqlString(source: string, fn: (sql: string) => string): string {
   let out = "";
   let i = 0;
   while (i < source.length) {

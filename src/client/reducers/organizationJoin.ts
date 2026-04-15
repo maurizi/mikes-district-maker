@@ -1,7 +1,7 @@
-import { Cmd, Loop, loop } from "redux-loop";
+import { Cmd, type Loop, loop } from "redux-loop";
 import { getType } from "typesafe-actions";
 
-import { LoopAction } from "../actions";
+import { type LoopAction } from "../actions";
 import {
   joinOrganization,
   joinOrganizationSuccess,
@@ -11,10 +11,10 @@ import {
   leaveOrganizationFailure
 } from "../actions/organizationJoin";
 
-import { IOrganization } from "../../shared/entities";
+import { type IOrganization } from "../../shared/entities";
 import { addUserToOrganization, removeUserFromOrganization } from "../api";
 import { showResourceFailedToast } from "../functions";
-import { Resource } from "../resource";
+import { type Resource } from "../resource";
 import { organizationFetch } from "../actions/organization";
 
 export type OrganizationJoinState = Resource<IOrganization>;

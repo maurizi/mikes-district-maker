@@ -1,7 +1,7 @@
-import { Cmd, Loop, loop } from "redux-loop";
+import { Cmd, type Loop, loop } from "redux-loop";
 import { getType } from "typesafe-actions";
 
-import { LoopAction } from "../actions";
+import { type LoopAction } from "../actions";
 import {
   projectArchive,
   projectArchiveSuccess,
@@ -19,10 +19,10 @@ import {
   setTemplateProject
 } from "../actions/projects";
 
-import { IProject, PaginationMetadata } from "../../shared/entities";
+import { type IProject, type PaginationMetadata } from "../../shared/entities";
 import { fetchAllPublishedProjects, fetchProjects, patchProject } from "../api";
 import { showResourceFailedToast } from "../functions";
-import { Resource } from "../resource";
+import { type Resource } from "../resource";
 
 export interface ProjectsState {
   readonly projects: Resource<readonly IProject[]>;

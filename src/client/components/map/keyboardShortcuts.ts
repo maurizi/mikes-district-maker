@@ -1,4 +1,4 @@
-import { DistrictId } from "../../../shared/entities";
+import { type DistrictId } from "../../../shared/entities";
 
 import {
   setGeoLevelIndex,
@@ -14,14 +14,14 @@ import {
   redo,
   toggleExpandedMetrics,
   setZoomToDistrictId,
-  PaintBrushSize,
+  type PaintBrushSize,
   setPaintBrushSize
 } from "../../actions/districtDrawing";
 import { toggleKeyboardShortcutsModal } from "../../actions/projectModals";
 import { toggleLimitDrawingToWithinCounty, setElectionYear } from "../../actions/projectOptions";
 import store from "../../store";
 import { showMapActionToast } from "../../functions";
-import { ElectionYear } from "../../types";
+import { type ElectionYear } from "../../types";
 
 interface MapContext {
   readonly selectionTool: SelectionTool;

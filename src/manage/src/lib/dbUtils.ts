@@ -1,4 +1,4 @@
-import { DataSource, DataSourceOptions } from "typeorm";
+import { DataSource, type DataSourceOptions } from "typeorm";
 import { DsqlSigner } from "@aws-sdk/dsql-signer";
 
 import { Chamber } from "../../../server/src/chambers/entities/chamber.entity";

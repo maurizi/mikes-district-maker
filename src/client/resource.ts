@@ -1,4 +1,4 @@
-import { Errors } from "../shared/types";
+import { type Errors } from "../shared/types";
 
 export interface ResourceEditing<D> {
   readonly data: D;

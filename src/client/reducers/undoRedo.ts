@@ -1,7 +1,11 @@
-import { CmdType } from "redux-loop";
+import { type CmdType } from "redux-loop";
 
-import { DistrictsDefinition, GeoUnits, LockedDistricts } from "../../shared/entities";
-import { ProjectState } from "./project";
+import {
+  type DistrictsDefinition,
+  type GeoUnits,
+  type LockedDistricts
+} from "../../shared/entities";
+import { type ProjectState } from "./project";
 
 const UNDO_HISTORY_MAX_LENGTH = 100;
 

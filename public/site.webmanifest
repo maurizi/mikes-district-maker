@@ -1,6 +1,6 @@
 {
-    "name": "DistrictBuilder",
-    "short_name": "DistrictBuilder",
+    "name": "Mike's District Maker",
+    "short_name": "MikesDistrictMaker",
     "icons": [
         {
             "src": "/android-chrome-192x192.png",

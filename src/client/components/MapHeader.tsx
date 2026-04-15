@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { Flex, Box, Button, Slider, Text, ThemeUIStyleObject } from "theme-ui";
+import { Flex, Box, Button, Slider, Text, type ThemeUIStyleObject } from "theme-ui";
 import {
-  GeoLevelInfo,
-  GeoLevelHierarchy,
-  GeoUnits,
-  IStaticMetadata,
-  GroupTotal
+  type GeoLevelInfo,
+  type GeoLevelHierarchy,
+  type GeoUnits,
+  type IStaticMetadata,
+  type GroupTotal
 } from "../../shared/entities";
-import { ElectionYear } from "../types";
+import { type ElectionYear } from "../types";
 import { toggleFind } from "../actions/districtDrawing";
 import { geoLevelLabel, canSwitchGeoLevels } from "../functions";
 import MapSelectionOptionsFlyout from "./MapSelectionOptionsFlyout";
@@ -19,11 +19,11 @@ import {
   setGeoLevelIndex,
   setSelectionTool,
   SelectionTool,
-  PaintBrushSize,
+  type PaintBrushSize,
   setPaintBrushSize
 } from "../actions/districtDrawing";
 import store from "../store";
-import icons from "../icons";
+import type icons from "../icons";
 
 const style: Record<string, ThemeUIStyleObject> = {
   buttonGroup: {

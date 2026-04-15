@@ -1,21 +1,21 @@
 import React, { Fragment, memo, useEffect, useMemo, useState } from "react";
-import { Box, Button, Flex, ThemeUIStyleObject } from "theme-ui";
+import { Box, Button, Flex, type ThemeUIStyleObject } from "theme-ui";
 import { pickBy, sum } from "lodash";
 
 import {
-  DemographicCounts,
-  DistrictProperties,
-  GeoUnitHierarchy,
-  GeoUnits,
-  IProject,
-  IStaticMetadata,
-  IReferenceLayer,
-  LockedDistricts,
-  MetricsList,
-  VotingMetricsList,
-  ReferenceLayerId,
-  DemographicsGroup,
-  GroupTotal
+  type DemographicCounts,
+  type DistrictProperties,
+  type GeoUnitHierarchy,
+  type GeoUnits,
+  type IProject,
+  type IStaticMetadata,
+  type IReferenceLayer,
+  type LockedDistricts,
+  type MetricsList,
+  type VotingMetricsList,
+  type ReferenceLayerId,
+  type DemographicsGroup,
+  type GroupTotal
 } from "../../shared/entities";
 
 import {
@@ -45,7 +45,7 @@ import {
   getPopulationPerRepresentative
 } from "../functions";
 import store from "../store";
-import { DistrictGeoJSON, DistrictsGeoJSON, SavingState } from "../types";
+import { type DistrictGeoJSON, type DistrictsGeoJSON, type SavingState } from "../types";
 import {
   getSavedDistrictSelectedDemographics,
   getTotalSelectedDemographics
@@ -59,7 +59,7 @@ import ProjectSidebarHeader from "./ProjectSidebarHeader";
 import Tooltip from "./Tooltip";
 import PVIDisplay from "./PVIDisplay";
 import ProjectReferenceLayers from "./ProjectReferenceLayers";
-import { Resource } from "../resource";
+import { type Resource } from "../resource";
 import {
   getVotingMetricFields,
   getDemographicsMetricFields,

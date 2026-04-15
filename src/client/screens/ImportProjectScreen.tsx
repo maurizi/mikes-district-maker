@@ -10,7 +10,7 @@ import {
   Flex,
   Heading,
   Spinner,
-  ThemeUIStyleObject,
+  type ThemeUIStyleObject,
   Label,
   Radio,
   Divider,
@@ -19,15 +19,15 @@ import {
 
 import { DEFAULT_POPULATION_DEVIATION, FIPS, MAX_UPLOAD_FILE_SIZE } from "../../shared/constants";
 import {
-  DistrictsDefinition,
-  IProject,
-  IRegionConfig,
-  IChamber,
-  DistrictsImportApiSuccess,
-  IOrganization,
-  IUser,
-  CreateProjectData,
-  OrganizationNest
+  type DistrictsDefinition,
+  type IProject,
+  type IRegionConfig,
+  type IChamber,
+  type DistrictsImportApiSuccess,
+  type IOrganization,
+  type IUser,
+  type CreateProjectData,
+  type OrganizationNest
 } from "../../shared/entities";
 
 import { regionConfigsFetch } from "../actions/regionConfig";
@@ -40,8 +40,8 @@ import Field, { InputField } from "../components/Field";
 import Icon from "../components/Icon";
 import ImportFlagsModal from "../components/ImportFlagsModal";
 import Logo from "../media/logos/mark-white.svg?react";
-import { State } from "../reducers";
-import { WriteResource, Resource } from "../resource";
+import { type State } from "../reducers";
+import { type WriteResource, type Resource } from "../resource";
 import store from "../store";
 import OrganizationTemplateForm from "../components/OrganizationTemplateForm";
 import { userFetch } from "../actions/user";
@@ -453,7 +453,7 @@ const ImportProjectScreen = ({ organization, regionConfigs, user }: StateProps) 
   }, [organization]);
 
   useEffect(() => {
-    document.title = "DistrictBuilder | Import Map";
+    document.title = "Mike's District Maker | Import Map";
   });
 
   useEffect(() => {
@@ -551,7 +551,9 @@ const ImportProjectScreen = ({ organization, regionConfigs, user }: StateProps) 
                 const regionForThumbnail =
                   "resource" in importResource ? importResource.data : null;
                 const numberOfDistricts =
-                  "numberOfDistricts" in validatedData ? validatedData.numberOfDistricts : undefined;
+                  "numberOfDistricts" in validatedData
+                    ? validatedData.numberOfDistricts
+                    : undefined;
                 const definitionForThumbnail =
                   "districtsDefinition" in validatedData
                     ? validatedData.districtsDefinition
@@ -595,7 +597,7 @@ const ImportProjectScreen = ({ organization, regionConfigs, user }: StateProps) 
                 as="span"
                 sx={{ ...style.cardHint, ...{ flex: "0 0 100%" } }}
               >
-                Select a block equivalency file CSV from DistrictBuilder or a different
+                Select a block equivalency file CSV from Mike&rsquo;s District Maker or a different
                 redistricting source.
               </Box>
               <input

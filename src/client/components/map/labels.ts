@@ -1,4 +1,4 @@
-import { MapGeoJSONFeature } from "maplibre-gl";
+import { type MapGeoJSONFeature } from "maplibre-gl";
 import { geoLevelLabelSingular } from "../../functions";
 
 export function getLabel(geoLevelId?: string, feature?: MapGeoJSONFeature) {

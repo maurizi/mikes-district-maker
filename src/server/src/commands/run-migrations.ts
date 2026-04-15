@@ -1,3 +1,4 @@
+/* eslint-disable no-console, functional/no-loop-statements */
 // Migration runner for DSQL.
 //
 // DSQL rejects TypeORM's default behavior in two ways:

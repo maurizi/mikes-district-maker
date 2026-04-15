@@ -49,6 +49,7 @@
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2",
     "shapefile": "^0.6.6",
+    "simplify-geojson": "^1.0.5",
     "threads": "1.7.0",
     "topobuf": "^1.1.0",
     "topojson-client": "3.1.0",

@@ -10,7 +10,7 @@ import {
   flip,
   shift,
   FloatingPortal,
-  Placement
+  type Placement
 } from "@floating-ui/react";
 
 interface TooltipProps {

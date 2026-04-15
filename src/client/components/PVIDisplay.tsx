@@ -1,6 +1,6 @@
 import { Box } from "theme-ui";
-import { DistrictProperties } from "../../shared/entities";
-import { ElectionYear } from "../types";
+import { type DistrictProperties } from "../../shared/entities";
+import { type ElectionYear } from "../types";
 import { getPartyColor, calculatePVI } from "../functions";
 import Tooltip from "./Tooltip";
 import VotingSidebarTooltip from "./VotingSidebarTooltip";

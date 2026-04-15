@@ -12,7 +12,7 @@ import {
 } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
-import { IStaticFile, IStaticMetadata } from "../../../shared/entities";
+import { type IStaticFile, type IStaticMetadata } from "../../../shared/entities";
 import { geojsonPolygonLabels, tileJoin, tippecanoe } from "../lib/cmd";
 import { abbreviateNumber } from "./process-geojson";
 import {

@@ -5,16 +5,16 @@ import { Link, NavLink, useNavigate, type NavigateFunction } from "react-router-
 import Icon from "../components/Icon";
 import SupportMenu from "../components/SupportMenu";
 import OrganizationDropdown from "../components/OrganizationDropdown";
-import { Alert, Box, Button, Flex, Heading, ThemeUIStyleObject } from "theme-ui";
+import { Alert, Box, Button, Flex, Heading, type ThemeUIStyleObject } from "theme-ui";
 
 import Logo from "../media/logos/logo.svg?react";
 
 import { resetState } from "../actions/root";
 import { clearJWT, isUserLoggedIn } from "../jwt";
-import { UserState } from "../reducers/user";
+import { type UserState } from "../reducers/user";
 import store from "../store";
 import { resendConfirmationEmail } from "../api";
-import { WriteResource } from "../resource";
+import { type WriteResource } from "../resource";
 
 interface Props {
   readonly user: UserState;
@@ -169,8 +169,8 @@ const SiteHeader = ({ user }: Props) => {
             {"errors" in resendEmail && (
               <Box sx={{ fontWeight: "body" }}>
                 Error resending email. If this error persists, please contact us at{" "}
-                <a sx={{ color: "muted" }} href="mailto:support@districtbuilder.org">
-                  support@districtbuilder.org
+                <a sx={{ color: "muted" }} href="mailto:michael@maurizi.org">
+                  michael@maurizi.org
                 </a>
                 .
               </Box>
@@ -181,7 +181,7 @@ const SiteHeader = ({ user }: Props) => {
       <Flex as="header" sx={style.header}>
         <Heading as="h1" sx={{ mb: "0px", mr: "auto", pt: 2 }}>
           <Link to="/" sx={style.logoLink}>
-            <Logo sx={{ width: "12rem" }} />
+            <Logo sx={{ width: "18rem" }} />
           </Link>
         </Heading>
         {!isLoggedIn && (!("isPending" in user) || !user.isPending) ? (

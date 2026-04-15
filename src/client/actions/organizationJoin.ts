@@ -1,5 +1,5 @@
 import { createAction } from "typesafe-actions";
-import { OrganizationSlug, UserId } from "../../shared/entities";
+import { type OrganizationSlug, type UserId } from "../../shared/entities";
 
 export const joinOrganization = createAction("Join organization")<{
   readonly organization: OrganizationSlug;

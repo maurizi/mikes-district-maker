@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { toast } from "react-toastify";
-import { Box, Button, Flex, Heading, Spinner, ThemeUIStyleObject } from "theme-ui";
+import { Box, Button, Flex, Heading, Spinner, type ThemeUIStyleObject } from "theme-ui";
 
-import { IProject } from "../../../../shared/entities";
+import { type IProject } from "../../../../shared/entities";
 import { projectFetchSuccess } from "../../../actions/projectData";
 import { checkPlanScoreAPI } from "../../../api";
 import {
@@ -12,7 +12,11 @@ import {
   getPartyColor
 } from "../../../functions";
 import store from "../../../store";
-import { DistrictsGeoJSON, EvaluateMetricWithValue, PviBucket } from "../../../types";
+import {
+  type DistrictsGeoJSON,
+  type EvaluateMetricWithValue,
+  type PviBucket
+} from "../../../types";
 import { getPviSteps } from "../../map/index";
 import PVIDisplay from "../../PVIDisplay";
 import Tooltip from "../../Tooltip";

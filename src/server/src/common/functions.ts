@@ -1,9 +1,9 @@
-import { GetObjectCommand, GetObjectCommandInput, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, type GetObjectCommandInput, type S3Client } from "@aws-sdk/client-s3";
 import { existsSync } from "fs";
 import { mkdir, readFile, writeFile } from "fs/promises";
 import { join } from "path";
 
-import { S3URI } from "../../../shared/entities";
+import { type S3URI } from "../../../shared/entities";
 
 const CACHE_DIR = process.env.S3_CACHE_DIRECTORY || "/tmp/s3-cache";
 

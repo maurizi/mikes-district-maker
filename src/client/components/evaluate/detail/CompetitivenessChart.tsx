@@ -1,5 +1,5 @@
 import { Flex } from "theme-ui";
-import { PviBucket } from "../../../types";
+import { type PviBucket } from "../../../types";
 import { Bar } from "@visx/shape";
 import { Group } from "@visx/group";
 import { ParentSize } from "@visx/responsive";

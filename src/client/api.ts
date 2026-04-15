@@ -1,40 +1,39 @@
-import axios, { AxiosResponse } from "axios";
+import axios, { type AxiosResponse } from "axios";
 import { saveAs } from "file-saver";
 import * as shpwrite from "@mapbox/shp-write";
 import memoize from "memoizee";
 
 import {
-  CreateProjectData,
-  IOrganization,
-  IProject,
-  IProjectTemplateWithProjects,
-  IRegionConfig,
-  IUser,
-  JWT,
-  OrganizationSlug,
-  ProjectId,
-  ProjectTemplateId,
-  UpdateProjectData,
-  UpdateUserData,
-  UserId,
-  RegionConfigId,
-  ProjectNest,
-  DistrictsImportApiResponse,
-  S3URI,
-  IReferenceLayer,
-  ReferenceLayerId,
-  CreateReferenceLayerData,
-  IProjectTemplate,
-  CreateProjectTemplateData,
-  IStaticMetadata,
-  UpdateReferenceLayer
+  type CreateProjectData,
+  type IOrganization,
+  type IProject,
+  type IProjectTemplateWithProjects,
+  type IRegionConfig,
+  type IUser,
+  type JWT,
+  type OrganizationSlug,
+  type ProjectId,
+  type ProjectTemplateId,
+  type UpdateProjectData,
+  type UpdateUserData,
+  type UserId,
+  type ProjectNest,
+  type DistrictsImportApiResponse,
+  type S3URI,
+  type IReferenceLayer,
+  type ReferenceLayerId,
+  type CreateReferenceLayerData,
+  type IProjectTemplate,
+  type CreateProjectTemplateData,
+  type IStaticMetadata,
+  type UpdateReferenceLayer
 } from "../shared/entities";
 import { PLANSCORE_POLL_MS, PLANSCORE_POLL_MAX_TRIES } from "../shared/constants";
 import {
-  DistrictsGeoJSON,
-  DynamicProjectData,
-  PaginatedResponse,
-  ReferenceLayerWithGeojson
+  type DistrictsGeoJSON,
+  type DynamicProjectData,
+  type PaginatedResponse,
+  type ReferenceLayerWithGeojson
 } from "./types";
 import { getJWT, setJWT } from "./jwt";
 import { fetchStaticMetadata } from "./s3";
@@ -289,10 +288,7 @@ export async function convertGeoJsonToShapefile(
   saveAs(blob, `${projectName}.zip`);
 }
 
-export async function importCsv(
-  file: Blob,
-  regionURI: S3URI
-): Promise<DistrictsImportApiResponse> {
+export async function importCsv(file: Blob, regionURI: S3URI): Promise<DistrictsImportApiResponse> {
   // CSV parsing + validation runs entirely in the client worker. Previously
   // POSTed to /api/districts/import/csv on the server, but block-level CSVs
   // for large states (TX ~13MB) exceeded Lambda's 6 MB sync-invoke ceiling.

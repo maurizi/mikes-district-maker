@@ -1,10 +1,22 @@
 import { useMemo, useEffect, useState } from "react";
-import { useTable, Row, HeaderGroup, Cell, useSortBy, SortingRule, Column } from "react-table";
+import {
+  useTable,
+  type Row,
+  type HeaderGroup,
+  type Cell,
+  useSortBy,
+  type SortingRule,
+  type Column
+} from "react-table";
 import { Link } from "react-router-dom";
-import { Button, Flex, ThemeUIStyleObject } from "theme-ui";
+import { Button, Flex, type ThemeUIStyleObject } from "theme-ui";
 
 import { ProjectVisibility } from "../../shared/constants";
-import { OrganizationSlug, ProjectNest, IProjectTemplateWithProjects } from "../../shared/entities";
+import {
+  type OrganizationSlug,
+  type ProjectNest,
+  type IProjectTemplateWithProjects
+} from "../../shared/entities";
 
 import { toggleProjectFeatured } from "../actions/organizationProjects";
 import { formatDate } from "../functions";

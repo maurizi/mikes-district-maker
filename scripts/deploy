@@ -20,15 +20,21 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TF_DIR="$ROOT_DIR/deployment/terraform"
 SERVER_DIR="$ROOT_DIR/src/server"
-TF="${TF:-terraform}"
 
 say() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 
+# Terraform runs in the container defined by docker-compose.ci.yml so the host
+# doesn't need its own install. -T disables TTY allocation so output capture
+# works in non-interactive shells (e.g. CI).
+tf() {
+  (cd "$ROOT_DIR" && docker compose -f docker-compose.ci.yml run --rm -T terraform "$@")
+}
+
 # Terraform outputs drive the deploy targets. One read, reused everywhere.
 say "Reading terraform outputs"
-LAMBDA_FUNCTION_NAME=$("$TF" -chdir="$TF_DIR" output -raw lambda_function_name)
-STATIC_BUCKET=$("$TF" -chdir="$TF_DIR" output -raw static_bucket)
-CLOUDFRONT_DIST_ID=$("$TF" -chdir="$TF_DIR" output -raw cloudfront_distribution_id)
+LAMBDA_FUNCTION_NAME=$(tf output -raw lambda_function_name)
+STATIC_BUCKET=$(tf output -raw static_bucket)
+CLOUDFRONT_DIST_ID=$(tf output -raw cloudfront_distribution_id)
 echo "  function:    $LAMBDA_FUNCTION_NAME"
 echo "  static:      $STATIC_BUCKET"
 echo "  cloudfront:  $CLOUDFRONT_DIST_ID"
@@ -130,7 +136,7 @@ say "Zipping lambda bundle"
 ZIP_PATH="$BUNDLE_DIR/lambda.zip"
 (cd "$BUNDLE_DIR" && zip -qr lambda.zip main.js run.sh templates node_modules)
 ZIP_SIZE=$(stat -c%s "$ZIP_PATH")
-echo "  size: $(numfmt --to=iec --suffix=B $ZIP_SIZE)"
+echo "  size: $(numfmt --to=iec --suffix=B "$ZIP_SIZE")"
 
 say "Uploading lambda code"
 # Direct upload limit is 50 MiB. Above that, stage via the static bucket.

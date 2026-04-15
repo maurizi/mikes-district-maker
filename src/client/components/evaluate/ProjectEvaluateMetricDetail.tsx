@@ -1,7 +1,12 @@
-import { Box, Button, Flex, ThemeUIStyleObject, Heading, Text, Select } from "theme-ui";
-import { IProject, IStaticMetadata } from "../../../shared/entities";
+import { Box, Button, Flex, type ThemeUIStyleObject, Heading, Text, Select } from "theme-ui";
+import { type IProject, type IStaticMetadata } from "../../../shared/entities";
 import Icon from "../Icon";
-import { DistrictsGeoJSON, ElectionYear, EvaluateMetricWithValue, PviBucket } from "../../types";
+import {
+  type DistrictsGeoJSON,
+  type ElectionYear,
+  type EvaluateMetricWithValue,
+  type PviBucket
+} from "../../types";
 import store from "../../store";
 import { selectEvaluationMetric } from "../../actions/districtDrawing";
 import ContiguityMetricDetail from "./detail/Contiguity";

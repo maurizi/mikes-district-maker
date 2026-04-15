@@ -1,6 +1,10 @@
-import { Feature, FeatureCollection, MultiPolygon } from "geojson";
+import { type Feature, type FeatureCollection, type MultiPolygon } from "geojson";
 
-import { ProjectVisibility, ReferenceLayerTypes, ReferenceLayerColors } from "./constants";
+import {
+  type ProjectVisibility,
+  type ReferenceLayerTypes,
+  type ReferenceLayerColors
+} from "./constants";
 
 export type UserId = string;
 

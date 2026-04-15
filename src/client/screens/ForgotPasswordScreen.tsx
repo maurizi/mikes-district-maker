@@ -7,8 +7,8 @@ import { initiateForgotPassword } from "../api";
 import CenteredContent from "../components/CenteredContent";
 import { InputField } from "../components/Field";
 import FormError from "../components/FormError";
-import { WriteResource } from "../resource";
-import { AuthLocationState } from "../types";
+import { type WriteResource } from "../resource";
+import { type AuthLocationState } from "../types";
 
 const isFormInvalid = (form: ForgotPasswordForm): boolean =>
   Object.values(form).some(value => value.trim() === "") || !form.email.includes("@");

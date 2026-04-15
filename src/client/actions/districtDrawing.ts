@@ -1,6 +1,6 @@
 import { createAction } from "typesafe-actions";
-import { DistrictId, GeoUnits, ReferenceLayerId } from "../../shared/entities";
-import { SavingState, EvaluateMetricWithValue } from "../types";
+import { type DistrictId, type GeoUnits, type ReferenceLayerId } from "../../shared/entities";
+import { type SavingState, type EvaluateMetricWithValue } from "../types";
 
 export enum SelectionTool {
   Default = "DEFAULT",

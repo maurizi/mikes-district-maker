@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Box, Input, ThemeUIStyleObject } from "theme-ui";
+import { Box, Input, type ThemeUIStyleObject } from "theme-ui";
 import {
   useFloating,
   useClick,
@@ -13,7 +13,7 @@ import {
 } from "@floating-ui/react";
 
 import { capitalizeFirstLetter, officeName, parseVotingId } from "../functions";
-import { IStaticMetadata } from "../../shared/entities";
+import { type IStaticMetadata } from "../../shared/entities";
 import store from "../store";
 import { setMapLabel } from "../actions/districtDrawing";
 import Icon from "./Icon";

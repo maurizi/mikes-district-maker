@@ -1,6 +1,6 @@
 import jwtDecode from "jwt-decode";
 
-import { JWT } from "../shared/entities";
+import { type JWT } from "../shared/entities";
 
 const JWT_ITEM_KEY = "jwt";
 

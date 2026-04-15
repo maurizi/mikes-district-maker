@@ -1,18 +1,18 @@
-import maplibregl from "maplibre-gl";
+import type maplibregl from "maplibre-gl";
 import { connect } from "react-redux";
-import { Box, Button, Flex, Select, Text, ThemeUIStyleObject } from "theme-ui";
+import { Box, Button, Flex, Select, Text, type ThemeUIStyleObject } from "theme-ui";
 import bbox from "@turf/bbox";
 import { polygon } from "@turf/helpers";
 
 import Icon from "../Icon";
 
-import { State } from "../../reducers";
-import { DistrictsGeoJSON } from "../../types";
+import { type State } from "../../reducers";
+import { type DistrictsGeoJSON } from "../../types";
 import { FindTool, setFindIndex, setFindType } from "../../actions/districtDrawing";
 import { getFindCoords } from "../../reducers/projectData";
 import store from "../../store";
 import { destructureResource } from "../../functions";
-import { ChangeEvent, useEffect } from "react";
+import { type ChangeEvent, useEffect } from "react";
 
 const style: Record<string, ThemeUIStyleObject> = {
   menu: {

@@ -10,16 +10,16 @@ import {
   Heading,
   Label,
   Text,
-  ThemeUIStyleObject,
+  type ThemeUIStyleObject,
   Spinner
 } from "theme-ui";
 
 import { userFetch } from "../actions/user";
 import { InputField } from "../components/Field";
-import { State } from "../reducers";
-import { WriteResource } from "../resource";
+import { type State } from "../reducers";
+import { type WriteResource } from "../resource";
 import SiteHeader from "../components/SiteHeader";
-import { IUser } from "../../shared/entities";
+import { type IUser } from "../../shared/entities";
 import RegisterTermsText from "../components/RegisterTermsText";
 import FormError from "../components/FormError";
 import { patchUser } from "../api";
@@ -90,7 +90,7 @@ interface InvalidUserForm extends UserForm {
   readonly valid: false;
 }
 
-const accountDeleteEmail = "districtbuilder@azavea.com";
+const accountDeleteEmail = "michael@maurizi.org";
 
 const validate = (form: UserForm) =>
   form.name.trim() !== "" && form.email.trim() !== ""

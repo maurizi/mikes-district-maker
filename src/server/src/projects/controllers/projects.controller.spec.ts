@@ -1,14 +1,14 @@
 import { Test } from "@nestjs/testing";
-import { ModuleMocker, MockFunctionMetadata } from "jest-mock";
+import { ModuleMocker, type MockFunctionMetadata } from "jest-mock";
 import * as uuid from "uuid";
 
 import { ProjectsController } from "./projects.controller";
-import { Project } from "../entities/project.entity";
+import { type Project } from "../entities/project.entity";
 import { ProjectsService } from "../services/projects.service";
-import { DeepPartial } from "typeorm";
-import { RegionConfig } from "../../region-configs/entities/region-config.entity";
+import { type DeepPartial } from "typeorm";
+import { type RegionConfig } from "../../region-configs/entities/region-config.entity";
 import { DEFAULT_PINNED_METRIC_FIELDS, ProjectVisibility } from "../../../../shared/constants";
-import { CrudRequest } from "@dataui/crud";
+import { type CrudRequest } from "@dataui/crud";
 
 const moduleMocker = new ModuleMocker(global);
 
@@ -75,7 +75,7 @@ describe("ProjectsController", () => {
         if (typeof token === "function") {
           const mockMetadata = moduleMocker.getMetadata(token) as MockFunctionMetadata<any, any>;
           const Mock = moduleMocker.generateFromMetadata(mockMetadata);
-          // eslint-disable-next-line
+
           return new Mock();
         }
       })

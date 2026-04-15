@@ -1,8 +1,8 @@
-import { Box, IconButton, Flex, ThemeUIStyleObject, Heading, Text } from "theme-ui";
+import { Box, IconButton, Flex, type ThemeUIStyleObject, Heading, Text } from "theme-ui";
 
 import Icon from "../Icon";
 import store from "../../store";
-import { EvaluateMetricWithValue } from "../../types";
+import { type EvaluateMetricWithValue } from "../../types";
 import { formatPviByDistrict } from "../../functions";
 import { selectEvaluationMetric, toggleEvaluate } from "../../actions/districtDrawing";
 

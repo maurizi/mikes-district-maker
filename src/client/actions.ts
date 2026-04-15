@@ -1,18 +1,18 @@
-import { Action as ReduxAction } from "redux";
-import { ActionType } from "typesafe-actions";
+import { type Action as ReduxAction } from "redux";
+import { type ActionType } from "typesafe-actions";
 
-import * as authActions from "./actions/auth";
-import * as districtDrawingActions from "./actions/districtDrawing";
-import * as organizationActions from "./actions/organization";
-import * as organizationJoinActions from "./actions/organizationJoin";
-import * as organizationProjectActions from "./actions/organizationProjects";
-import * as projectDataActions from "./actions/projectData";
-import * as projectOptionsActions from "./actions/projectOptions";
-import * as projectModalsActions from "./actions/projectModals";
-import * as projectsActions from "./actions/projects";
-import * as regionConfigActions from "./actions/regionConfig";
-import * as rootActions from "./actions/root";
-import * as userActions from "./actions/user";
+import type * as authActions from "./actions/auth";
+import type * as districtDrawingActions from "./actions/districtDrawing";
+import type * as organizationActions from "./actions/organization";
+import type * as organizationJoinActions from "./actions/organizationJoin";
+import type * as organizationProjectActions from "./actions/organizationProjects";
+import type * as projectDataActions from "./actions/projectData";
+import type * as projectOptionsActions from "./actions/projectOptions";
+import type * as projectModalsActions from "./actions/projectModals";
+import type * as projectsActions from "./actions/projects";
+import type * as regionConfigActions from "./actions/regionConfig";
+import type * as rootActions from "./actions/root";
+import type * as userActions from "./actions/user";
 
 export type AuthAction = ActionType<typeof authActions>;
 export type DistrictDrawingAction = ActionType<typeof districtDrawingActions>;

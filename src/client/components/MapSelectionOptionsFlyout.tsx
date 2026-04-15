@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Checkbox, Flex, Label, Radio, Select, Heading, ThemeUIStyleObject } from "theme-ui";
+import { Checkbox, Flex, Label, Radio, Select, Heading, type ThemeUIStyleObject } from "theme-ui";
 import { Button as MenuButton, Wrapper, Menu } from "react-aria-menubutton";
 import { style as menuStyle } from "./MenuButton.styles";
 import store from "../store";
@@ -11,8 +11,8 @@ import {
 } from "../actions/projectOptions";
 import Tooltip from "./Tooltip";
 import Icon from "./Icon";
-import { IStaticMetadata, GroupTotal } from "../../shared/entities";
-import { ElectionYear } from "../types";
+import { type IStaticMetadata, type GroupTotal } from "../../shared/entities";
+import { type ElectionYear } from "../types";
 import { getOfficeYearCombos, officeName } from "../functions";
 
 const POPULATION_LABELS: { readonly [key: string]: string } = {

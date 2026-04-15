@@ -1,6 +1,6 @@
 import { createAction } from "typesafe-actions";
-import { IProject, ProjectId } from "../../shared/entities";
-import { PaginatedResponse } from "../types";
+import { type IProject, type ProjectId } from "../../shared/entities";
+import { type PaginatedResponse } from "../types";
 
 export const userProjectsFetch = createAction("Projects fetch")();
 export const userProjectsFetchPage = createAction("User projects fetch page")<number>();

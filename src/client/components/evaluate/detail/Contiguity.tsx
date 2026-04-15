@@ -1,6 +1,6 @@
-import { Box, Flex, ThemeUIStyleObject, Heading } from "theme-ui";
-import { DistrictProperties } from "../../../../shared/entities";
-import { DistrictsGeoJSON, EvaluateMetricWithValue } from "../../../types";
+import { Box, Flex, type ThemeUIStyleObject, Heading } from "theme-ui";
+import { type DistrictProperties } from "../../../../shared/entities";
+import { type DistrictsGeoJSON, type EvaluateMetricWithValue } from "../../../types";
 import { CONTIGUITY_FILL_COLOR, EVALUATE_GRAY_FILL_COLOR } from "../../map/index";
 
 const style: Record<string, ThemeUIStyleObject> = {

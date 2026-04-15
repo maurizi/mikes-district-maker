@@ -60,7 +60,6 @@ export class StructuredLoggerExceptionFilter extends BaseExceptionFilter {
         userId: request.user?.id,
         ip: parseIp(request)
       });
-      // eslint-disable-next-line functional/no-expression-statement
       process.stdout.write(payload + "\n");
     }
 

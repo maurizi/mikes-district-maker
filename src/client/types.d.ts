@@ -1,14 +1,14 @@
-import { FeatureCollection, MultiPolygon } from "geojson";
+import { type FeatureCollection, type MultiPolygon } from "geojson";
 import {
   DistrictGeoJSON,
   DistrictsGeoJSON,
-  IProject,
-  IStaticMetadata,
-  TypedArrays,
-  GeoUnitHierarchy,
-  DemographicCounts,
-  PaginationMetadata,
-  IReferenceLayer,
+  type IProject,
+  type IStaticMetadata,
+  type TypedArrays,
+  type GeoUnitHierarchy,
+  type DemographicCounts,
+  type PaginationMetadata,
+  type IReferenceLayer,
   ThumbnailGeoJSON
 } from "../shared/entities";
 

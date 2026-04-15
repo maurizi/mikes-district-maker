@@ -1,5 +1,5 @@
 import { Button } from "theme-ui";
-import { DistrictId } from "../../shared/entities";
+import { type DistrictId } from "../../shared/entities";
 import store from "../store";
 import { setZoomToDistrictId } from "../actions/districtDrawing";
 import Icon from "./Icon";

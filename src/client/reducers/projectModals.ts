@@ -1,7 +1,7 @@
-import { Loop } from "redux-loop";
+import { type Loop } from "redux-loop";
 import { getType } from "typesafe-actions";
 
-import { LoopAction } from "../actions";
+import { type LoopAction } from "../actions";
 
 import {
   showAdvancedEditingModal,

@@ -9,15 +9,15 @@ import PaginationFooter from "../components/PaginationFooter";
 import { userProjectsFetch, userProjectsFetchPage } from "../actions/projects";
 import { userFetch } from "../actions/user";
 import { isUserLoggedIn } from "../jwt";
-import { State } from "../reducers";
-import { UserState } from "../reducers/user";
-import { Resource } from "../resource";
+import { type State } from "../reducers";
+import { type UserState } from "../reducers/user";
+import { type Resource } from "../resource";
 import store from "../store";
-import { IProject, PaginationMetadata } from "../../shared/entities";
+import { type IProject, type PaginationMetadata } from "../../shared/entities";
 import DeleteProjectModal from "../components/DeleteProjectModal";
 import SiteHeader from "../components/SiteHeader";
 import HomeScreenProjectCard from "../components/HomeScreenProjectCard";
-import { SavingState } from "../types";
+import { type SavingState } from "../types";
 import { Navigate } from "react-router-dom";
 import TemplateFromProjectModal from "../components/TemplateFromProjectModal";
 
@@ -41,7 +41,7 @@ const HomeScreen = ({ projects, isSaving, duplicatedProject, user, pagination }:
   }, [isLoggedIn]);
 
   useEffect(() => {
-    document.title = "DistrictBuilder | My Maps";
+    document.title = "Mike's District Maker | My Maps";
   });
 
   return isSaving === "saved" && duplicatedProject !== null ? (
@@ -121,7 +121,7 @@ const HomeScreen = ({ projects, isSaving, duplicatedProject, user, pagination }:
               <Box sx={{ mb: 5 }}>
                 <NoMapsIllustration />
               </Box>
-              <Heading sx={{ variant: "text.h4" }}>Welcome to DistrictBuilder!</Heading>
+              <Heading sx={{ variant: "text.h4" }}>Welcome to Mike&rsquo;s District Maker!</Heading>
               <Text sx={{ fontSize: 3, color: "text", mb: 5, mt: 3 }}>
                 We believe in the power of individuals like you to draw maps that reflect local
                 communities and lead to fair representation. We are excited to see what you build!

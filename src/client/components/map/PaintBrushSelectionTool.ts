@@ -1,18 +1,18 @@
 import throttle from "lodash/throttle";
 import maplibregl from "maplibre-gl";
 import {
-  DistrictsDefinition,
-  FeatureId,
-  GeoUnits,
-  IStaticMetadata,
-  LockedDistricts,
-  TypedArrays
+  type DistrictsDefinition,
+  type FeatureId,
+  type GeoUnits,
+  type IStaticMetadata,
+  type LockedDistricts,
+  type TypedArrays
 } from "../../../shared/entities";
 import booleanIntersects from "@turf/boolean-intersects";
 import distance from "@turf/distance";
 import circle from "@turf/circle";
 import { polygon } from "@turf/turf";
-import { editSelectedGeounits, PaintBrushSize } from "../../actions/districtDrawing";
+import { editSelectedGeounits, type PaintBrushSize } from "../../actions/districtDrawing";
 import { areAnyGeoUnitsSelected, mergeGeoUnits } from "../../functions";
 import paint from "../../media/paint.png";
 import store from "../../store";
@@ -22,7 +22,7 @@ import {
   filterGeoUnits,
   isFeatureSelected,
   levelToSelectionLayerId,
-  ISelectionTool,
+  type ISelectionTool,
   setFeaturesSelectedFromGeoUnits,
   SET_FEATURE_DELAY,
   getChildGeoUnits,

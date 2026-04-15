@@ -62,6 +62,10 @@ export default tseslint.config(
       "@typescript-eslint/restrict-template-expressions": "off",
       "@typescript-eslint/no-floating-promises": "off",
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+      "@typescript-eslint/consistent-type-imports": [
+        "error",
+        { prefer: "type-imports", fixStyle: "inline-type-imports" }
+      ],
       "functional/functional-parameters": "off",
       // "functional/no-conditional-statements": "off",
       // "functional/no-expression-statements": "off",

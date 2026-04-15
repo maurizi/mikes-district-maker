@@ -1,7 +1,7 @@
 import React from "react";
 import { Box } from "theme-ui";
 
-import { WriteResource } from "./../resource";
+import { type WriteResource } from "./../resource";
 
 export default function FormError({
   resource

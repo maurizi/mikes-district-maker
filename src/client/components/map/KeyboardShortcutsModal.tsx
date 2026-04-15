@@ -1,14 +1,14 @@
 import React from "react";
 import AriaModal from "react-aria-modal";
-import { Box, Button, Flex, Heading, ThemeUIStyleObject } from "theme-ui";
+import { Box, Button, Flex, Heading, type ThemeUIStyleObject } from "theme-ui";
 import { connect } from "react-redux";
 
 import { SelectionTool } from "../../actions/districtDrawing";
 import { toggleKeyboardShortcutsModal } from "../../actions/projectModals";
-import { State } from "../../reducers";
+import { type State } from "../../reducers";
 import store from "../../store";
 import { KEYBOARD_SHORTCUTS } from "./keyboardShortcuts";
-import { IStaticMetadata } from "../../../shared/entities";
+import { type IStaticMetadata } from "../../../shared/entities";
 import { hasMultipleElections } from "../../functions";
 
 const style: Record<string, ThemeUIStyleObject> = {

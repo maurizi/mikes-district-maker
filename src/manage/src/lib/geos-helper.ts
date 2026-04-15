@@ -3,7 +3,7 @@
  * No WASM memory limits — uses the system's native GEOS library.
  */
 import koffi from "koffi";
-import { Polygon, MultiPolygon } from "geojson";
+import { type Polygon, type MultiPolygon } from "geojson";
 
 // Opaque pointer types
 const GEOSGeometry = koffi.opaque("GEOSGeometry");

@@ -1,4 +1,4 @@
-import maplibregl from "maplibre-gl";
+import type maplibregl from "maplibre-gl";
 import store from "../../store";
 import { removeSelectedGeounits, editSelectedGeounits } from "../../actions/districtDrawing";
 import {
@@ -6,7 +6,7 @@ import {
   isFeatureSelected,
   featureStateGeoLevel,
   levelToSelectionLayerId,
-  ISelectionTool,
+  type ISelectionTool,
   featuresToGeoUnits,
   onlyUnlockedGeoUnits,
   getChildGeoUnits,
@@ -14,13 +14,13 @@ import {
 } from "./index";
 import { allGeoUnitIds } from "../../functions";
 import {
-  GeoUnits,
-  GeoUnitIndices,
-  DistrictsDefinition,
-  FeatureId,
-  IStaticMetadata,
-  LockedDistricts,
-  TypedArrays
+  type GeoUnits,
+  type GeoUnitIndices,
+  type DistrictsDefinition,
+  type FeatureId,
+  type IStaticMetadata,
+  type LockedDistricts,
+  type TypedArrays
 } from "../../../shared/entities";
 
 function areAllUnlockedChildGeoUnitsSelected(

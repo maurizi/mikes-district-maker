@@ -6,7 +6,7 @@ import { createDataSource } from "../lib/dbUtils";
 import { RegionConfig } from "../../../server/src/region-configs/entities/region-config.entity";
 import { Project } from "../../../server/src/projects/entities/project.entity";
 import { User } from "../../../server/src/users/entities/user.entity";
-import { GeoUnitHierarchy } from "../../../shared/entities";
+import { type GeoUnitHierarchy } from "../../../shared/entities";
 import { getObject, s3Options } from "../../../server/src/common/functions";
 
 const s3 = new S3Client({});

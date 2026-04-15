@@ -7,9 +7,12 @@ import {
   existsSync,
   readFileSync,
   writeFileSync,
-  copyFileSync
+  copyFileSync,
+  unlinkSync
 } from "fs";
-import { Feature, FeatureCollection, MultiPolygon, Polygon } from "geojson";
+import { tmpdir } from "os";
+import { pipeline } from "stream/promises";
+import { type Feature, type FeatureCollection, type MultiPolygon, type Polygon } from "geojson";
 import { parse } from "JSONStream";
 import { JsonStreamStringify } from "json-stream-stringify";
 import groupBy from "lodash/groupBy";
@@ -18,15 +21,20 @@ import { join } from "path";
 import { feature as topo2feature, mergeArcs, quantize } from "topojson-client";
 import { topology } from "topojson-server";
 import { planarTriangleArea, presimplify, simplify } from "topojson-simplify";
-import { GeometryCollection, GeometryObject, Objects, Topology } from "topojson-specification";
+import {
+  type GeometryCollection,
+  type GeometryObject,
+  type Objects,
+  type Topology
+} from "topojson-specification";
 
 import {
-  GeoLevelInfo,
-  GeoUnitDefinition,
-  HierarchyDefinition,
-  IStaticFile,
-  IStaticMetadata,
-  DemographicsGroup
+  type GeoLevelInfo,
+  type GeoUnitDefinition,
+  type HierarchyDefinition,
+  type IStaticFile,
+  type IStaticMetadata,
+  type DemographicsGroup
 } from "../../../shared/entities";
 import { extractAdjacencyData } from "../lib/extract-adjacency";
 import { geojsonPolygonLabels, tileJoin, tippecanoe } from "../lib/cmd";
@@ -262,7 +270,7 @@ max string length of ~512MB).
       this.log("No inputS3Dir provided, no sorting needed");
     } else {
       ux.action.start("Pulling down previous geo-properties for sorting");
-      const prevGeoProperties = await this.readPrevGeoProperties(flags.inputS3Dir);
+      const prevGeoProperties = await this.readPrevGeoProperties(flags.inputS3Dir, geoLevelIds);
       ux.action.stop();
 
       this.log("Sorting TopoJSON based on previous version");
@@ -530,11 +538,14 @@ max string length of ~512MB).
     );
   }
 
-  // Reads previous geo-properties from S3 for sorting. Streams the body and
-  // parses incrementally so we don't blow Node's max string length (≈512MB)
-  // on big states like AL/CA/TX/FL.
+  // Reads previous geo-properties from S3 for sorting. The payload is big
+  // (hundreds of MB for TX/CA/FL) and contains all demographic/voting fields
+  // per feature, but we only need the geoLevelIds fields for sort + verify.
+  // We spool the body to a temp file, then stream-parse per level, projecting
+  // each item down to just the id fields so peak memory stays small.
   async readPrevGeoProperties(
-    inputS3Dir: string
+    inputS3Dir: string,
+    geoLevelIds: readonly string[]
   ): Promise<Record<string, Record<string, unknown>[]>> {
     const s3Client = new S3Client({});
     const uriComponents = inputS3Dir.split("/");
@@ -548,23 +559,36 @@ max string length of ~512MB).
       })
     );
 
-    // Stream-parse the JSON. Top-level object structure is:
-    //   { "<level>": [ {...}, {...}, ... ], ... }
-    // JSONStream pattern `$*` emits {key, value} pairs at the root, so each
-    // top-level array (one per geolevel) arrives as a single JS array — no
-    // intermediate string is ever materialized for the whole payload.
+    const tmpPath = join(tmpdir(), `geo-properties-${process.pid}-${Date.now()}.json`);
     const body = response.Body as unknown as NodeJS.ReadableStream;
-    return await new Promise((resolve, reject) => {
+    await pipeline(body, createWriteStream(tmpPath));
+
+    try {
       const result: Record<string, Record<string, unknown>[]> = {};
-      const parser = parse("$*");
-      parser.on("data", (item: { key: string; value: Record<string, unknown>[] }) => {
-        result[item.key] = item.value;
-      });
-      parser.on("error", reject);
-      parser.on("end", () => resolve(result));
-      body.on("error", reject);
-      body.pipe(parser);
-    });
+      for (const levelId of geoLevelIds) {
+        const items: Record<string, unknown>[] = await new Promise((resolve, reject) => {
+          const out: Record<string, unknown>[] = [];
+          const parser = parse(`${levelId}.*`);
+          parser.on("data", (item: Record<string, unknown>) => {
+            // Project to just the id fields we need — drops demographics/voting/etc
+            const projected: Record<string, unknown> = {};
+            for (const id of geoLevelIds) projected[id] = item[id];
+            out.push(projected);
+          });
+          parser.on("error", reject);
+          parser.on("end", () => resolve(out));
+          createReadStream(tmpPath).pipe(parser);
+        });
+        result[levelId] = items;
+      }
+      return result;
+    } finally {
+      try {
+        unlinkSync(tmpPath);
+      } catch {
+        // ignore
+      }
+    }
   }
 
   // Write TopoJSON file to disk
@@ -963,7 +987,6 @@ max string length of ~512MB).
     prevGeoProperties: Record<string, Record<string, unknown>[]>,
     geoLevelIds: readonly string[]
   ): string | null {
-    const baseLevel = geoLevelIds[0];
     for (const level of geoLevelIds) {
       const newFeatures = (newTopoJson.objects[level] as any).geometries;
       const prevProps = prevGeoProperties[level];
@@ -985,6 +1008,14 @@ max string length of ~512MB).
         prevIndexMap.set(props[level] as string, index);
       });
 
+      const missing = newFeatures.find(
+        (f: any) => !prevIndexMap.has(f.properties[level] as string)
+      );
+      if (missing) {
+        this.log(`Skipping sort for ${level}: geounit set changed`);
+        continue;
+      }
+
       // Sort new TopoJSON using previous ordering
       newFeatures.sort((x: any, y: any) =>
         prevIndexMap.get(x.properties[level])! > prevIndexMap.get(y.properties[level])! ? 1 : -1
@@ -994,12 +1025,11 @@ max string length of ~512MB).
       for (let i = 0; i < newFeatures.length; i++) {
         const newProperties = newFeatures[i].properties;
         const prevProperties = prevProps[i];
-        const baseId = newProperties[baseLevel];
         for (const geoLevel of geoLevelIds) {
           const newProp = newProperties[geoLevel];
           const prevProp = prevProperties[geoLevel];
           if (newProp !== prevProp) {
-            return `new ${geoLevel} is: ${newProp}, was: ${prevProp} for ${baseLevel}: ${baseId}`;
+            return `new ${geoLevel} is: ${newProp}, was: ${prevProp} at ${level}: ${newProperties[level]}`;
           }
         }
       }

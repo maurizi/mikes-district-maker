@@ -1,12 +1,12 @@
 import { Component } from "react";
-import { Joyride, EventData, STATUS, Step } from "react-joyride";
-import { IProject, IStaticMetadata, IUser } from "../../shared/entities";
+import { Joyride, type EventData, STATUS, type Step } from "react-joyride";
+import { type IProject, type IStaticMetadata, type IUser } from "../../shared/entities";
 import { patchUser } from "../api";
 import { geoLevelLabel, getPopulationPerRepresentative } from "../functions";
 import SalamanderIllustration from "../media/tour-salamander-builder.svg?react";
 import tourClickingGif from "../media/tour-clicking-counties-sidebar.gif";
 import tourCountiesGif from "../media/tour-counties-blockgroups.gif";
-import { DistrictsGeoJSON } from "../types";
+import { type DistrictsGeoJSON } from "../types";
 
 interface Props {
   readonly geojson: DistrictsGeoJSON;
@@ -48,10 +48,10 @@ class Tour extends Component<Props, State> {
       run: !props.user.hasSeenTour,
       steps: [
         {
-          title: "Welcome to DistrictBuilder!",
+          title: "Welcome to Mike's District Maker!",
           content: (
             <div>
-              <SalamanderIllustration width="135px" />
+              <SalamanderIllustration width="200px" height="200px" />
               <p>
                 Do you want help building
                 <br />
@@ -79,7 +79,7 @@ class Tour extends Component<Props, State> {
           content: (
             <p>
               Great! I’ll walk you through some redistricting basics and show you how to get started
-              with DistrictBuilder.
+              with Mike&rsquo;s District Maker.
             </p>
           ),
           placement: "center",
@@ -97,7 +97,7 @@ class Tour extends Component<Props, State> {
               Your objective: build <strong>{numberOfDistricts} districts</strong> for{" "}
               <strong>{regionConfig}, </strong>
               each with a population of <strong>{population}</strong> per representative. Use
-              DistrictBuilder to group {availableGeolevelsText} into districts.
+              Mike&rsquo;s District Maker to group {availableGeolevelsText} into districts.
             </p>
           ),
           skipBeacon: true,
@@ -254,8 +254,8 @@ class Tour extends Component<Props, State> {
           content: (
             <p>
               You can find additional tutorials and contact us in the <strong>Resources</strong>{" "}
-              menu. Thank you for using DistrictBuilder and fighting for fair and transparent
-              redistricting!
+              menu. Thank you for using Mike&rsquo;s District Maker and fighting for fair and
+              transparent redistricting!
             </p>
           ),
           placement: "auto",

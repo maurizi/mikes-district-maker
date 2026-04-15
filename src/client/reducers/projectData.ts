@@ -1,7 +1,7 @@
-import { Cmd, Loop, loop } from "redux-loop";
+import { Cmd, type Loop, loop } from "redux-loop";
 import { getType } from "typesafe-actions";
 
-import { LoopAction } from "../actions";
+import { type LoopAction } from "../actions";
 import {
   exportCsv,
   exportCsvFailure,
@@ -61,16 +61,21 @@ import {
 } from "../actions/districtDrawing";
 import { updateCurrentState } from "../reducers/undoRedo";
 import {
-  DistrictsDefinition,
-  IProject,
-  IReferenceLayer,
-  IStaticMetadata,
-  S3URI
+  type DistrictsDefinition,
+  type IProject,
+  type IReferenceLayer,
+  type IStaticMetadata,
+  type S3URI
 } from "../../shared/entities";
-import { ProjectState, initialProjectState } from "./project";
+import { type ProjectState, initialProjectState } from "./project";
 import { resetProjectState } from "../actions/root";
-import { DistrictsGeoJSON, DynamicProjectData, SavingState, StaticProjectData } from "../types";
-import { Resource } from "../resource";
+import {
+  type DistrictsGeoJSON,
+  type DynamicProjectData,
+  type SavingState,
+  type StaticProjectData
+} from "../types";
+import { type Resource } from "../resource";
 
 import {
   allGeoUnitIndices,

@@ -1,16 +1,16 @@
 import AriaModal from "react-aria-modal";
 import { connect } from "react-redux";
 
-import { Box, ThemeUIStyleObject } from "theme-ui";
+import { Box, type ThemeUIStyleObject } from "theme-ui";
 
-import { IOrganization, IUser } from "../../shared/entities";
+import { type IOrganization, type IUser } from "../../shared/entities";
 import { showCopyMapModal } from "../actions/projectModals";
-import { State } from "../reducers";
+import { type State } from "../reducers";
 import store from "../store";
 import { AuthModalContent } from "./AuthComponents";
 import ConfirmJoinOrganization from "./ConfirmJoinOrganization";
-import { Resource } from "../resource";
-import { CreateProjectData } from "../../shared/entities";
+import { type Resource } from "../resource";
+import { type CreateProjectData } from "../../shared/entities";
 
 const style: Record<string, ThemeUIStyleObject> = {
   footer: {

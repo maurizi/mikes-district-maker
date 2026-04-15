@@ -1,4 +1,4 @@
-import { Middleware } from "redux";
+import { type Middleware } from "redux";
 import { getType } from "typesafe-actions";
 import { updateDistrictsDefinition, projectFetch } from "./actions/projectData";
 import { userProjectsFetch } from "./actions/projects";
@@ -18,7 +18,7 @@ const rumMiddleware: Middleware = () => next => action => {
   if (awsRum && action && typeof action.type === "string" && trackingActionTypes.has(action.type)) {
     awsRum.recordEvent(action.type, { payload: action.payload });
   }
-  return next(action);
+  return next(action) as unknown;
 };
 
 export default rumMiddleware;

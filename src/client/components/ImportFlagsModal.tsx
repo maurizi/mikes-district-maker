@@ -1,12 +1,12 @@
 import AriaModal from "react-aria-modal";
 import { connect } from "react-redux";
 
-import { Box, Heading, ThemeUIStyleObject, Button } from "theme-ui";
+import { Box, Heading, type ThemeUIStyleObject, Button } from "theme-ui";
 
 import { setImportFlagsModal } from "../actions/projectModals";
-import { State } from "../reducers";
+import { type State } from "../reducers";
 import store from "../store";
-import { ImportRowFlag } from "../../shared/entities";
+import { type ImportRowFlag } from "../../shared/entities";
 import { MAX_IMPORT_ERRORS } from "../../shared/constants";
 
 const style: Record<string, ThemeUIStyleObject> = {

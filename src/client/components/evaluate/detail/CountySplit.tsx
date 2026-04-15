@@ -1,7 +1,7 @@
-import { Box, Flex, ThemeUIStyleObject, Heading } from "theme-ui";
-import { IProject, IStaticMetadata } from "../../../../shared/entities";
+import { Box, Flex, type ThemeUIStyleObject, Heading } from "theme-ui";
+import { type IProject, type IStaticMetadata } from "../../../../shared/entities";
 import { getLabelLookup } from "../../map/labels";
-import { EvaluateMetricWithValue } from "../../../types";
+import { type EvaluateMetricWithValue } from "../../../types";
 import { geoLevelLabel, geoLevelLabelSingular } from "../../../functions";
 
 const style: Record<string, ThemeUIStyleObject> = {

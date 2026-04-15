@@ -1,6 +1,6 @@
-import { Box, Flex, ThemeUIStyleObject, Heading } from "theme-ui";
+import { Box, Flex, type ThemeUIStyleObject, Heading } from "theme-ui";
 import { getEqualPopulationStops } from "../../map/index";
-import { DistrictsGeoJSON, EvaluateMetricWithValue } from "../../../types";
+import { type DistrictsGeoJSON, type EvaluateMetricWithValue } from "../../../types";
 import { computeRowFill } from "../../../functions";
 
 const style: Record<string, ThemeUIStyleObject> = {

@@ -2,7 +2,7 @@ import AriaModal from "react-aria-modal";
 import { Box, Button, Flex, Heading } from "theme-ui";
 
 import Icon from "./Icon";
-import { IOrganization } from "../../shared/entities";
+import { type IOrganization } from "../../shared/entities";
 import store from "../store";
 import { archiveTemplate, setArchiveTemplate } from "../actions/organization";
 

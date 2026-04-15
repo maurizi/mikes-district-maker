@@ -1,7 +1,7 @@
 import { Box } from "theme-ui";
 import { Button as MenuButton, Wrapper, Menu, MenuItem } from "react-aria-menubutton";
 import Icon from "../components/Icon";
-import { IProject } from "../../shared/entities";
+import { type IProject } from "../../shared/entities";
 import { style, invertStyles } from "./MenuButton.styles";
 import store from "../store";
 import { exportCsv, exportGeoJson, exportShp } from "../actions/projectData";

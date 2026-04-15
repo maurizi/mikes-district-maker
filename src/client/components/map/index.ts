@@ -1,23 +1,24 @@
-import maplibregl, { MapGeoJSONFeature } from "maplibre-gl";
+import { type MapGeoJSONFeature } from "maplibre-gl";
+import type maplibregl from "maplibre-gl";
 import { cloneDeep } from "lodash";
 import { s3ToHttps } from "../../s3";
 import {
-  GeoUnitCollection,
-  DistrictId,
-  DistrictsDefinition,
-  FeatureId,
-  GeoLevelInfo,
-  GeoUnitIndices,
-  GeoUnits,
-  MutableGeoUnits,
-  IStaticMetadata,
-  LockedDistricts,
-  TypedArrays
+  type GeoUnitCollection,
+  type DistrictId,
+  type DistrictsDefinition,
+  type FeatureId,
+  type GeoLevelInfo,
+  type GeoUnitIndices,
+  type GeoUnits,
+  type MutableGeoUnits,
+  type IStaticMetadata,
+  type LockedDistricts,
+  type TypedArrays
 } from "../../../shared/entities";
 import { getAllIndices } from "../../../shared/functions";
 import { isBaseGeoLevelAlwaysVisible } from "../../functions";
 import { mapValues } from "lodash";
-import { ChoroplethSteps, PviBucket, DistrictsGeoJSON } from "../../types";
+import { type ChoroplethSteps, type PviBucket, type DistrictsGeoJSON } from "../../types";
 
 // Vector tiles with geolevel data for this geography
 export const GEOLEVELS_SOURCE_ID = "db";
@@ -757,9 +758,8 @@ export function getGeoLevelVisibility(
 }
 
 export interface ISelectionTool {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   enable: (map: maplibregl.Map, ...args: any[]) => void;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   disable: (map: maplibregl.Map, ...args: any[]) => void;
   setCursor?: () => void;
   unsetCursor?: () => void;

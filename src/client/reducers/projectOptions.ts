@@ -1,8 +1,8 @@
-import { Loop } from "redux-loop";
+import { type Loop } from "redux-loop";
 import { getType } from "typesafe-actions";
 
-import { LoopAction } from "../actions";
-import { ElectionYear } from "../types";
+import { type LoopAction } from "../actions";
+import { type ElectionYear } from "../types";
 
 import {
   toggleLimitDrawingToWithinCounty,
@@ -11,7 +11,7 @@ import {
   setPopulationKey
 } from "../actions/projectOptions";
 import { resetProjectState } from "../actions/root";
-import { GroupTotal } from "../../shared/entities";
+import { type GroupTotal } from "../../shared/entities";
 
 export interface ProjectOptionsState {
   readonly limitSelectionToCounty: boolean;

@@ -1,17 +1,17 @@
 import throttle from "lodash/throttle";
-import maplibregl from "maplibre-gl";
+import type maplibregl from "maplibre-gl";
 import React, { useEffect, useRef, useState } from "react";
 import { connect } from "react-redux";
-import { Box, Divider, Heading, Grid, ThemeUIStyleObject } from "theme-ui";
+import { Box, Divider, Heading, Grid, type ThemeUIStyleObject } from "theme-ui";
 
 import {
-  DemographicCounts,
-  GeoUnits,
-  IProject,
-  IStaticMetadata,
-  GroupTotal
+  type DemographicCounts,
+  type GeoUnits,
+  type IProject,
+  type IStaticMetadata,
+  type GroupTotal
 } from "../../../shared/entities";
-import { ElectionYear } from "../../types";
+import { type ElectionYear } from "../../types";
 
 import {
   areAnyGeoUnitsSelected,
@@ -22,7 +22,7 @@ import {
 } from "../../functions";
 import { getTotalSelectedDemographics } from "../../worker-functions";
 import { featuresToGeoUnits, SET_FEATURE_DELAY } from "./index";
-import { State } from "../../reducers";
+import { type State } from "../../reducers";
 import DemographicsTooltip from "../DemographicsTooltip";
 import VotingMapTooltip from "../VotingMapTooltip";
 import { levelToLineLayerId, levelToSelectionLayerId } from ".";

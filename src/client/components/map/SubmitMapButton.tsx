@@ -3,10 +3,10 @@ import { Button as MenuButton, Menu, Wrapper } from "react-aria-menubutton";
 import { connect } from "react-redux";
 import { Box, Button, Heading } from "theme-ui";
 
-import { IProject } from "../../../shared/entities";
+import { type IProject } from "../../../shared/entities";
 import { projectSubmit } from "../../actions/projectData";
 import { showSubmitMapModal } from "../../actions/projectModals";
-import { State } from "../../reducers";
+import { type State } from "../../reducers";
 import store from "../../store";
 import Icon from "../Icon";
 import { style as menuButtonStyle } from "../MenuButton.styles";

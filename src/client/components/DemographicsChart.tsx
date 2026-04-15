@@ -2,7 +2,7 @@ import { Box, Flex } from "theme-ui";
 
 import { demographicsColors } from "../constants/colors";
 import { DEMOGRAPHIC_FIELDS_ORDER } from "../../shared/constants";
-import { GroupTotal, DemographicsGroup } from "../../shared/entities";
+import { type GroupTotal, type DemographicsGroup } from "../../shared/entities";
 import { getDemographicsPercentages } from "../functions";
 
 const Bar = ({ width, color }: { readonly width: string; readonly color: string }) => (

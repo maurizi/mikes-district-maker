@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
-import { Flex, ThemeUIStyleObject } from "theme-ui";
+import { Flex, type ThemeUIStyleObject } from "theme-ui";
 
-import { IProject, RegionConfigId, ChamberId } from "../../shared/entities";
+import { type IProject, type RegionConfigId, type ChamberId } from "../../shared/entities";
 import { regionConfigsFetch } from "../actions/regionConfig";
 import { createProject } from "../api";
-import { WriteResource } from "../resource";
+import { type WriteResource } from "../resource";
 import store from "../store";
 
 const validate = (form: ProjectForm): ValidForm | InvalidForm => {
@@ -86,7 +86,7 @@ export default () => {
       Error creating a project for this link.
       <p>
         Please contact&nbsp;
-        <a href="mailto:support@districtbuilder.org">support@districtbuilder.org</a> for help.
+        <a href="mailto:michael@maurizi.org">michael@maurizi.org</a> for help.
       </p>
     </Flex>
   ) : (

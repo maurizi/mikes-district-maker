@@ -53,6 +53,10 @@ export default tseslint.config(
       "@typescript-eslint/no-unsafe-call": "off",
       "@typescript-eslint/no-unsafe-member-access": "off",
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+      "@typescript-eslint/consistent-type-imports": [
+        "error",
+        { prefer: "type-imports", fixStyle: "inline-type-imports" }
+      ],
       "@typescript-eslint/prefer-readonly-parameter-types": "off",
       "@typescript-eslint/restrict-template-expressions": "off",
       "@typescript-eslint/no-unsafe-argument": "off",

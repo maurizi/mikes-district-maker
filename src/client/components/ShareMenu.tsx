@@ -1,9 +1,9 @@
-import { Box, Button, Input, Flex, Label, Radio, ThemeUIStyleObject } from "theme-ui";
+import { Box, Button, Input, Flex, Label, Radio, type ThemeUIStyleObject } from "theme-ui";
 import { Button as MenuButton, Wrapper, Menu, MenuItem } from "react-aria-menubutton";
 import { useClipboard } from "use-clipboard-copy";
 
 import { ProjectVisibility } from "../../shared/constants";
-import { IProject } from "../../shared/entities";
+import { type IProject } from "../../shared/entities";
 import { updateProjectVisibility } from "../actions/projectData";
 import Icon from "../components/Icon";
 import store from "../store";
@@ -145,7 +145,7 @@ const ShareMenu = ({ invert, project }: ShareProps) => {
                 <Box>
                   <Label sx={style.label}>Published</Label>
                   <Box sx={style.description} id="project-share-published">
-                    Anyone on the DistrictBuilder website or with the link can view
+                    Anyone on the Mike&rsquo;s District Maker website or with the link can view
                   </Box>
                 </Box>
               </Flex>

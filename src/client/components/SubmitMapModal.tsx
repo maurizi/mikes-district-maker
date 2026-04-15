@@ -1,10 +1,10 @@
 import AriaModal from "react-aria-modal";
 import { connect } from "react-redux";
-import { Box, Button, Flex, Heading, ThemeUIStyleObject } from "theme-ui";
+import { Box, Button, Flex, Heading, type ThemeUIStyleObject } from "theme-ui";
 
-import { IProject } from "../../shared/entities";
+import { type IProject } from "../../shared/entities";
 import { showSubmitMapModal } from "../actions/projectModals";
-import { State } from "../reducers";
+import { type State } from "../reducers";
 import store from "../store";
 
 const style: Record<string, ThemeUIStyleObject> = {

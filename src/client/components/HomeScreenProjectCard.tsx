@@ -1,7 +1,7 @@
-import { Box, Flex, Heading, Text, ThemeUIStyleObject } from "theme-ui";
+import { Box, Flex, Heading, Text, type ThemeUIStyleObject } from "theme-ui";
 import { useNavigate } from "react-router-dom";
 
-import { IProject } from "../../shared/entities";
+import { type IProject } from "../../shared/entities";
 import ProjectListFlyout from "./ProjectListFlyout";
 import TimeAgo from "timeago-react";
 import ProjectDistrictsMap from "./map/ProjectDistrictsMap";

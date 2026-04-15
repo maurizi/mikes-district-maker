@@ -2,16 +2,18 @@ import { Args, Command, Flags } from "@oclif/core";
 import {
   writeFileSync,
   readFileSync,
+  readdirSync,
   mkdirSync,
   existsSync,
   createWriteStream,
   createReadStream,
   writeSync
 } from "fs";
+import { parseBlockDistrictCsv } from "../../../shared/csv-import";
 import { dirname, join } from "path";
 import { tmpdir } from "os";
 import RBush from "rbush";
-import { MultiPolygon, Polygon } from "geojson";
+import { type MultiPolygon, type Polygon } from "geojson";
 
 import { GeosHelper } from "../lib/geos-helper";
 import {
@@ -84,6 +86,10 @@ export default class PrepareDevData extends Command {
       description:
         "Additional VEST zips for other election years, comma-separated as precinctField:path pairs",
       default: ""
+    }),
+    befDir: Flags.string({
+      description:
+        "Directory containing per-state BEF CSV subdirectories (e.g. dev-data/befs). Blocks referenced in any CSV under <befDir>/<stateAbbr>/ are allowed to fall back to the nearest precinct when outside precinct coverage; all other blocks outside precinct coverage are dropped."
     })
   };
 
@@ -106,6 +112,35 @@ export default class PrepareDevData extends Command {
     mkdirSync(tmp, { recursive: true });
 
     this.log(`Preparing dev data for ${stateAbbr} (FIPS ${stateFips})`);
+
+    // Load block GEOIDs referenced in official district CSVs for this state.
+    // Blocks in this set are allowed to fall back to nearest-precinct when
+    // outside real precinct coverage (needed so official district imports
+    // cover stray water blocks). Blocks not in this set are dropped when
+    // outside coverage, and we fail loudly if a dropped block carries
+    // population data.
+    const blocksInBef = new Set<string>();
+    if (flags.befDir) {
+      const stateBefDir = join(flags.befDir, stateAbbr);
+      if (!existsSync(stateBefDir)) {
+        this.log(
+          `   WARNING: --befDir set but ${stateBefDir} does not exist; running in strict mode (no nearest-precinct fallback)`
+        );
+      } else {
+        const csvFiles = readdirSync(stateBefDir).filter(
+          f => f.endsWith(".csv") && !f.includes("_district_names")
+        );
+        for (const f of csvFiles) {
+          const records = parseBlockDistrictCsv(readFileSync(join(stateBefDir, f), "utf-8"));
+          for (const [blockId] of records) blocksInBef.add(blockId);
+        }
+        this.log(
+          `   Loaded ${blocksInBef.size} block GEOIDs from ${csvFiles.length} BEF CSVs in ${stateBefDir}`
+        );
+      }
+    } else {
+      this.log("   No --befDir provided; running in strict mode (no nearest-precinct fallback)");
+    }
 
     // ── Step 1: Get Census blocks + demographics ──
     let blockFeatures: GeoJSON.Feature[];
@@ -732,17 +767,22 @@ export default class PrepareDevData extends Command {
           }
         }
 
-        // Fallback: nearest precinct by R-tree bbox center distance. Keeps
-        // water/offshore blocks in the output (assigned to the nearest
-        // on-land precinct) so they contribute to geometry / contiguity /
-        // compactness downstream.
-        if (intersectingPrecinct === -1) {
+        // Fallback: nearest precinct by R-tree bbox center distance. Only
+        // applied to blocks that are referenced in an official district CSV
+        // (blocksInBef) — they need to exist in the output even though they
+        // sit outside real precinct coverage. Other blocks with no precinct
+        // intersection are dropped in this pass.
+        const deferredGeoId = (blockFeatures[df.blockIdx].properties as Record<string, any>)
+          .GEOID20 as string;
+        if (intersectingPrecinct === -1 && blocksInBef.has(deferredGeoId)) {
           const cx = (fMinX + fMaxX) / 2;
           const cy = (fMinY + fMaxY) / 2;
           let bestDist = Infinity;
           const allCands = precinctTree.search({
-            minX: cx - 1.0, minY: cy - 1.0,
-            maxX: cx + 1.0, maxY: cy + 1.0
+            minX: cx - 1.0,
+            minY: cy - 1.0,
+            maxX: cx + 1.0,
+            maxY: cy + 1.0
           });
           for (const pc of allCands) {
             const pcx = (pc.minX + pc.maxX) / 2;
@@ -809,25 +849,39 @@ export default class PrepareDevData extends Command {
         const blockProps = blockFeatures[bi].properties as Record<string, any>;
         const geoId = blockProps.GEOID20 as string;
         const demo = blockDemographics.get(geoId);
-        if (!demo) { missNoDemo++; continue; }
+        if (!demo) {
+          missNoDemo++;
+          continue;
+        }
         const g = blockGeoms[bi];
-        if (!g) { stillMissing++; missNoGeom++; continue; }
+        if (!g) {
+          stillMissing++;
+          missNoGeom++;
+          continue;
+        }
 
         // Find a precinct for this block. Try containment first, then
         // intersection, then nearest by bbox center. These blocks are
         // typically offshore/water where VEST precincts don't extend.
         let precinctIdx = -1;
         const rp = geosHelper.pointOnSurface(g);
-        if (!rp) { stillMissing++; missNoRP++; continue; }
+        if (!rp) {
+          stillMissing++;
+          missNoRP++;
+          continue;
+        }
         const rpWkt = geosHelper.toWkt(rp);
         const rpMatch = rpWkt?.match(/-?\d+\.?\d*/g);
-        let rpx = 0, rpy = 0;
+        let rpx = 0,
+          rpy = 0;
         if (rpMatch && rpMatch.length >= 2) {
           rpx = parseFloat(rpMatch[0]) / COORD_SCALE;
           rpy = parseFloat(rpMatch[1]) / COORD_SCALE;
           const precCands = precinctTree.search({
-            minX: rpx - 0.001, minY: rpy - 0.001,
-            maxX: rpx + 0.001, maxY: rpy + 0.001
+            minX: rpx - 0.001,
+            minY: rpy - 0.001,
+            maxX: rpx + 0.001,
+            maxY: rpy + 0.001
           });
           for (const pc of precCands) {
             if ((geosHelper as any)._Contains(precinctGeoms[pc.index], rp) === 1) {
@@ -841,8 +895,10 @@ export default class PrepareDevData extends Command {
         // Fallback: intersection test with an expanded search, then nearest
         if (precinctIdx === -1 && rpMatch && rpMatch.length >= 2) {
           const precCands = precinctTree.search({
-            minX: rpx - 0.1, minY: rpy - 0.1,
-            maxX: rpx + 0.1, maxY: rpy + 0.1
+            minX: rpx - 0.1,
+            minY: rpy - 0.1,
+            maxX: rpx + 0.1,
+            maxY: rpy + 0.1
           });
           for (const pc of precCands) {
             if ((geosHelper as any)._Intersects(precinctGeoms[pc.index], g) === 1) {
@@ -851,12 +907,16 @@ export default class PrepareDevData extends Command {
             }
           }
         }
-        if (precinctIdx === -1 && rpMatch && rpMatch.length >= 2) {
-          // Nearest-precinct fallback: use precinct R-tree bbox center distance
+        if (precinctIdx === -1 && rpMatch && rpMatch.length >= 2 && blocksInBef.has(geoId)) {
+          // Nearest-precinct fallback: only for blocks referenced in an
+          // official district CSV — these need to survive even though they
+          // sit outside real precinct coverage.
           let bestDist = Infinity;
           const allCands = precinctTree.search({
-            minX: rpx - 1.0, minY: rpy - 1.0,
-            maxX: rpx + 1.0, maxY: rpy + 1.0
+            minX: rpx - 1.0,
+            minY: rpy - 1.0,
+            maxX: rpx + 1.0,
+            maxY: rpy + 1.0
           });
           for (const pc of allCands) {
             const cx = (pc.minX + pc.maxX) / 2;
@@ -868,23 +928,54 @@ export default class PrepareDevData extends Command {
             }
           }
         }
-        if (precinctIdx === -1) { stillMissing++; missNoPrec++; continue; }
+        if (precinctIdx === -1) {
+          // About to drop this block. Fail loudly if it carries population
+          // or any demographic data — that's a signal the BEF set is
+          // incomplete and the user needs to add this block to an official
+          // district CSV (or otherwise investigate).
+          const hasData =
+            (demo.population || 0) > 0 ||
+            (demo.VAP || 0) > 0 ||
+            (demo.CVAP || 0) > 0 ||
+            (demo.white || 0) > 0 ||
+            (demo.black || 0) > 0 ||
+            (demo.asian || 0) > 0 ||
+            (demo.hispanic || 0) > 0 ||
+            (demo.other || 0) > 0;
+          if (hasData) {
+            this.error(
+              `Block ${geoId} has no precinct coverage and is not in any official district CSV, but carries demographic data (population=${demo.population || 0}). Add it to a BEF CSV under --befDir, or investigate why it lacks precinct coverage.`
+            );
+          }
+          stillMissing++;
+          missNoPrec++;
+          continue;
+        }
 
         // Clone the block's own geometry as a synthetic face
         const wkt = geosHelper.toWkt(g);
-        if (!wkt) { stillMissing++; missNoWKT++; continue; }
-        const cloned = (geosHelper as any)._WKTReader_read(
-          (geosHelper as any).reader, wkt
-        );
+        if (!wkt) {
+          stillMissing++;
+          missNoWKT++;
+          continue;
+        }
+        const cloned = (geosHelper as any)._WKTReader_read((geosHelper as any).reader, wkt);
         const areaOut = [0];
         (geosHelper as any)._Area(cloned, areaOut);
-        facesByBlock.set(bi, [{
-          geom: cloned, area: areaOut[0], blockIdx: bi, precinctIdx
-        }]);
+        facesByBlock.set(bi, [
+          {
+            geom: cloned,
+            area: areaOut[0],
+            blockIdx: bi,
+            precinctIdx
+          }
+        ]);
         rescued++;
         if ((demo.population || 0) > 0) rescuedPopulated++;
       }
-      this.log(`   Third pass (rescue): recovered ${rescued} (${rescuedPopulated} populated), still-missing ${stillMissing} [noDemo=${missNoDemo} noGeom=${missNoGeom} noRP=${missNoRP} noPrec=${missNoPrec} noWKT=${missNoWKT}]`);
+      this.log(
+        `   Third pass (rescue): recovered ${rescued} (${rescuedPopulated} populated), still-missing ${stillMissing} [noDemo=${missNoDemo} noGeom=${missNoGeom} noRP=${missNoRP} noPrec=${missNoPrec} noWKT=${missNoWKT}]`
+      );
     }
 
     // ── Build output features from faces ──
@@ -935,6 +1026,42 @@ export default class PrepareDevData extends Command {
       }
     };
 
+    // Sub-blocks below these thresholds will topo-degenerate (collapse to zero
+    // area after presimplify + quantize). Set just above the quantization grid
+    // cell (~1m at 1e5) — anything larger is renderable. We deliberately do
+    // NOT use a relative ratio here: a sub-block that's 0.1% of a 50,000m²
+    // block is still 50m², which is a real precinct fragment, and culling it
+    // breaks district contiguity when the precinct relies on that block.
+    const MIN_SUB_AREA_M2 = 5;
+    const MIN_SUB_WIDTH_M = 2;
+
+    // Two-pass plan:
+    //   Pass 1 classifies each block's precincts into viable / sliver using
+    //   the tier-1 thresholds (ratio + absolute area + width).
+    //   Rescue step then promotes slivers back to viable for any precinct
+    //   that ended up with zero viable blocks anywhere, so long as the sliver
+    //   passes the looser tier-2 threshold (absolute area + width only).
+    //   This keeps precincts alive that exist only as sub-block fragments.
+    //   Pass 2 emits features from the (possibly rescued) plans.
+    type BlockPlan = {
+      blockFeature: any;
+      geoId: string;
+      countyFp: string;
+      demo: any;
+      faces: FaceInfo[];
+      byPrecinct: Map<number, FaceInfo[]>;
+      precinctAreas: Map<number, number>;
+      blockArea: number;
+      viable: Set<number>;
+      slivers: Set<number>;
+    };
+    const blockPlans: BlockPlan[] = [];
+    const precinctViableSomewhere = new Set<number>();
+    const sliverCandidates = new Map<
+      number,
+      { planIdx: number; areaM2: number; widthM: number }[]
+    >();
+
     for (let bi = 0; bi < blockFeatures.length; bi++) {
       const blockFeature = blockFeatures[bi];
       const blockProps = blockFeature.properties as Record<string, any>;
@@ -945,66 +1072,54 @@ export default class PrepareDevData extends Command {
 
       const faces = facesByBlock.get(bi);
       if (!faces || faces.length === 0) {
+        // Last safety net: if we're about to silently drop a block that
+        // carries demographic data, fail loudly. In practice all such drops
+        // should have already been caught in the third-pass rescue.
+        const hasData =
+          (demo.population || 0) > 0 ||
+          (demo.VAP || 0) > 0 ||
+          (demo.CVAP || 0) > 0 ||
+          (demo.white || 0) > 0 ||
+          (demo.black || 0) > 0 ||
+          (demo.asian || 0) > 0 ||
+          (demo.hispanic || 0) > 0 ||
+          (demo.other || 0) > 0;
+        if (hasData) {
+          this.error(
+            `Block ${geoId} has demographic data (population=${demo.population || 0}) but no faces were assigned. Add it to a BEF CSV under --befDir, or investigate why it lacks precinct coverage.`
+          );
+        }
         noMatch++;
         continue;
       }
 
-      // Group by precinct
       const byPrecinct = new Map<number, FaceInfo[]>();
       for (const f of faces) {
         if (!byPrecinct.has(f.precinctIdx)) byPrecinct.set(f.precinctIdx, []);
         byPrecinct.get(f.precinctIdx)!.push(f);
       }
 
+      const blockArea = faces.reduce((s, f) => s + f.area, 0);
+
+      // Single-precinct block: no threshold math, precinct is trivially viable.
       if (byPrecinct.size === 1) {
-        // Single precinct — use noded geometry (not original) so arcs are shared
         const pi = faces[0].precinctIdx;
-        const pData = precinctVoting.get(pi)!;
-        let merged = faces[0].geom;
-        for (let fi = 1; fi < faces.length; fi++) {
-          const u = geosHelper.union(merged, faces[fi].geom);
-          geosHelper.free(merged);
-          geosHelper.free(faces[fi].geom);
-          merged = u;
-        }
-        const geoJSON = geosHelper.toGeoJSONScaled(merged, COORD_SCALE);
-        geosHelper.free(merged);
-        singlePrecinct++;
-        {
-          const props = buildBlockProps(
-            geoId,
-            pData.precinctId,
-            countyFp,
-            countyNames,
-            demo,
-            pData.votes,
-            pData.totalVotes,
-            officesFound,
-            detectedYear
-          );
-          require("fs").writeSync(geomFd, JSON.stringify(geoJSON || blockFeature.geometry) + "\n"); // eslint-disable-line
-          trackAssignment(pi, featureProps.length, demo.population || 0);
-          featureProps.push(props);
-        }
+        precinctViableSomewhere.add(pi);
+        blockPlans.push({
+          blockFeature,
+          geoId,
+          countyFp,
+          demo,
+          faces,
+          byPrecinct,
+          precinctAreas: new Map([[pi, blockArea]]),
+          blockArea,
+          viable: new Set([pi]),
+          slivers: new Set()
+        });
         continue;
       }
 
-      // Multiple precincts — split
-      const blockArea = faces.reduce((s, f) => s + f.area, 0);
-      const MIN_AREA_RATIO = demo.population === 0 ? 0.05 : 0.005;
-
-      // Sub-blocks must be large enough AND thick enough to survive topojson
-      // presimplify + quantize. Sub-blocks that fail either check collapse to
-      // zero area in the topology ("topo-degenerates") — invisible on the map
-      // but present as degenerate rings.
-      //   MIN_SUB_AREA_M2: comfortably above the largest state's quantization
-      //     grid cell area (CA at 1e5 quantization ≈ 144 m²).
-      //   MIN_SUB_WIDTH_M:  approximated as 2·area/perimeter (short side of a
-      //     thin rectangle). Thin shapes collapse even when they have large
-      //     area because every vertex triangle falls below the simplification
-      //     threshold.
-      const MIN_SUB_AREA_M2 = 200;
-      const MIN_SUB_WIDTH_M = 20;
       // Convert scaled-coord area to m² using this block's centroid latitude.
       const [, bMinY, , bMaxY] = featureBbox(blockFeature);
       const latRad = (((bMinY + bMaxY) / 2) * Math.PI) / 180;
@@ -1018,6 +1133,7 @@ export default class PrepareDevData extends Command {
       // side of the tightest enclosing rectangle), which is what actually
       // determines whether the shape survives simplify+quantize.
       const precinctAreas = new Map<number, number>();
+      const precinctAreasM2 = new Map<number, number>();
       const precinctWidthsM = new Map<number, number>();
       for (const [pi, pFaces] of byPrecinct) {
         const pArea = pFaces.reduce((s, f) => s + f.area, 0);
@@ -1041,6 +1157,7 @@ export default class PrepareDevData extends Command {
           }
         }
         if (!Number.isFinite(pMinX)) {
+          precinctAreasM2.set(pi, 0);
           precinctWidthsM.set(pi, 0);
           continue;
         }
@@ -1049,28 +1166,113 @@ export default class PrepareDevData extends Command {
         const longSide = Math.max(bboxWM, bboxHM);
         const pAreaM2 = pArea * M2_PER_SCALED_DEG2;
         const widthM = longSide > 0 ? pAreaM2 / longSide : 0;
+        precinctAreasM2.set(pi, pAreaM2);
         precinctWidthsM.set(pi, widthM);
       }
 
-      const viablePrecincts: number[] = [];
-      const sliverPrecincts: number[] = [];
-      for (const [pi, area] of precinctAreas) {
-        const areaM2 = area * M2_PER_SCALED_DEG2;
+      const viable = new Set<number>();
+      const slivers = new Set<number>();
+      for (const pi of precinctAreas.keys()) {
+        const areaM2 = precinctAreasM2.get(pi) || 0;
         const widthM = precinctWidthsM.get(pi) || 0;
-        const ratioOK = blockArea > 0 && area / blockArea >= MIN_AREA_RATIO;
-        const absoluteOK = areaM2 >= MIN_SUB_AREA_M2;
-        const widthOK = widthM >= MIN_SUB_WIDTH_M;
-        if (ratioOK && absoluteOK && widthOK) {
-          viablePrecincts.push(pi);
+        if (areaM2 >= MIN_SUB_AREA_M2 && widthM >= MIN_SUB_WIDTH_M) {
+          viable.add(pi);
         } else {
-          sliverPrecincts.push(pi);
+          slivers.add(pi);
         }
       }
 
-      if (viablePrecincts.length <= 1) {
+      const planIdx = blockPlans.length;
+      for (const pi of viable) precinctViableSomewhere.add(pi);
+      for (const pi of slivers) {
+        if (!sliverCandidates.has(pi)) sliverCandidates.set(pi, []);
+        sliverCandidates.get(pi)!.push({
+          planIdx,
+          areaM2: precinctAreasM2.get(pi) || 0,
+          widthM: precinctWidthsM.get(pi) || 0
+        });
+      }
+
+      blockPlans.push({
+        blockFeature,
+        geoId,
+        countyFp,
+        demo,
+        faces,
+        byPrecinct,
+        precinctAreas,
+        blockArea,
+        viable,
+        slivers
+      });
+    }
+
+    // Rescue: any precinct with no viable block anywhere gets its tier-2
+    // passing slivers promoted to viable. Slivers below tier 2 would
+    // topo-degenerate anyway, so promoting them doesn't help — they stay
+    // dropped. A precinct with zero tier-2 survivors is unrescuable and
+    // errors below (precincts are precious; we don't silently drop them).
+    let rescuedPrecincts = 0;
+    let rescuedSlivers = 0;
+    let forcedPrecincts = 0;
+    let forcedSlivers = 0;
+    for (const [pi, candidates] of sliverCandidates) {
+      if (precinctViableSomewhere.has(pi)) continue;
+      const survivable = candidates.filter(
+        c => c.areaM2 >= MIN_SUB_AREA_M2 && c.widthM >= MIN_SUB_WIDTH_M
+      );
+      // Tier-2 rescue if available; otherwise force the largest sliver through
+      // so the precinct stays attached to voting data, even though its sub-block
+      // will topo-degenerate (invisible on the map but present in the data).
+      const promote =
+        survivable.length > 0
+          ? survivable
+          : [candidates.reduce((a, b) => (a.areaM2 >= b.areaM2 ? a : b))];
+      for (const c of promote) {
+        const plan = blockPlans[c.planIdx];
+        plan.viable.add(pi);
+        plan.slivers.delete(pi);
+      }
+      precinctViableSomewhere.add(pi);
+      if (survivable.length > 0) {
+        rescuedPrecincts++;
+        rescuedSlivers += promote.length;
+      } else {
+        forcedPrecincts++;
+        forcedSlivers += promote.length;
+      }
+    }
+    if (rescuedPrecincts > 0) {
+      this.log(
+        `   Rescued ${rescuedPrecincts} endangered precincts (${rescuedSlivers} forced sub-blocks)`
+      );
+    }
+    if (forcedPrecincts > 0) {
+      this.log(
+        `   Forced ${forcedPrecincts} sub-tier-2 precincts (${forcedSlivers} sub-blocks will topo-degenerate)`
+      );
+    }
+
+    // Pass 2: emit features from the (possibly rescued) plans.
+    for (const plan of blockPlans) {
+      const {
+        blockFeature,
+        geoId,
+        countyFp,
+        demo,
+        faces,
+        byPrecinct,
+        precinctAreas,
+        viable,
+        slivers
+      } = plan;
+      const viableArr = [...viable];
+      const sliverArr = [...slivers];
+
+      if (viableArr.length <= 1) {
         const bestPi =
-          viablePrecincts.length === 1
-            ? viablePrecincts[0]
+          viableArr.length === 1
+            ? viableArr[0]
             : [...precinctAreas.entries()].reduce((a, b) => (a[1] > b[1] ? a : b))[0];
         const pData = precinctVoting.get(bestPi)!;
         let merged = faces[0].geom;
@@ -1083,29 +1285,27 @@ export default class PrepareDevData extends Command {
         const geoJSON = geosHelper.toGeoJSONScaled(merged, COORD_SCALE);
         geosHelper.free(merged);
         singlePrecinct++;
-        {
-          const props = buildBlockProps(
-            geoId,
-            pData.precinctId,
-            countyFp,
-            countyNames,
-            demo,
-            pData.votes,
-            pData.totalVotes,
-            officesFound,
-            detectedYear
-          );
-          require("fs").writeSync(geomFd, JSON.stringify(geoJSON || blockFeature.geometry) + "\n"); // eslint-disable-line
-          trackAssignment(bestPi, featureProps.length, demo.population || 0);
-          featureProps.push(props);
-        }
+        const props = buildBlockProps(
+          geoId,
+          pData.precinctId,
+          countyFp,
+          countyNames,
+          demo,
+          pData.votes,
+          pData.totalVotes,
+          officesFound,
+          detectedYear
+        );
+        writeSync(geomFd, JSON.stringify(geoJSON || blockFeature.geometry) + "\n");
+        trackAssignment(bestPi, featureProps.length, demo.population || 0);
+        featureProps.push(props);
         continue;
       }
 
       // Multiple viable sub-blocks
       splitBlocks++;
-      const areaRatios = viablePrecincts.map(pi => precinctAreas.get(pi)!);
-      const sliverArea = sliverPrecincts.reduce((s, pi) => s + (precinctAreas.get(pi) || 0), 0);
+      const areaRatios = viableArr.map(pi => precinctAreas.get(pi)!);
+      const sliverArea = sliverArr.reduce((s, pi) => s + (precinctAreas.get(pi) || 0), 0);
       const largestIdx = areaRatios.indexOf(Math.max(...areaRatios));
       areaRatios[largestIdx] += sliverArea;
 
@@ -1114,10 +1314,10 @@ export default class PrepareDevData extends Command {
         apportioned[key] = apportion(demo[key], areaRatios);
       }
 
-      for (let si = 0; si < viablePrecincts.length; si++) {
+      for (let si = 0; si < viableArr.length; si++) {
         totalSubBlocks++;
         const subBlockId = `${geoId}-${si + 1}`;
-        const pi = viablePrecincts[si];
+        const pi = viableArr[si];
         const pData = precinctVoting.get(pi)!;
 
         const subDemo: Record<string, number> = {};
@@ -1128,7 +1328,7 @@ export default class PrepareDevData extends Command {
         const pFaces = byPrecinct.get(pi)!;
         const facesToMerge =
           si === largestIdx
-            ? [...pFaces, ...sliverPrecincts.flatMap(sp => byPrecinct.get(sp) || [])]
+            ? [...pFaces, ...sliverArr.flatMap(sp => byPrecinct.get(sp) || [])]
             : pFaces;
 
         // Collect face coordinates directly into a MultiPolygon — no GEOS union.
@@ -1149,22 +1349,20 @@ export default class PrepareDevData extends Command {
               ? { type: "Polygon", coordinates: polys[0] }
               : { type: "MultiPolygon", coordinates: polys };
 
-        {
-          const props = buildBlockProps(
-            subBlockId,
-            pData.precinctId,
-            countyFp,
-            countyNames,
-            subDemo,
-            pData.votes,
-            pData.totalVotes,
-            officesFound,
-            detectedYear
-          );
-          writeSync(geomFd, JSON.stringify(subGeoJSON || blockFeature.geometry) + "\n");
-          trackAssignment(pi, featureProps.length, subDemo.population || 0);
-          featureProps.push(props);
-        }
+        const props = buildBlockProps(
+          subBlockId,
+          pData.precinctId,
+          countyFp,
+          countyNames,
+          subDemo,
+          pData.votes,
+          pData.totalVotes,
+          officesFound,
+          detectedYear
+        );
+        writeSync(geomFd, JSON.stringify(subGeoJSON || blockFeature.geometry) + "\n");
+        trackAssignment(pi, featureProps.length, subDemo.population || 0);
+        featureProps.push(props);
       }
 
       // Free remaining face geoms
@@ -1215,6 +1413,23 @@ export default class PrepareDevData extends Command {
     this.log(`     Split blocks:    ${splitBlocks} (${totalSubBlocks} sub-blocks)`);
     this.log(`     No match:        ${noMatch}`);
     this.log(`     Total features:  ${featureProps.length}`);
+
+    // Sanity check: every VEST precinct must survive to output. A gap here
+    // means (countyFp, precinctField) isn't disambiguating — almost always
+    // the wrong --vestPrecinctField for this state's shapefile schema.
+    const distinctOutputPrecincts = new Set(featureProps.map(p => p.precinct)).size;
+    const vestPrecinctCount = vestFeatures.length;
+    this.log(
+      `     Distinct output precincts: ${distinctOutputPrecincts} / ${vestPrecinctCount} VEST`
+    );
+    if (distinctOutputPrecincts < vestPrecinctCount) {
+      this.error(
+        `Only ${distinctOutputPrecincts} of ${vestPrecinctCount} VEST precincts survived to output. ` +
+          `This usually means --vestPrecinctField="${flags.vestPrecinctField}" is not unique enough ` +
+          `to disambiguate VEST rows (even combined with county prefix). ` +
+          `Inspect the VEST shapefile's DBF fields and pick one that has roughly one distinct value per row.`
+      );
+    }
 
     // ── Step 5: Process additional election years ──
     // addVotingYear now works with the properties array (no geometry needed

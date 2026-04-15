@@ -3,17 +3,17 @@ import React, { useState, useCallback, useRef, useEffect } from "react";
 import AriaModal from "react-aria-modal";
 import { connect } from "react-redux";
 import { InputField } from "../components/Field";
-import { Box, Button, Flex, Heading, ThemeUIStyleObject, Label, Select } from "theme-ui";
+import { Box, Button, Flex, Heading, type ThemeUIStyleObject, Label, Select } from "theme-ui";
 
-import { IProject, ProjectId } from "../../shared/entities";
+import { type IProject, type ProjectId } from "../../shared/entities";
 import { createReferenceLayer } from "../api";
 import { convertCsvToGeojson, showActionFailedToast } from "../functions";
-import { State } from "../reducers";
+import { type State } from "../reducers";
 import store from "../store";
-import { ReferenceLayerGeojson, ReferenceLayerWithGeojson } from "../types";
+import { type ReferenceLayerGeojson, type ReferenceLayerWithGeojson } from "../types";
 import { projectReferenceLayersFetch, toggleReferenceLayersModal } from "../actions/projectData";
 import { FileDrop } from "react-file-drop";
-import { WriteResource } from "../resource";
+import { type WriteResource } from "../resource";
 import {
   MAX_UPLOAD_FILE_SIZE,
   ReferenceLayerTypes,

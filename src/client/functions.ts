@@ -1,34 +1,34 @@
 import { isThisYear, isToday } from "date-fns";
 import format from "date-fns/format";
-import { FeatureCollection, Feature, Point } from "geojson";
+import { type FeatureCollection, type Feature, type Point } from "geojson";
 import { cloneDeep, mapKeys, mapValues, pick, pickBy } from "lodash";
 import { toast } from "react-toastify";
 
 import {
-  DemographicCounts,
-  DistrictsDefinition,
-  MutableGeoUnitCollection,
-  GeoLevelHierarchy,
-  GeoUnits,
-  GeoUnitIndices,
-  GeoUnitHierarchy,
-  NestedArray,
-  IStaticMetadata,
-  ReferenceLayerProperties,
-  GroupTotal,
-  DemographicsGroup,
-  IProject
+  type DemographicCounts,
+  type DistrictsDefinition,
+  type MutableGeoUnitCollection,
+  type GeoLevelHierarchy,
+  type GeoUnits,
+  type GeoUnitIndices,
+  type GeoUnitHierarchy,
+  type NestedArray,
+  type IStaticMetadata,
+  type ReferenceLayerProperties,
+  type GroupTotal,
+  type DemographicsGroup,
+  type IProject
 } from "../shared/entities";
-import { State } from "./reducers";
+import { type State } from "./reducers";
 
-import { Resource, WriteResource } from "./resource";
+import { type Resource, type WriteResource } from "./resource";
 import {
-  ChoroplethSteps,
-  DistrictGeoJSON,
-  ElectionYear,
-  DistrictsGeoJSON,
-  ReferenceLayerGeojson,
-  PviBucket
+  type ChoroplethSteps,
+  type DistrictGeoJSON,
+  type ElectionYear,
+  type DistrictsGeoJSON,
+  type ReferenceLayerGeojson,
+  type PviBucket
 } from "./types";
 
 export function areAnyGeoUnitsSelected(geoUnits: GeoUnits) {

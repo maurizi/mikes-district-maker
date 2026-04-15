@@ -1,9 +1,13 @@
-import { Box, Spinner, ThemeUIStyleObject } from "theme-ui";
+import { Box, Spinner, type ThemeUIStyleObject } from "theme-ui";
 import maplibregl from "maplibre-gl";
 import React, { useEffect, useRef, useState } from "react";
 
-import { IStaticMetadata, ProjectNest, ThumbnailGeoJSON } from "../../../shared/entities";
-import { DistrictGeoJSON } from "../../types";
+import {
+  type IStaticMetadata,
+  type ProjectNest,
+  type ThumbnailGeoJSON
+} from "../../../shared/entities";
+import { type DistrictGeoJSON } from "../../types";
 import { getDistrictColor } from "../../constants/colors";
 import { fetchMemoizedStateBbox } from "../../api";
 

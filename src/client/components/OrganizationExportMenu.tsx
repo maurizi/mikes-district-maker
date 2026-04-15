@@ -1,7 +1,7 @@
 import { Box } from "theme-ui";
 import { Button as MenuButton, Wrapper, Menu, MenuItem } from "react-aria-menubutton";
 import Icon from "../components/Icon";
-import { OrganizationSlug } from "../../shared/entities";
+import { type OrganizationSlug } from "../../shared/entities";
 import { style } from "./MenuButton.styles";
 import store from "../store";
 import { exportProjects, exportOrgUsers } from "../actions/organization";

@@ -1,16 +1,16 @@
-import { Cmd, Loop, loop } from "redux-loop";
+import { Cmd, type Loop, loop } from "redux-loop";
 import { getType } from "typesafe-actions";
 
-import { LoopAction } from "../actions";
+import { type LoopAction } from "../actions";
 
-import { IProjectTemplateWithProjects } from "../../shared/entities";
+import { type IProjectTemplateWithProjects } from "../../shared/entities";
 import {
   fetchOrganizationFeaturedProjects,
   fetchOrganizationProjects,
   saveProjectFeatured
 } from "../api";
 import { showResourceFailedToast } from "../functions";
-import { Resource } from "../resource";
+import { type Resource } from "../resource";
 import {
   organizationProjectsFetch,
   organizationProjectsFetchSuccess,

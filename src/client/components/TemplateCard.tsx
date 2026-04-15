@@ -1,8 +1,13 @@
 import { useState } from "react";
 import { Button as MenuButton, Wrapper, Menu, MenuItem } from "react-aria-menubutton";
-import { Box, Button, Flex, Heading, Text, Spinner, ThemeUIStyleObject } from "theme-ui";
+import { Box, Button, Flex, Heading, Text, Spinner, type ThemeUIStyleObject } from "theme-ui";
 
-import { IOrganization, IProjectTemplate, IUser, CreateProjectData } from "../../shared/entities";
+import {
+  type IOrganization,
+  type IProjectTemplate,
+  type IUser,
+  type CreateProjectData
+} from "../../shared/entities";
 import { setArchiveTemplate } from "../actions/organization";
 import { isUserLoggedIn } from "../jwt";
 import store from "../store";

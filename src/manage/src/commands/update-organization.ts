@@ -1,7 +1,7 @@
 import { Args, Command } from "@oclif/core";
 import { readFileSync } from "fs";
 import yaml from "js-yaml";
-import { UserId } from "../../../shared/entities";
+import { type UserId } from "../../../shared/entities";
 
 import { Organization } from "../../../server/src/organizations/entities/organization.entity";
 import { ProjectTemplate } from "../../../server/src/project-templates/entities/project-template.entity";

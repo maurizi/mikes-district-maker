@@ -1,5 +1,5 @@
-import { IOrganization, IUser, CreateProjectData } from "../../shared/entities";
-import { Box, Heading, ThemeUIStyleObject } from "theme-ui";
+import { type IOrganization, type IUser, type CreateProjectData } from "../../shared/entities";
+import { Box, Heading, type ThemeUIStyleObject } from "theme-ui";
 import TemplateCard from "./TemplateCard";
 
 interface Props {

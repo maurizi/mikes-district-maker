@@ -1,6 +1,6 @@
 import { createStore, applyMiddleware } from "redux";
 import { composeWithDevTools } from "@redux-devtools/extension";
-import { install, StoreCreator } from "redux-loop";
+import { install, type StoreCreator } from "redux-loop";
 import { getType } from "typesafe-actions";
 import { redo, undo } from "./actions/districtDrawing";
 import rumMiddleware from "./rumMiddleware";

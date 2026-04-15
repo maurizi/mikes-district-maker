@@ -1,11 +1,11 @@
-import maplibregl from "maplibre-gl";
+import type maplibregl from "maplibre-gl";
 import React from "react";
 import { connect } from "react-redux";
 import { Link } from "react-router-dom";
 import Logo from "../media/logos/mark-white.svg?react";
 
-import { Box, Button, Flex, ThemeUIStyleObject } from "theme-ui";
-import { IProject } from "../../shared/entities";
+import { Box, Button, Flex, type ThemeUIStyleObject } from "theme-ui";
+import { type IProject } from "../../shared/entities";
 import { undo, redo, toggleEvaluate } from "../actions/districtDrawing";
 import { heights } from "../theme";
 import CopyMapButton from "../components/CopyMapButton";
@@ -15,8 +15,8 @@ import ProjectName from "../components/ProjectName";
 import ShareMenu from "../components/ShareMenu";
 import SupportMenu from "../components/SupportMenu";
 import store from "../store";
-import { State } from "../reducers";
-import { UndoHistory } from "../reducers/undoRedo";
+import { type State } from "../reducers";
+import { type UndoHistory } from "../reducers/undoRedo";
 
 import { style as menuButtonStyle } from "./MenuButton.styles";
 import SubmitMapButton from "./map/SubmitMapButton";

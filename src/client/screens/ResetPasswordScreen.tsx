@@ -9,7 +9,7 @@ import { resetPassword } from "../api";
 import CenteredContent from "../components/CenteredContent";
 import { PasswordField } from "../components/Field";
 import FormError from "../components/FormError";
-import { WriteResource } from "../resource";
+import { type WriteResource } from "../resource";
 import store from "../store";
 
 const isFormInvalid = (form: ResetPasswordForm): boolean =>

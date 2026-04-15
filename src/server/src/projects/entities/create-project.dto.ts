@@ -11,7 +11,7 @@ import {
   ValidateIf
 } from "class-validator";
 
-import {
+import type {
   CreateProjectData,
   DistrictsDefinition,
   ThumbnailGeoJSON

@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from "fs";
-import { TypedArray } from "../../../shared/entities";
+import { type TypedArray } from "../../../shared/entities";
 import { join } from "path";
 import * as shapefile from "shapefile";
 import * as unzipper from "unzipper";

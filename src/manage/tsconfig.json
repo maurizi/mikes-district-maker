@@ -8,6 +8,12 @@
     "module": "commonjs",
     "outDir": "lib",
     "rootDirs": ["src", "../"],
+    "baseUrl": ".",
+    "paths": {
+      "geojson": ["./node_modules/@types/geojson"],
+      "@turf/bbox": ["./node_modules/@turf/bbox"],
+      "simplify-geojson": ["./node_modules/simplify-geojson"]
+    },
     "strict": true,
     "strictPropertyInitialization": false,
     "target": "ES2022",

@@ -1,4 +1,4 @@
-import { AwsRum, AwsRumConfig } from "aws-rum-web";
+import { AwsRum, type AwsRumConfig } from "aws-rum-web";
 import { DEBUG } from "../shared/constants";
 
 const APPLICATION_ID = import.meta.env.VITE_RUM_APP_MONITOR_ID;

@@ -1,8 +1,8 @@
 import { connect } from "react-redux";
-import { Button, Box, Flex, Heading, Spinner, Text, ThemeUIStyleObject } from "theme-ui";
+import { Button, Box, Flex, Heading, Spinner, Text, type ThemeUIStyleObject } from "theme-ui";
 
-import { GeoUnits } from "../../shared/entities";
-import { SavingState } from "../types";
+import { type GeoUnits } from "../../shared/entities";
+import { type SavingState } from "../types";
 import { areAnyGeoUnitsSelected, isProjectReadOnly } from "../functions";
 import Icon from "./Icon";
 import Tooltip from "./Tooltip";
@@ -12,7 +12,7 @@ import {
   clearSelectedGeounits,
   toggleExpandedMetrics
 } from "../actions/districtDrawing";
-import { State } from "../reducers";
+import { type State } from "../reducers";
 import store from "../store";
 
 interface LoadingProps {

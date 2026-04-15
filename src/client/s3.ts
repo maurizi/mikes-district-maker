@@ -1,15 +1,15 @@
 import axios from "axios";
 
 import {
-  TypedArrays,
-  GeoUnitHierarchy,
-  HttpsURI,
-  IStaticFile,
-  IStaticMetadata,
-  S3URI
+  type TypedArrays,
+  type GeoUnitHierarchy,
+  type HttpsURI,
+  type IStaticFile,
+  type IStaticMetadata,
+  type S3URI
 } from "../shared/entities";
-import { AdjacencyData } from "./boundary";
-import { StaticProjectData, WorkerProjectData } from "./types";
+import { type AdjacencyData } from "../shared/boundary";
+import { type StaticProjectData, type WorkerProjectData } from "./types";
 
 const s3Axios = axios.create();
 

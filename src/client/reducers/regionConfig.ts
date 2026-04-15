@@ -1,17 +1,17 @@
-import { Cmd, Loop, loop } from "redux-loop";
+import { Cmd, type Loop, loop } from "redux-loop";
 import { getType } from "typesafe-actions";
 
-import { LoopAction } from "../actions";
+import { type LoopAction } from "../actions";
 import {
   regionConfigsFetch,
   regionConfigsFetchFailure,
   regionConfigsFetchSuccess
 } from "../actions/regionConfig";
 
-import { IRegionConfig } from "../../shared/entities";
+import { type IRegionConfig } from "../../shared/entities";
 import { fetchRegionConfigs } from "../api";
 import { showResourceFailedToast } from "../functions";
-import { Resource } from "../resource";
+import { type Resource } from "../resource";
 
 export interface RegionConfigState {
   readonly regionConfigs: Resource<readonly IRegionConfig[]>;

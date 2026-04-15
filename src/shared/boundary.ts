@@ -1,5 +1,5 @@
 /**
- * Client-side district boundary computation using pre-computed adjacency index.
+ * District boundary computation using pre-computed adjacency index.
  *
  * Replaces the server's topojson.mergeArcs() with a typed-array-based approach:
  * 1. Scan adjacency index to find boundary arcs per district
@@ -8,8 +8,8 @@
  * 4. Decode arc coordinates using transform
  */
 
-import { MultiPolygon } from "geojson";
-import { Contiguity, DistrictsDefinition, GeoUnitHierarchy } from "../shared/entities";
+import { type MultiPolygon } from "geojson";
+import { type Contiguity, type DistrictsDefinition, type GeoUnitHierarchy } from "./entities";
 
 export interface AdjacencyData {
   readonly adjacency: Int32Array; // [forwardBlock, reverseBlock] per arc

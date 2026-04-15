@@ -1,24 +1,29 @@
 import * as Comlink from "comlink";
-import simplify from "simplify-geojson";
-import bbox from "@turf/bbox";
 
 import {
-  DemographicCounts,
-  DistrictImportField,
-  DistrictsDefinition,
-  DistrictsImportApiResponse,
-  GeoUnits,
-  GeoUnitIndices,
-  GeoUnitHierarchy,
-  ImportRowFlag,
-  IProject,
-  IStaticMetadata,
-  NestedArray,
-  S3URI,
-  ThumbnailGeoJSON
+  type DemographicCounts,
+  type DistrictImportField,
+  type DistrictsDefinition,
+  type DistrictsImportApiResponse,
+  type GeoUnits,
+  type GeoUnitIndices,
+  type GeoUnitHierarchy,
+  type ImportRowFlag,
+  type IProject,
+  type IStaticMetadata,
+  type NestedArray,
+  type S3URI,
+  type ThumbnailGeoJSON
 } from "../shared/entities";
 import { FIPS, MAX_IMPORT_ERRORS } from "../shared/constants";
-import { StaticCounts, DistrictsGeoJSON } from "../client/types";
+import {
+  buildSplitBlockMap,
+  expandBlockToDistrict,
+  importCsvToDefinition,
+  parseBlockDistrictCsv
+} from "../shared/csv-import";
+import { simplifyForThumbnail } from "../shared/thumbnail";
+import { type StaticCounts, type DistrictsGeoJSON } from "../client/types";
 import {
   getDemographics as getDemographicsBase,
   getVoting as getVotingBase
@@ -30,14 +35,14 @@ import {
   fetchBlockIds,
   fetchGeoUnitHierarchy
 } from "./s3";
-import { WorkerProjectData } from "./types";
+import { type WorkerProjectData } from "./types";
 import {
-  AdjacencyData,
-  ReverseIndex,
+  type AdjacencyData,
+  type ReverseIndex,
   buildReverseIndex,
   buildBlockAssignment,
   computeDistrictBoundaries
-} from "./boundary";
+} from "../shared/boundary";
 
 interface RegionData {
   readonly uri: S3URI;
@@ -176,58 +181,6 @@ function exportDistrictsToCsv(
   return rows.join("\n");
 }
 
-function importCsvToDefinition(
-  blockIds: readonly string[],
-  geoUnitHierarchy: GeoUnitHierarchy,
-  blockToDistrict: { readonly [blockId: string]: number }
-): DistrictsDefinition {
-  // Build reverse lookup: blockId → index
-  const idToIndex = new Map<string, number>();
-  for (let i = 0; i < blockIds.length; i++) {
-    idToIndex.set(blockIds[i], i);
-  }
-
-  // Build flat assignment array
-  const assignment = new Uint8Array(blockIds.length);
-  for (const [blockId, district] of Object.entries(blockToDistrict)) {
-    const idx = idToIndex.get(blockId);
-    if (idx !== undefined) {
-      assignment[idx] = district;
-    }
-  }
-
-  // Walk hierarchy and build definition, simplifying where possible
-  function walk(hierarchy: GeoUnitHierarchy | number): DistrictsDefinition | number {
-    if (typeof hierarchy === "number") {
-      return assignment[hierarchy];
-    }
-    const results: (DistrictsDefinition | number)[] = hierarchy.map(h => walk(h));
-    // Simplify: if all children are the same value, collapse
-    if (results.length !== 1 && results.every(item => item === results[0])) {
-      return results[0];
-    }
-    return results;
-  }
-  return walk(geoUnitHierarchy) as DistrictsDefinition;
-}
-
-// Parse a simple two-column `BLOCKID,DISTRICT` CSV (header row + data rows).
-// This intentionally does not handle quoted fields — BEF files are flat
-// integer/string pairs. Empty trailing lines are skipped.
-function parseBlockDistrictCsv(csvText: string): [string, string][] {
-  const lines = csvText.split(/\r?\n/);
-  const records: [string, string][] = [];
-  // Skip the header row (line 0).
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i];
-    if (!line) continue;
-    const commaIdx = line.indexOf(",");
-    if (commaIdx === -1) continue;
-    records.push([line.slice(0, commaIdx), line.slice(commaIdx + 1)]);
-  }
-  return records;
-}
-
 // Full CSV → DistrictsImportApiResponse pipeline, ported from the former
 // server endpoint at src/server/src/districts/controllers/districts.controller.ts.
 // Runs entirely in the worker so large-state CSVs (TX ~13MB) don't hit
@@ -249,7 +202,6 @@ function runCsvImport(
     field: DistrictImportField,
     errorText: string
   ): void => {
-    // eslint-disable-next-line functional/immutable-data
     flaggedRows[rowNumber] = { rowNumber, errorText, rowValue: row, field };
   };
 
@@ -264,7 +216,7 @@ function runCsvImport(
   records.forEach((record, i) => {
     const rowFips = record[0]?.slice(0, 2);
     const blockId = record[0];
-    // eslint-disable-next-line functional/immutable-data
+
     blockIdCounts[blockId] = blockIdCounts[blockId] ? blockIdCounts[blockId] + 1 : 1;
 
     if (!rowFips || !(rowFips in FIPS)) {
@@ -281,24 +233,8 @@ function runCsvImport(
     }
   });
 
-  // Build split-block lookup: base block → its sub-block variants
-  // (e.g. "42001..." → ["42001...-1", "42001...-2"]). When a CSV references
-  // the base block but the region data has split it during processing, we
-  // expand the assignment across all sub-blocks.
   const allBlockIds: Set<string> = new Set(blockIds);
-  const splitBlockMap: Map<string, string[]> = new Map();
-  blockIds.forEach(id => {
-    const dashIdx = id.indexOf("-");
-    if (dashIdx === -1) return;
-    const baseId = id.substring(0, dashIdx);
-    const existing = splitBlockMap.get(baseId);
-    if (existing) {
-      // eslint-disable-next-line functional/immutable-data
-      existing.push(id);
-    } else {
-      splitBlockMap.set(baseId, [id]);
-    }
-  });
+  const splitBlockMap = buildSplitBlockMap(blockIds);
 
   // Pass 2: flag unknown block IDs (not present as real or split-parent).
   const invalidRecords = records.filter((record, i) => {
@@ -319,29 +255,14 @@ function runCsvImport(
 
   // Build block → district, expanding split parents to all their sub-blocks.
   const unflaggedRows = records.filter((_, i) => !flaggedRows[i]);
-  const blockToDistricts: { [blockId: string]: number } = {};
-  unflaggedRows.forEach(([block, district]) => {
-    const d = Number(district);
-    if (allBlockIds.has(block)) {
-      // eslint-disable-next-line functional/immutable-data
-      blockToDistricts[block] = d;
-    }
-    const splits = splitBlockMap.get(block);
-    if (splits) {
-      splits.forEach(splitId => {
-        // eslint-disable-next-line functional/immutable-data
-        blockToDistricts[splitId] = d;
-      });
-    }
-  });
-
-  const districtsDefinition = importCsvToDefinition(
-    blockIds,
-    geoUnitHierarchy,
-    blockToDistricts
+  const { blockToDistrict: blockToDistricts, maxDistrictId } = expandBlockToDistrict(
+    unflaggedRows,
+    allBlockIds,
+    splitBlockMap
   );
 
-  const maxDistrictId = Object.values(blockToDistricts).reduce((a, b) => Math.max(a, b), 0);
+  const districtsDefinition = importCsvToDefinition(blockIds, geoUnitHierarchy, blockToDistricts);
+
   const rowFlags = flaggedRows.filter((r): r is ImportRowFlag => !!r);
   const numFlags = rowFlags.length;
 
@@ -351,41 +272,6 @@ function runCsvImport(
     numFlags: numFlags || undefined,
     rowFlags: numFlags > 0 ? rowFlags.slice(0, MAX_IMPORT_ERRORS) : undefined
   };
-}
-
-// Thumbnail serialized JSON size cap. The /api/projects PATCH carries
-// districtsDefinition + thumbnail + metadata; Nest's default body limit is
-// ~5MB, leave headroom for the rest of the payload.
-const THUMBNAIL_MAX_BYTES = 3 * 1024 * 1024;
-const THUMBNAIL_MAX_ITERATIONS = 6;
-
-function simplifyForThumbnail(districts: DistrictsGeoJSON): ThumbnailGeoJSON {
-  // Small states (DC, RI, etc.) have tiny bbox area and need a finer tolerance
-  // than continent-sized states, else the whole state collapses to a point.
-  const box = bbox(districts);
-  const boxArea = (box[2] - box[0]) * (box[3] - box[1]);
-  let tolerance = boxArea > 1 ? 0.005 : 0.001;
-
-  const simplifyOnce = (t: number): ThumbnailGeoJSON => ({
-    type: "FeatureCollection",
-    features: districts.features.map(feature => {
-      try {
-        return simplify(feature, t);
-      } catch {
-        return feature;
-      }
-    })
-  });
-
-  let thumbnail = simplifyOnce(tolerance);
-  for (let i = 0; i < THUMBNAIL_MAX_ITERATIONS; i++) {
-    if (JSON.stringify(thumbnail).length <= THUMBNAIL_MAX_BYTES) {
-      break;
-    }
-    tolerance *= 2;
-    thumbnail = simplifyOnce(tolerance);
-  }
-  return thumbnail;
 }
 
 const functions = {
@@ -455,10 +341,7 @@ const functions = {
     ]);
     return exportDistrictsToCsv(blockIds, districtsDefinition, data.geoUnitHierarchy);
   },
-  importCsv: async (
-    regionURI: S3URI,
-    csvText: string
-  ): Promise<DistrictsImportApiResponse> => {
+  importCsv: async (regionURI: S3URI, csvText: string): Promise<DistrictsImportApiResponse> => {
     const [geoUnitHierarchy, blockIds] = await Promise.all([
       fetchGeoUnitHierarchy(regionURI),
       getBlockIds(regionURI)

@@ -3,11 +3,11 @@ import { isEqual } from "lodash";
 import maplibregl from "maplibre-gl";
 
 import {
-  DistrictsDefinition,
-  GeoUnits,
-  IStaticMetadata,
-  LockedDistricts,
-  TypedArrays
+  type DistrictsDefinition,
+  type GeoUnits,
+  type IStaticMetadata,
+  type LockedDistricts,
+  type TypedArrays
 } from "../../../shared/entities";
 
 import {
@@ -23,7 +23,7 @@ import {
   GEOLEVELS_SOURCE_ID,
   isFeatureSelected,
   levelToSelectionLayerId,
-  ISelectionTool,
+  type ISelectionTool,
   SET_FEATURE_DELAY,
   setFeaturesSelectedFromGeoUnits,
   deselectChildGeounits,

@@ -1,7 +1,7 @@
 // Type declarations for packages that don't ship their own types
 
 declare module "react-aria-modal" {
-  import { Component, ReactNode } from "react";
+  import { Component, type ReactNode } from "react";
 
   interface AriaModalProps {
     titleText?: string;
@@ -35,7 +35,7 @@ declare module "jwt-decode" {
 }
 
 declare module "simplify-geojson" {
-  import { GeoJSON } from "geojson";
+  import { type GeoJSON } from "geojson";
 
   export default function simplify<G extends GeoJSON>(feature: G, tolerance?: number): G;
 }

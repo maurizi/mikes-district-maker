@@ -3,16 +3,16 @@ import { Button as MenuButton, Wrapper, Menu, MenuItem } from "react-aria-menubu
 import AriaModal from "react-aria-modal";
 import { connect } from "react-redux";
 import { Link } from "react-router-dom";
-import { Box, Button, Flex, Heading, Input, Text, ThemeUIStyleObject } from "theme-ui";
-import { IProject, IProjectTemplate } from "../../shared/entities";
+import { Box, Button, Flex, Heading, Input, Text, type ThemeUIStyleObject } from "theme-ui";
+import { type IProject, type IProjectTemplate } from "../../shared/entities";
 import {
   setProjectNameEditing,
   updateProjectName,
   toggleProjectDetailsModal
 } from "../actions/projectData";
-import { State } from "../reducers";
+import { type State } from "../reducers";
 import store from "../store";
-import { SavingState } from "../types";
+import { type SavingState } from "../types";
 import Icon from "./Icon";
 import { style as menuButtonStyles } from "./MenuButton.styles";
 

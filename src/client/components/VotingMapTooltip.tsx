@@ -1,5 +1,5 @@
 import { mapValues } from "lodash";
-import { Box, ThemeUIStyleObject } from "theme-ui";
+import { Box, type ThemeUIStyleObject } from "theme-ui";
 
 import { getPartyColor, capitalizeFirstLetter } from "../functions";
 

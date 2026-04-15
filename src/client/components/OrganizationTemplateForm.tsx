@@ -1,11 +1,11 @@
 import {
-  IOrganization,
-  IUser,
-  CreateProjectData,
-  OrganizationSlug,
-  OrganizationNest
+  type IOrganization,
+  type IUser,
+  type CreateProjectData,
+  type OrganizationSlug,
+  type OrganizationNest
 } from "../../shared/entities";
-import { Box, Card, Label, Radio, Flex, Spinner, ThemeUIStyleObject } from "theme-ui";
+import { Box, Card, Label, Radio, Flex, Spinner, type ThemeUIStyleObject } from "theme-ui";
 import OrganizationTemplates from "./OrganizationTemplates";
 import { useState, useEffect } from "react";
 import { organizationFetch, organizationReset } from "../actions/organization";

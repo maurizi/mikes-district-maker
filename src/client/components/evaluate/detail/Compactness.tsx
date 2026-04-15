@@ -1,6 +1,6 @@
-import { Box, Flex, ThemeUIStyleObject, Heading } from "theme-ui";
+import { Box, Flex, type ThemeUIStyleObject, Heading } from "theme-ui";
 import { getCompactnessStops } from "../../map/index";
-import { EvaluateMetricWithValue, DistrictsGeoJSON } from "../../../types";
+import { type EvaluateMetricWithValue, type DistrictsGeoJSON } from "../../../types";
 import { getCompactnessDisplay } from "../../ProjectSidebar";
 import { computeRowFill } from "../../../functions";
 

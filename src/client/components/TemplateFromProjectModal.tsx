@@ -3,12 +3,12 @@ import { connect } from "react-redux";
 import { Box, Button, Flex, Heading, Select, Label } from "theme-ui";
 
 import Icon from "./Icon";
-import { IProject, IProjectTemplate, OrganizationNest } from "../../shared/entities";
+import { type IProject, type IProjectTemplate, type OrganizationNest } from "../../shared/entities";
 import { setTemplateProject } from "../actions/projects";
-import { State } from "../reducers";
+import { type State } from "../reducers";
 import store from "../store";
 import React, { useState } from "react";
-import { WriteResource } from "../resource";
+import { type WriteResource } from "../resource";
 import { InputField } from "./Field";
 import { createProjectTemplate } from "../api";
 import { useNavigate } from "react-router-dom";

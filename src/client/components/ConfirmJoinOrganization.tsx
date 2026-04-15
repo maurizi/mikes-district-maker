@@ -1,12 +1,17 @@
 import React from "react";
 import { connect } from "react-redux";
-import { Box, Button, Flex, Heading, ThemeUIStyleObject } from "theme-ui";
+import { Box, Button, Flex, Heading, type ThemeUIStyleObject } from "theme-ui";
 
-import { CreateProjectData, IOrganization, IUser, IProject } from "../../shared/entities";
+import {
+  type CreateProjectData,
+  type IOrganization,
+  type IUser,
+  type IProject
+} from "../../shared/entities";
 import { useNavigate } from "react-router-dom";
-import { State } from "../reducers";
+import { type State } from "../reducers";
 import store from "../store";
-import { Resource } from "../resource";
+import { type Resource } from "../resource";
 import { joinOrganization } from "../actions/organizationJoin";
 import { showCopyMapModal } from "../actions/projectModals";
 import { createProject } from "../api";

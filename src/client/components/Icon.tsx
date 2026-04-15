@@ -1,4 +1,4 @@
-import { ThemeUIStyleObject } from "theme-ui";
+import { type ThemeUIStyleObject } from "theme-ui";
 import icons from "../icons";
 
 interface IconProps {

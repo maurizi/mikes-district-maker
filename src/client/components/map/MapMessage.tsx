@@ -1,11 +1,11 @@
 import { connect } from "react-redux";
-import { Box, ThemeUIStyleObject } from "theme-ui";
-import maplibregl from "maplibre-gl";
+import { Box, type ThemeUIStyleObject } from "theme-ui";
+import type maplibregl from "maplibre-gl";
 import Icon from "../Icon";
 
-import { State } from "../../reducers";
+import { type State } from "../../reducers";
 import { geoLevelLabel } from "../../functions";
-import { IStaticMetadata } from "../../../shared/entities";
+import { type IStaticMetadata } from "../../../shared/entities";
 import { destructureResource } from "../../functions";
 
 const style: Record<string, ThemeUIStyleObject> = {

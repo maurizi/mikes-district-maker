@@ -1,17 +1,17 @@
 import { createAction } from "typesafe-actions";
-import { ProjectVisibility } from "../../shared/constants";
+import { type ProjectVisibility } from "../../shared/constants";
 import {
-  DistrictsDefinition,
-  IProject,
-  IReferenceLayer,
-  LockedDistricts,
-  ProjectId,
-  ReferenceLayerId,
-  ThumbnailGeoJSON,
-  UpdateReferenceLayer
+  type DistrictsDefinition,
+  type IProject,
+  type IReferenceLayer,
+  type LockedDistricts,
+  type ProjectId,
+  type ReferenceLayerId,
+  type ThumbnailGeoJSON,
+  type UpdateReferenceLayer
 } from "../../shared/entities";
-import { DistrictsGeoJSON, DynamicProjectData, StaticProjectData } from "../types";
-import { ResourceFailure } from "../resource";
+import { type DistrictsGeoJSON, type DynamicProjectData, type StaticProjectData } from "../types";
+import { type ResourceFailure } from "../resource";
 
 interface PinnedMetrics {
   readonly pinnedMetricFields: readonly string[];

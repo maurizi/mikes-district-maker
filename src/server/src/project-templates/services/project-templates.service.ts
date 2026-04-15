@@ -54,6 +54,7 @@ export class ProjectTemplatesService extends TypeOrmCrudService<ProjectTemplate>
     // thumbnail as text (via simple-json TypeORM auto-parses) and project
     // district properties in JS.
     type Row = Omit<ProjectExportRow, "districtProperties"> & {
+      // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
       readonly thumbnail: ThumbnailGeoJSON | null;
     };
     const builder = this.repo

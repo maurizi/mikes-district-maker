@@ -98,8 +98,8 @@ export class AuthService {
       to: user.email,
       from: DEFAULT_FROM_EMAIL,
       subject: org
-        ? `Verify your DistrictBuilder account and join ${org}`
-        : `Verify your DistrictBuilder account`,
+        ? `Verify your Mike's District Maker account and join ${org}`
+        : `Verify your Mike's District Maker account`,
       context: {
         user,
         url: org
@@ -120,7 +120,7 @@ export class AuthService {
     const info = await this.mailerService.sendMail({
       to: user.email,
       from: DEFAULT_FROM_EMAIL,
-      subject: "Reset your DistrictBuilder password",
+      subject: "Reset your Mike's District Maker password",
       context: {
         user,
         url: `${process.env.CLIENT_URL}/password-reset/${emailToken}`

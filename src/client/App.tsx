@@ -24,6 +24,9 @@ import { awsRum } from "./rum";
 import "./App.css";
 import StartProjectScreen from "./screens/StartProjectScreen";
 import PublishedMapsListScreen from "./screens/PublishedMapsListScreen";
+import LandingScreen from "./screens/LandingScreen";
+import TermsScreen from "./screens/TermsScreen";
+import PrivacyScreen from "./screens/PrivacyScreen";
 
 const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
@@ -35,6 +38,12 @@ const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
   }
 
   return <>{children}</>;
+};
+
+const RootRoute = () => {
+  const savedJWT = getJWT();
+  const loggedIn = savedJWT && !jwtIsExpired(savedJWT);
+  return loggedIn ? <HomeScreen /> : <LandingScreen />;
 };
 
 const RumPageTracker = () => {
@@ -50,14 +59,9 @@ const AppRoutes = () => (
     <QueryParamProvider adapter={ReactRouter6Adapter}>
       <RumPageTracker />
       <Routes>
-        <Route
-          path="/"
-          element={
-            <PrivateRoute>
-              <HomeScreen />
-            </PrivateRoute>
-          }
-        />
+        <Route path="/" element={<RootRoute />} />
+        <Route path="/terms" element={<TermsScreen />} />
+        <Route path="/privacy" element={<PrivacyScreen />} />
         <Route path="/o/:organizationSlug" element={<OrganizationScreen />} />
         <Route
           path="/o/:organizationSlug/admin"
@@ -73,10 +77,7 @@ const AppRoutes = () => (
         <Route path="/register" element={<RegistrationScreen />} />
         <Route path="/forgot-password" element={<ForgotPasswordScreen />} />
         <Route path="/activate/:token" element={<ActivateAccountScreen />} />
-        <Route
-          path="/activate/:token/:organizationSlug"
-          element={<ActivateAccountScreen />}
-        />
+        <Route path="/activate/:token/:organizationSlug" element={<ActivateAccountScreen />} />
         <Route path="/password-reset/:token" element={<ResetPasswordScreen />} />
         <Route
           path="/create-project"

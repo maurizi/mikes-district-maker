@@ -3,8 +3,8 @@ import { connect } from "react-redux";
 import { Box, Button, Flex, Heading } from "theme-ui";
 
 import Icon from "./Icon";
-import { IReferenceLayer } from "../../shared/entities";
-import { State } from "../reducers";
+import { type IReferenceLayer } from "../../shared/entities";
+import { type State } from "../reducers";
 import store from "../store";
 import { referenceLayerDelete, setDeleteReferenceLayer } from "../actions/projectData";
 

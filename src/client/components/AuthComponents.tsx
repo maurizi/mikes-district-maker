@@ -1,16 +1,16 @@
 import React, { useState } from "react";
-import { Box, Button, Flex, Heading, Text, ThemeUIStyleObject, Divider } from "theme-ui";
+import { Box, Button, Flex, Heading, Text, type ThemeUIStyleObject, Divider } from "theme-ui";
 
-import { Login, JWT, IOrganization } from "../../shared/entities";
+import { type Login, type JWT, type IOrganization } from "../../shared/entities";
 import RegisterContent from "./RegisterContent";
 
 import { authenticateUser } from "../api";
 import { InputField } from "../components/Field";
 import FormError from "../components/FormError";
-import { WriteResource } from "../resource";
+import { type WriteResource } from "../resource";
 import { userFetch } from "../actions/user";
 import { assertNever } from "../functions";
-import { IProject } from "../../shared/entities";
+import { type IProject } from "../../shared/entities";
 import store from "../store";
 import SignupIconAudience from "../media/signup-icon-audience.svg?react";
 import SignupIconDollar from "../media/signup-icon-dollar.svg?react";
@@ -179,11 +179,11 @@ export const AuthModalContent = ({
       <Box sx={{ ...style.header, ...style.headerFancy }}>
         <Heading as="h1" sx={style.heading} id="modal-header">
           {project ? project.user.name : organization ? organization.name : ""} builds maps with
-          DistrictBuilder
+          Mike&rsquo;s District Maker
         </Heading>
         <Text>
-          DistrictBuilder is a <strong>free</strong> and <strong>open</strong> redistricting tool
-          that puts the power of drawing electoral maps in your hands.
+          Mike&rsquo;s District Maker is a <strong>free</strong> and <strong>open</strong>{" "}
+          redistricting tool that puts the power of drawing electoral maps in your hands.
         </Text>
       </Box>
       <Box>
@@ -195,7 +195,7 @@ export const AuthModalContent = ({
                 100% free, forever
               </Heading>
               <Text sx={style.featuresListDesc}>
-                DistrictBuilder is completely free to use and open source.
+                Mike&rsquo;s District Maker is completely free to use and open source.
               </Text>
             </div>
           </li>

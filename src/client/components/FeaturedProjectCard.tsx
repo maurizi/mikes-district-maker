@@ -1,7 +1,7 @@
-import { Box, Flex, Heading, Text, ThemeUIStyleObject } from "theme-ui";
+import { Box, Flex, Heading, Text, type ThemeUIStyleObject } from "theme-ui";
 import { useNavigate } from "react-router-dom";
 
-import { ProjectNest } from "../../shared/entities";
+import { type ProjectNest } from "../../shared/entities";
 import ProjectDistrictsMap from "./map/ProjectDistrictsMap";
 
 const style: Record<string, ThemeUIStyleObject> = {

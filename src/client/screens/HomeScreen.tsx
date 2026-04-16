@@ -58,7 +58,7 @@ const HomeScreen = ({ projects, isSaving, duplicatedProject, user, pagination }:
         sx={{ width: "100%", maxWidth: "large", my: 6, mx: "auto", flexDirection: "column", px: 4 }}
       >
         {projectList.length > 0 && (
-          <Flex sx={{ mb: 3 }}>
+          <Flex sx={{ mb: 3, flexWrap: "wrap", gap: 2, alignItems: "center" }}>
             <Heading as="h1" sx={{ variant: "text.h3", mr: "auto" }}>
               Maps
             </Heading>

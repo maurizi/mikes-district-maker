@@ -211,7 +211,8 @@ const LabelAutocomplete = ({
           }
         }}
         sx={{
-          width: "250px",
+          width: "100%",
+          height: "32px",
           fontSize: 1,
           py: 1,
           px: 2,

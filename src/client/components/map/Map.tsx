@@ -394,14 +394,18 @@ const DistrictsMap = ({
       return;
     }
 
-    // Constrain panning to the region bbox with padding so users can't wander off
-    const bboxPad = 10;
+    // Constrain panning to the region bbox with padding so users can't wander off.
+    // On web Mercator, 1° of lat appears larger than 1° of lng on screen (by 1/cos(lat)).
+    // Scale lng padding up so horizontal room matches vertical room visually.
+    const latPad = 10;
+    const centerLat = (b1 + b3) / 2;
+    const lngPad = latPad / Math.cos((centerLat * Math.PI) / 180);
     const map = new maplibregl.Map({
       container: mapRef.current,
       style: MAP_STYLE,
       bounds: [b0, b1, b2, b3],
       fitBoundsOptions: { padding: 75 },
-      maxBounds: [b0 - bboxPad, b1 - bboxPad, b2 + bboxPad, b3 + bboxPad],
+      maxBounds: [b0 - lngPad, b1 - latPad, b2 + lngPad, b3 + latPad],
       minZoom: minZoom,
       maxZoom: overZoom
     });

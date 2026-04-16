@@ -1,5 +1,5 @@
 import { Box, Flex, Heading, Text, type ThemeUIStyleObject } from "theme-ui";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 import { type IProject } from "../../shared/entities";
 import ProjectListFlyout from "./ProjectListFlyout";
@@ -21,6 +21,8 @@ const style: Record<string, ThemeUIStyleObject> = {
     p: "15px"
   },
   projectTitle: {
+    textDecoration: "none",
+    color: "inherit",
     "&:hover": {
       cursor: "pointer"
     },
@@ -69,19 +71,13 @@ const HomeScreenProjectCard = ({
   readonly project: IProject;
   readonly isOrganizationAdmin: boolean;
 }) => {
-  const navigate = useNavigate();
-
-  function goToProject(project: IProject) {
-    navigate(`/projects/${project.id}`);
-  }
-
   return (
     <Flex sx={style.featuredProject}>
       <Box sx={{ height: "125px", width: "125px", position: "relative", mx: 3 }}>
         <ProjectDistrictsMap project={project} context={"home"} />
       </Box>
       <Box sx={style.mapLabel}>
-        <Box sx={style.projectTitle} onClick={() => goToProject(project)}>
+        <Link to={`/projects/${project.id}`} sx={style.projectTitle}>
           <Heading
             as="h2"
             sx={{
@@ -97,7 +93,7 @@ const HomeScreenProjectCard = ({
             {project.regionConfig.name} · {project.numberOfDistricts} districts ·
             {project.chamber ? ` ${project.chamber.name} ` : " Custom "}
           </Text>
-        </Box>
+        </Link>
         <Text
           sx={{
             color: "gray.5",

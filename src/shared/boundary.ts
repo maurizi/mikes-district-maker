@@ -462,8 +462,11 @@ export function computeDistrictBoundaries(
       const rings = stitchArcs([...boundaryArcs], endpoints, arcCoords, arcOffsets, transform);
       if (rings.length === 0) continue;
 
-      // Decode rings to coordinates
-      const decodedRings = rings.map(r => decodeRing(r, arcCoords, arcOffsets, transform));
+      // Decode rings to coordinates, filtering out degenerate rings (< 4 positions)
+      const decodedRings = rings
+        .map(r => decodeRing(r, arcCoords, arcOffsets, transform))
+        .filter(r => r.length >= 4);
+      if (decodedRings.length === 0) continue;
 
       if (decodedRings.length > 1) {
         // Sort by area, largest first (exterior ring)

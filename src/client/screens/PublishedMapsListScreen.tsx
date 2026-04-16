@@ -49,10 +49,12 @@ const style: Record<string, ThemeUIStyleObject> = {
     pb: 8,
     position: "relative",
     flexDirection: "row",
-    width: "large",
+    maxWidth: "large",
+    width: "100%",
     mx: "auto",
+    px: 4,
     "> *": {
-      mx: 5
+      mx: [0, 5]
     },
     "> *:last-of-type": {
       mr: 0
@@ -63,7 +65,7 @@ const style: Record<string, ThemeUIStyleObject> = {
   },
   featuredProjectContainer: {
     display: "grid",
-    gridTemplateColumns: "repeat(4, 1fr)",
+    gridTemplateColumns: ["1fr", "repeat(2, 1fr)", "repeat(4, 1fr)"],
     gridGap: "15px",
     justifyContent: "space-between",
     marginTop: "4"
@@ -122,7 +124,7 @@ const PublishedMapsListScreen = ({
       <SiteHeader user={user} />
       <Box sx={{ flex: 1 }}>
         <Box sx={style.projects}>
-          <Flex>
+          <Flex sx={{ flexDirection: ["column", "row"], gap: 3 }}>
             <Box sx={{ flex: 1 }}>
               <Heading as="h1" sx={{ my: "3" }}>
                 <span>Community maps</span>

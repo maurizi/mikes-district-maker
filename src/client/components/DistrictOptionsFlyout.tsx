@@ -20,9 +20,13 @@ const DistrictOptionsFlyout = ({
       gap={30}
       menuButton={
         <Button
-          sx={{ mr: 2 }}
+          sx={{
+            mr: 2,
+            "@media (hover: hover)": {
+              visibility: isDistrictHovered ? "visible" : "hidden"
+            }
+          }}
           variant="icon"
-          style={{ visibility: isDistrictHovered ? "visible" : "hidden" }}
         >
           <Icon name="ellipsis" color="#131f28" size={0.75} />
         </Button>

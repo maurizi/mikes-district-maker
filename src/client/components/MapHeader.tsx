@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Flex, Box, Button, Slider, Text, type ThemeUIStyleObject } from "theme-ui";
 import {
   type GeoLevelInfo,
@@ -54,9 +54,13 @@ const style: Record<string, ThemeUIStyleObject> = {
   },
   header: {
     variant: "styles.header.app",
+    height: "auto",
+    minHeight: "48px",
     backgroundColor: "white",
     alignItems: "center",
     justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: 1,
     px: 2,
     py: 1,
     borderBottom: "1px solid",
@@ -67,6 +71,7 @@ const style: Record<string, ThemeUIStyleObject> = {
     variant: "buttons.outlined",
     fontSize: 1,
     py: 1,
+    height: "32px",
     "&.selected": {
       bg: "blue.0",
       borderColor: "blue.2",
@@ -174,6 +179,30 @@ const MapHeader = ({
   readonly populationKey: GroupTotal;
 }) => {
   const [isPaintBrushSizeSliderVisible, setPaintBrushSizeSliderVisibility] = useState(false);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const labelsGroupRef = useRef<HTMLDivElement>(null);
+  const [labelsWrapped, setLabelsWrapped] = useState(false);
+
+  const checkWrapped = useCallback(() => {
+    const header = headerRef.current;
+    const labelsGroup = labelsGroupRef.current;
+    if (!header || !labelsGroup) return;
+    // Labels group is wrapped if its top is below the header's top + some threshold
+    const headerRect = header.getBoundingClientRect();
+    const labelsRect = labelsGroup.getBoundingClientRect();
+    setLabelsWrapped(labelsRect.top > headerRect.top + 10);
+  }, []);
+
+  useLayoutEffect(checkWrapped);
+
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+    const observer = new ResizeObserver(checkWrapped);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, [checkWrapped]);
+
   const topGeoLevelName = metadata
     ? metadata.geoLevelHierarchy[metadata.geoLevelHierarchy.length - 1].id
     : undefined;
@@ -224,97 +253,111 @@ const MapHeader = ({
     }
   ];
   return (
-    <Flex sx={style.header}>
-      <Flex sx={{ flex: 1 }}>
-        {!isReadOnly && (
-          <React.Fragment>
-            <Flex sx={{ ...style.buttonGroup, mr: 2 }}>
-              {selectionToolIcons.map(({ tooltipContent, tool, iconName }) => (
-                <Tooltip key={iconName} content={tooltipContent}>
-                  <Button
-                    sx={{ ...style.selectionButton }}
-                    className={buttonClassName(selectionTool === tool)}
-                    onClick={() => {
-                      // Open slider on click if not already open
-                      setPaintBrushSizeSliderVisibility(tool === SelectionTool.PaintBrush);
-                      store.dispatch(setSelectionTool(tool));
-                    }}
-                  >
-                    <Icon name={iconName} />
-                  </Button>
-                </Tooltip>
-              ))}
-            </Flex>
-            {isPaintBrushSizeSliderVisible ? (
-              <Box sx={style.sliderContainer}>
-                <Text sx={{ fontSize: 1, flexShrink: 0 }}>Brush size</Text>
-                <Slider
-                  min={1}
-                  max={5}
-                  step={1}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                    store.dispatch(
-                      setPaintBrushSize(parseInt(e.target.value, 10) as PaintBrushSize)
-                    );
+    <Flex ref={headerRef} sx={style.header}>
+      {!isReadOnly && (
+        <Flex sx={{ alignItems: "center" }}>
+          <Flex sx={{ ...style.buttonGroup, mr: 2 }}>
+            {selectionToolIcons.map(({ tooltipContent, tool, iconName }) => (
+              <Tooltip key={iconName} content={tooltipContent}>
+                <Button
+                  sx={{ ...style.selectionButton }}
+                  className={buttonClassName(selectionTool === tool)}
+                  onClick={() => {
+                    // Open slider on click if not already open
+                    setPaintBrushSizeSliderVisibility(tool === SelectionTool.PaintBrush);
+                    store.dispatch(setSelectionTool(tool));
                   }}
-                  sx={{ width: "110px", position: "relative", top: "2px", mx: 2 }}
-                  value={paintBrushSize}
-                />
-                <Text sx={{ fontSize: 1, flexShrink: 0 }}>{paintBrushSize}</Text>
-              </Box>
-            ) : null}
-
-            <Box sx={{ position: "relative", mr: 3, pt: "6px" }}>
-              <MapSelectionOptionsFlyout
-                limitSelectionToCounty={limitSelectionToCounty}
-                topGeoLevelName={topGeoLevelName}
-                metadata={metadata}
-                electionYear={electionYear}
-                selectedOffice={selectedOffice}
-                populationKey={populationKey}
+                >
+                  <Icon name={iconName} />
+                </Button>
+              </Tooltip>
+            ))}
+          </Flex>
+          {isPaintBrushSizeSliderVisible ? (
+            <Box sx={style.sliderContainer}>
+              <Text sx={{ fontSize: 1, flexShrink: 0 }}>Brush size</Text>
+              <Slider
+                min={1}
+                max={5}
+                step={1}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  store.dispatch(
+                    setPaintBrushSize(parseInt(e.target.value, 10) as PaintBrushSize)
+                  );
+                }}
+                sx={{ width: "110px", position: "relative", top: "2px", mx: 2 }}
+                value={paintBrushSize}
               />
+              <Text sx={{ fontSize: 1, flexShrink: 0 }}>{paintBrushSize}</Text>
             </Box>
-          </React.Fragment>
-        )}
-        <Flex className="geolevel-button-group">{geoLevelOptions}</Flex>
+          ) : null}
+
+          <Box sx={{ position: "relative", mr: 3, pt: "6px" }}>
+            <MapSelectionOptionsFlyout
+              limitSelectionToCounty={limitSelectionToCounty}
+              topGeoLevelName={topGeoLevelName}
+              metadata={metadata}
+              electionYear={electionYear}
+              selectedOffice={selectedOffice}
+              populationKey={populationKey}
+            />
+          </Box>
+        </Flex>
+      )}
+      <Flex
+        className="geolevel-button-group"
+        sx={{ flexShrink: 0 }}
+      >
+        {geoLevelOptions}
       </Flex>
-      <Box sx={{ lineHeight: "1" }}>
-        <LabelAutocomplete metadata={metadata} selectedLabel={label} />
-      </Box>
-      <Box
+      <Flex
+        ref={labelsGroupRef}
         sx={{
-          position: "relative",
-          ml: 3,
-          pl: 2,
-          color: "gray.7",
-          borderLeft: "1px solid",
-          borderLeftColor: "gray.2"
+          flex: 1,
+          minWidth: "150px",
+          ml: "auto",
+          alignItems: "center",
+          justifyContent: "flex-end"
         }}
       >
-        <Tooltip content="Find">
-          <Button
-            sx={{
-              variant: "buttons.icon",
-              fontSize: 1,
-              py: 1,
-              color: "gray.7",
-              border: "1px solid transparent",
-              "&:hover:not([disabled]):not(:active).selected, &.selected": {
-                bg: "blue.1",
+        <Box sx={{ lineHeight: "1", flex: 1, maxWidth: labelsWrapped ? "none" : "250px", ml: labelsWrapped ? 0 : 3 }}>
+          <LabelAutocomplete metadata={metadata} selectedLabel={label} />
+        </Box>
+        <Box
+          sx={{
+            position: "relative",
+            ml: 3,
+            pl: 2,
+            color: "gray.7",
+            borderLeft: "1px solid",
+            borderLeftColor: "gray.2"
+          }}
+        >
+          <Tooltip content="Find">
+            <Button
+              sx={{
+                variant: "buttons.icon",
+                fontSize: 1,
+                py: 1,
                 color: "gray.7",
-                opacity: 1,
-                borderColor: "gray.2"
-              }
-            }}
-            onClick={() => {
-              store.dispatch(toggleFind(!findMenuOpen));
-            }}
-            className={findMenuOpen ? "selected" : ""}
-          >
-            <Icon name="search" />
-          </Button>
-        </Tooltip>
-      </Box>
+                border: "1px solid transparent",
+                "&:hover:not([disabled]):not(:active).selected, &.selected": {
+                  bg: "blue.1",
+                  color: "gray.7",
+                  opacity: 1,
+                  borderColor: "gray.2"
+                }
+              }}
+              onClick={() => {
+                store.dispatch(toggleFind(!findMenuOpen));
+              }}
+              className={findMenuOpen ? "selected" : ""}
+            >
+              <Icon name="search" />
+            </Button>
+          </Tooltip>
+        </Box>
+      </Flex>
     </Flex>
   );
 };

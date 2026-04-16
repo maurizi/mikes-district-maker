@@ -15,12 +15,15 @@ import { type UserState } from "../reducers/user";
 import store from "../store";
 import { resendConfirmationEmail } from "../api";
 import { type WriteResource } from "../resource";
+import useIsMobile from "../hooks/useIsMobile";
 
 interface Props {
   readonly user: UserState;
 }
 
 enum UserMenuKeys {
+  MyMaps = "my-maps",
+  CommunityMaps = "community-maps",
   Account = "account",
   Logout = "logout"
 }
@@ -82,7 +85,8 @@ const style: Record<string, ThemeUIStyleObject> = {
     border: "1px solid",
     borderColor: "gray.2",
     boxShadow: "small",
-    borderRadius: "small"
+    borderRadius: "small",
+    zIndex: 500
   },
   menuList: {
     p: "0",
@@ -131,7 +135,84 @@ const style: Record<string, ThemeUIStyleObject> = {
 const SiteHeader = ({ user }: Props) => {
   const navigate = useNavigate();
   const isLoggedIn = isUserLoggedIn();
+  const isMobile = useIsMobile();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [resendEmail, setResendEmail] = useState<WriteResource<void, void>>({ data: void 0 });
+
+  const navLinks = "resource" in user ? (
+    <React.Fragment>
+      <span sx={style.linkItem}>
+        <NavLink to="/" onClick={() => setMobileMenuOpen(false)}>
+          My maps
+        </NavLink>
+      </span>
+      {user.resource.organizations.length > 0 && (
+        <OrganizationDropdown organizations={user.resource.organizations} />
+      )}
+      <span sx={style.linkItem}>
+        <NavLink to="/maps" onClick={() => setMobileMenuOpen(false)}>
+          Community maps
+        </NavLink>
+      </span>
+      <span
+        sx={{
+          svg: { display: "none" },
+          span: {
+            backgroundColor: "transparent !important"
+          }
+        }}
+      >
+        <SupportMenu />
+      </span>
+    </React.Fragment>
+  ) : null;
+
+  const userMenu = "resource" in user ? (
+    <Wrapper onSelection={handleSelection(navigate)} sx={isMobile ? {} : { ml: 3 }}>
+      <MenuButton sx={style.menuButton}>
+        <Avatar
+          name={user.resource.name}
+          round={true}
+          size={"2.5rem"}
+          color={"#2c485e"}
+          maxInitials={3}
+          sx={style.avatar}
+        />
+        <Box sx={{ ml: 2, color: "heading" }}>
+          <Icon name="angle-down" />
+        </Box>
+      </MenuButton>
+      <Menu sx={style.menu}>
+        <ul sx={style.menuList}>
+          {isMobile && (
+            <React.Fragment>
+              <li key={UserMenuKeys.MyMaps}>
+                <MenuItem value={UserMenuKeys.MyMaps} sx={style.menuListItem}>
+                  My maps
+                </MenuItem>
+              </li>
+              <li key={UserMenuKeys.CommunityMaps}>
+                <MenuItem value={UserMenuKeys.CommunityMaps} sx={style.menuListItem}>
+                  Community maps
+                </MenuItem>
+              </li>
+              <li sx={{ borderBottom: "1px solid", borderColor: "gray.2", my: 1 }} />
+            </React.Fragment>
+          )}
+          <li key={UserMenuKeys.Account}>
+            <MenuItem value={UserMenuKeys.Account} sx={style.menuListItem}>
+              Account
+            </MenuItem>
+          </li>
+          <li key={UserMenuKeys.Logout}>
+            <MenuItem value={UserMenuKeys.Logout} sx={style.menuListItem}>
+              Logout
+            </MenuItem>
+          </li>
+        </ul>
+      </Menu>
+    </Wrapper>
+  ) : null;
 
   return (
     <Flex sx={{ flexDirection: "column" }}>
@@ -181,10 +262,27 @@ const SiteHeader = ({ user }: Props) => {
       <Flex as="header" sx={style.header}>
         <Heading as="h1" sx={{ mb: "0px", mr: "auto", pt: 2 }}>
           <Link to="/" sx={style.logoLink}>
-            <Logo sx={{ width: "18rem" }} />
+            <Logo sx={{ width: isMobile ? "12rem" : "18rem" }} />
           </Link>
         </Heading>
-        {!isLoggedIn && (!("isPending" in user) || !user.isPending) ? (
+        {isMobile && isLoggedIn ? (
+          userMenu
+        ) : isMobile ? (
+          <Button
+            sx={{
+              bg: "transparent",
+              color: "gray.8",
+              p: 2,
+              ml: 2,
+              cursor: "pointer",
+              "&:focus": { outline: "none", boxShadow: "focus" }
+            }}
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label="Toggle navigation menu"
+          >
+            <Icon name={mobileMenuOpen ? "times" : "bars"} />
+          </Button>
+        ) : !isLoggedIn && (!("isPending" in user) || !user.isPending) ? (
           <React.Fragment>
             <Link to="/login" sx={{ p: 2 }}>
               Login
@@ -193,59 +291,41 @@ const SiteHeader = ({ user }: Props) => {
               Register
             </Link>
           </React.Fragment>
-        ) : "resource" in user ? (
+        ) : (
           <React.Fragment>
-            <span sx={style.linkItem}>
-              <NavLink to="/">My maps</NavLink>
-            </span>
-            {user.resource.organizations.length > 0 && (
-              <OrganizationDropdown organizations={user.resource.organizations} />
-            )}
-            <span sx={style.linkItem}>
-              <NavLink to="/maps">Community maps</NavLink>
-            </span>
-            <span
-              sx={{
-                svg: { display: "none" },
-                span: {
-                  backgroundColor: "transparent !important"
-                }
-              }}
-            >
-              <SupportMenu />
-            </span>
-            <Wrapper onSelection={handleSelection(navigate)} sx={{ ml: 3 }}>
-              <MenuButton sx={style.menuButton}>
-                <Avatar
-                  name={user.resource.name}
-                  round={true}
-                  size={"2.5rem"}
-                  color={"#2c485e"}
-                  maxInitials={3}
-                  sx={style.avatar}
-                />
-                <Box sx={{ ml: 2, color: "heading" }}>
-                  <Icon name="angle-down" />
-                </Box>
-              </MenuButton>
-              <Menu sx={style.menu}>
-                <ul sx={style.menuList}>
-                  <li key={UserMenuKeys.Account}>
-                    <MenuItem value={UserMenuKeys.Account} sx={style.menuListItem}>
-                      Account
-                    </MenuItem>
-                  </li>
-                  <li key={UserMenuKeys.Logout}>
-                    <MenuItem value={UserMenuKeys.Logout} sx={style.menuListItem}>
-                      Logout
-                    </MenuItem>
-                  </li>
-                </ul>
-              </Menu>
-            </Wrapper>
+            {navLinks}
+            {userMenu}
           </React.Fragment>
-        ) : null}
+        )}
       </Flex>
+      {isMobile && !isLoggedIn && mobileMenuOpen && (
+        <Flex
+          sx={{
+            flexDirection: "column",
+            bg: "gray.0",
+            borderBottom: "1px solid",
+            borderColor: "gray.1",
+            boxShadow: "small",
+            py: 2,
+            px: 3
+          }}
+        >
+          <Link
+            to="/login"
+            sx={{ py: 2, display: "block" }}
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            Login
+          </Link>
+          <Link
+            to="/register"
+            sx={{ py: 2, display: "block" }}
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            Register
+          </Link>
+        </Flex>
+      )}
     </Flex>
   );
 };
@@ -258,6 +338,14 @@ const handleSelection = (navigate: NavigateFunction) => (key: string | number) =
 
   if (key === UserMenuKeys.Account) {
     navigate("/user-account");
+  }
+
+  if (key === UserMenuKeys.MyMaps) {
+    navigate("/");
+  }
+
+  if (key === UserMenuKeys.CommunityMaps) {
+    navigate("/maps");
   }
 };
 

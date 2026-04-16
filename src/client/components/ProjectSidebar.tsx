@@ -815,9 +815,13 @@ const SidebarRow = memo(
                 <Tooltip content="Lock this district">
                   <Button
                     variant="icon"
-                    style={{ visibility: isDistrictHovered ? "visible" : "hidden" }}
                     onClick={toggleLocked}
-                    sx={style.lockButton}
+                    sx={{
+                      ...style.lockButton,
+                      "@media (hover: hover)": {
+                        visibility: isDistrictHovered ? "visible" : "hidden"
+                      }
+                    }}
                   >
                     <Icon name="lock-unlocked" size={0.75} />
                   </Button>

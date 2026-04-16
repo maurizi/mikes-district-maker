@@ -4,7 +4,7 @@ import { useBeforeunload } from "react-beforeunload";
 import { connect } from "react-redux";
 import { Navigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
-import { Flex, Spinner, type ThemeUIStyleObject } from "theme-ui";
+import { Box, Button, Flex, Spinner, type ThemeUIStyleObject } from "theme-ui";
 
 import {
   type GeoUnitHierarchy,
@@ -30,6 +30,7 @@ import DeleteReferenceLayerModal from "../components/DeleteReferenceLayerModal";
 import ProjectEvaluateSidebar from "../components/evaluate/ProjectEvaluateSidebar";
 import Icon from "../components/Icon";
 import AdvancedEditingModal from "../components/map/AdvancedEditingModal";
+
 import KeyboardShortcutsModal from "../components/map/KeyboardShortcutsModal";
 import Map from "../components/map/Map";
 import MapHeader from "../components/MapHeader";
@@ -48,6 +49,7 @@ import { type Resource } from "../resource";
 import store from "../store";
 import { type DistrictsGeoJSON, type EvaluateMetricWithValue } from "../types";
 
+import useIsMobile, { useIsNarrowViewport } from "../hooks/useIsMobile";
 import PageNotFoundScreen from "./PageNotFoundScreen";
 
 interface StateProps {
@@ -108,6 +110,9 @@ const ProjectScreen = ({
 }: StateProps) => {
   const { projectId } = useParams();
   const [map, setMap] = useState<maplibregl.Map | undefined>(undefined);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const isNarrow = useIsNarrowViewport();
+  const effectiveReadOnly = isReadOnly || isNarrow;
   const isLoggedIn = isUserLoggedIn();
   const isFirstLoadPending =
     project === undefined ||
@@ -188,9 +193,134 @@ const ProjectScreen = ({
     </Flex>
   ) : (
     <Flex sx={{ height: "100%", flexDirection: "column" }}>
-      <ProjectHeader map={map} project={project} isArchived={isArchived} isReadOnly={isReadOnly} />
-      <Flex sx={{ flex: 1, overflowY: "auto" }}>
-        {!evaluateMode ? (
+      <ProjectHeader
+        map={map}
+        project={project}
+        isArchived={isArchived}
+        isReadOnly={isReadOnly}
+        isMobile={isNarrow}
+      />
+      {isNarrow && !isReadOnly && (
+        <Flex
+          sx={{
+            bg: "blue.1",
+            color: "blue.8",
+            px: 3,
+            py: 2,
+            fontSize: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            textAlign: "center"
+          }}
+        >
+          Use a desktop browser to edit this map
+        </Flex>
+      )}
+      <Flex sx={{ flex: 1, overflowY: "auto", position: "relative" }}>
+        {isNarrow ? (
+          <React.Fragment>
+            {!mobileSidebarOpen && (
+              <Button
+                sx={{
+                  position: "absolute",
+                  bottom: 3,
+                  left: 3,
+                  zIndex: 250,
+                  variant: "buttons.primary",
+                  boxShadow: "medium",
+                  fontSize: 1,
+                  px: 3,
+                  py: 2,
+                  cursor: "pointer"
+                }}
+                onClick={() => setMobileSidebarOpen(true)}
+              >
+                <Icon name="bars" /> Districts
+              </Button>
+            )}
+            {mobileSidebarOpen && (
+              <Flex
+                sx={{
+                  position: "absolute",
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  height: "55vh",
+                  zIndex: 300,
+                  flexDirection: "column",
+                  bg: "muted",
+                  boxShadow: "0 -2px 8px rgba(0,0,0,0.15)",
+                  borderTopLeftRadius: "8px",
+                  borderTopRightRadius: "8px"
+                }}
+              >
+                <Flex
+                  sx={{
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    px: 3,
+                    py: 2,
+                    borderBottom: "1px solid",
+                    borderColor: "gray.2",
+                    flexShrink: 0
+                  }}
+                >
+                  <span sx={{ fontWeight: "bold", fontFamily: "heading" }}>Districts</span>
+                  <Button
+                    sx={{
+                      bg: "transparent",
+                      color: "gray.7",
+                      p: 1,
+                      cursor: "pointer",
+                      "&:hover": { color: "gray.8" }
+                    }}
+                    onClick={() => setMobileSidebarOpen(false)}
+                  >
+                    <Icon name="times" />
+                  </Button>
+                </Flex>
+                <Box
+                  sx={{
+                    flex: 1,
+                    overflowY: "auto",
+                    overflowX: "auto",
+                    ".map-sidebar": { minWidth: "unset !important", height: "auto !important" }
+                  }}
+                >
+                  {!evaluateMode ? (
+                    <ProjectSidebar
+                      project={project}
+                      geojson={geojson}
+                      isLoading={isLoading}
+                      staticMetadata={staticMetadata}
+                      selectedDistrictId={districtDrawing.selectedDistrictId}
+                      selectedGeounits={presentDrawingState.selectedGeounits}
+                      highlightedGeounits={districtDrawing.highlightedGeounits}
+                      expandedProjectMetrics={districtDrawing.expandedProjectMetrics}
+                      geoUnitHierarchy={geoUnitHierarchy}
+                      referenceLayers={referenceLayers}
+                      showReferenceLayers={districtDrawing.showReferenceLayers}
+                      lockedDistricts={presentDrawingState.lockedDistricts}
+                      hoveredDistrictId={districtDrawing.hoveredDistrictId}
+                      saving={districtDrawing.saving}
+                      populationKey={projectOptions.populationKey}
+                      isReadOnly={effectiveReadOnly}
+                      pinnedMetrics={districtDrawing.undoHistory.present.state.pinnedMetricFields}
+                    />
+                  ) : (
+                    <ProjectEvaluateSidebar
+                      geojson={geojson}
+                      metric={evaluateMetric}
+                      project={project}
+                      staticMetadata={staticMetadata}
+                      isArchived={isArchived}
+                    />
+                  )}
+                </Box>
+              </Flex>
+            )}
+          </React.Fragment>
+        ) : !evaluateMode ? (
           <ProjectSidebar
             project={project}
             geojson={geojson}
@@ -207,7 +337,7 @@ const ProjectScreen = ({
             hoveredDistrictId={districtDrawing.hoveredDistrictId}
             saving={districtDrawing.saving}
             populationKey={projectOptions.populationKey}
-            isReadOnly={isReadOnly}
+            isReadOnly={effectiveReadOnly}
             pinnedMetrics={districtDrawing.undoHistory.present.state.pinnedMetricFields}
           />
         ) : (
@@ -239,7 +369,7 @@ const ProjectScreen = ({
                 selectedGeounits={presentDrawingState.selectedGeounits}
                 limitSelectionToCounty={limitSelectionToCounty}
                 advancedEditingEnabled={project?.advancedEditingEnabled}
-                isReadOnly={isReadOnly}
+                isReadOnly={effectiveReadOnly}
                 electionYear={projectOptions.electionYear}
                 selectedOffice={projectOptions.selectedOffice}
                 populationKey={projectOptions.populationKey}
@@ -250,7 +380,7 @@ const ProjectScreen = ({
 
             {project && staticMetadata && staticGeoLevels && geojson ? (
               <React.Fragment>
-                {!isReadOnly && "resource" in user && (
+                {!effectiveReadOnly && "resource" in user && (
                   <Tour
                     geojson={geojson}
                     project={project}
@@ -274,14 +404,14 @@ const ProjectScreen = ({
                   lockedDistricts={presentDrawingState.lockedDistricts}
                   evaluateMode={evaluateMode}
                   evaluateMetric={evaluateMetric}
-                  isReadOnly={isReadOnly}
+                  isReadOnly={effectiveReadOnly}
                   isArchived={isArchived}
                   limitSelectionToCounty={limitSelectionToCounty}
                   label={mapLabel}
                   map={map}
                   setMap={setMap}
                 />
-                {!isReadOnly && (
+                {!effectiveReadOnly && (
                   <AdvancedEditingModal
                     id={project.id}
                     geoLevels={staticMetadata.geoLevelHierarchy}
@@ -289,7 +419,7 @@ const ProjectScreen = ({
                 )}
                 <CopyMapModal project={project} />
                 <KeyboardShortcutsModal
-                  isReadOnly={isReadOnly}
+                  isReadOnly={effectiveReadOnly}
                   evaluateMode={evaluateMode}
                   staticMetadata={staticMetadata}
                 />

@@ -49,6 +49,7 @@ const defaultConfirmationModalHeader = {
 };
 
 const theme: Theme = {
+  breakpoints: ["40em", "52em", "64em"],
   fonts: {
     body: "-apple-system, BlinkMacSystemFont, avenir next, avenir, helvetica neue, helvetica, Ubuntu, roboto, noto, segoe ui, arial, sans-serif",
     heading:

@@ -535,7 +535,7 @@ export function generateMapLayers(
         layout: { visibility: "none" },
         paint: getGeolevelLinePaintStyle(level.id)
       },
-      beforeLabelId
+      DISTRICTS_SELECTED_OUTLINE_LAYER_ID
     );
   });
 

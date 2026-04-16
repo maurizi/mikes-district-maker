@@ -44,7 +44,7 @@ echo "  cloudfront:  $CLOUDFRONT_DIST_ID"
 ##########
 
 say "Building server (nest build)"
-(cd "$SERVER_DIR" && rm -rf dist && yarn build >/dev/null)
+(cd "$SERVER_DIR" && docker run --rm -v "$SERVER_DIR:/app" -w /app node:24-bookworm-slim rm -rf dist && yarn build >/dev/null)
 
 say "Bundling server with esbuild"
 BUNDLE_DIR=$(mktemp -d)
@@ -162,6 +162,14 @@ aws lambda wait function-updated --function-name "$LAMBDA_FUNCTION_NAME"
 ##########
 # Client #
 ##########
+
+say "Reading RUM config from terraform"
+export VITE_RUM_APP_MONITOR_ID=$(tf output -raw rum_app_monitor_id)
+export VITE_RUM_GUEST_ROLE_ARN=$(tf output -raw rum_guest_role_arn)
+export VITE_RUM_IDENTITY_POOL_ID=$(tf output -raw rum_identity_pool_id)
+export VITE_RUM_REGION="us-east-1"
+echo "  monitor:     $VITE_RUM_APP_MONITOR_ID"
+echo "  pool:        $VITE_RUM_IDENTITY_POOL_ID"
 
 say "Building client (vite)"
 (cd "$ROOT_DIR" && yarn build >/dev/null)

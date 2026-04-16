@@ -1,0 +1,64 @@
+#!/bin/bash
+
+set -e
+
+if [[ -n "${DB_DEBUG}" ]]; then
+    set -x
+fi
+
+function usage() {
+    echo -n \
+        "Usage: $(basename "$0") <manage-command> [args...]
+Run a manage command against the production Aurora DSQL cluster.
+
+Requires AWS credentials for the district-builder profile. The DSQL endpoint
+is read from \$DSQL_ENDPOINT if set, otherwise from 'terraform output'.
+
+Set DB_TARGET=prod in the environment to skip the confirmation prompt.
+"
+}
+
+if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+    return
+fi
+
+if [[ "${1:-}" == "--help" || $# -eq 0 ]]; then
+    usage
+    exit 0
+fi
+
+export AWS_PROFILE="${AWS_PROFILE:-district-builder}"
+export AWS_REGION="${AWS_REGION:-us-east-1}"
+
+if [[ -z "${DSQL_ENDPOINT:-}" ]]; then
+    echo "DSQL_ENDPOINT not set — reading from terraform output..."
+    DSQL_ENDPOINT="$(cd deployment/terraform && terraform output -raw dsql_endpoint)"
+fi
+
+if [[ -z "${DSQL_ENDPOINT}" ]]; then
+    echo "ERROR: could not determine DSQL_ENDPOINT" >&2
+    exit 1
+fi
+
+echo "Target: PRODUCTION DSQL (${DSQL_ENDPOINT})"
+echo "Command: $*"
+
+if [[ "${DB_TARGET:-}" != "prod" ]]; then
+    read -r -p "Type 'prod' to confirm: " confirm
+    if [[ "${confirm}" != "prod" ]]; then
+        echo "Aborted."
+        exit 1
+    fi
+fi
+
+docker compose run --no-deps --rm \
+    -e DSQL_ENDPOINT="${DSQL_ENDPOINT}" \
+    -e DSQL_USER="${DSQL_USER:-admin}" \
+    -e AWS_REGION="${AWS_REGION:-us-east-1}" \
+    -e AWS_PROFILE="${AWS_PROFILE:-district-builder}" \
+    -e POSTGRES_HOST= \
+    -e POSTGRES_PORT= \
+    -e POSTGRES_USER= \
+    -e POSTGRES_PASSWORD= \
+    -e POSTGRES_DB= \
+    manage ./bin/run "$@"

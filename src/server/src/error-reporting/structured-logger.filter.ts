@@ -1,10 +1,7 @@
 import {
   ArgumentsHost,
   Catch,
-  HttpException,
-  NotFoundException,
-  ServiceUnavailableException,
-  UnauthorizedException
+  HttpException
 } from "@nestjs/common";
 import { Request } from "express";
 import { BaseExceptionFilter } from "@nestjs/core";
@@ -15,13 +12,12 @@ export interface IGetUserAuthInfoRequest extends Request {
   };
 }
 
-function isWhitelisted(exception: HttpException) {
-  // BadRequestException has its own exception filter already
-  return (
-    exception instanceof NotFoundException ||
-    exception instanceof ServiceUnavailableException ||
-    exception instanceof UnauthorizedException
-  );
+function isServerError(exception: unknown): boolean {
+  if (exception instanceof HttpException) {
+    return exception.getStatus() >= 500;
+  }
+  // Non-HttpException errors (unhandled throws, crashes) are always server errors
+  return exception instanceof Error;
 }
 
 function parseIp(req: IGetUserAuthInfoRequest): string | undefined {
@@ -39,10 +35,7 @@ function parseIp(req: IGetUserAuthInfoRequest): string | undefined {
 @Catch()
 export class StructuredLoggerExceptionFilter extends BaseExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
-    if (
-      (exception instanceof HttpException && !isWhitelisted(exception)) ||
-      (exception instanceof Error && !(exception instanceof HttpException))
-    ) {
+    if (isServerError(exception)) {
       const ctx = host.switchToHttp();
       const request = ctx.getRequest<IGetUserAuthInfoRequest>();
       const err = exception as Error;

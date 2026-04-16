@@ -6,7 +6,7 @@
 resource "aws_cognito_identity_pool" "rum" {
   identity_pool_name               = "${var.project}-${var.environment}-rum"
   allow_unauthenticated_identities = true
-  allow_classic_flow               = false
+  allow_classic_flow               = true
 }
 
 data "aws_iam_policy_document" "rum_guest_assume" {

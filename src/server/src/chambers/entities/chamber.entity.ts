@@ -20,6 +20,13 @@ export class Chamber implements IChamber {
   })
   numberOfMembers?: readonly number[];
 
+  @Column({
+    type: "character varying",
+    name: "default_population_field",
+    nullable: true
+  })
+  defaultPopulationField?: string;
+
   @ManyToOne(() => RegionConfig, { nullable: false })
   @JoinColumn({ name: "region_config_id" })
   regionConfig: RegionConfig;

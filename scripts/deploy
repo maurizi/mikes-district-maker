@@ -159,6 +159,14 @@ aws lambda wait function-updated --function-name "$LAMBDA_FUNCTION_NAME"
 # Env vars (including secrets) are managed by terraform — see
 # deployment/terraform/lambda.tf + production.tfvars.
 
+##############
+# Migrations #
+##############
+
+say "Running database migrations"
+DSQL_ENDPOINT=$(tf output -raw dsql_endpoint)
+(cd "$SERVER_DIR" && DSQL_ENDPOINT="$DSQL_ENDPOINT" yarn migration:run)
+
 ##########
 # Client #
 ##########

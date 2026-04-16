@@ -184,6 +184,12 @@ export function isMajorityMinority(f: DistrictGeoJSON): boolean {
   );
 }
 
+/** The population key to use for deviation calculations.
+ *  Only "population" and "adj_population" affect deviation; VAP/CVAP do not. */
+export function getDeviationPopulationKey(populationKey: GroupTotal): GroupTotal {
+  return populationKey === "adj_population" ? "adj_population" : "population";
+}
+
 export function getDemographicsPercentages(
   demographics: { readonly [id: string]: number },
   demographicsGroups: readonly DemographicsGroup[],
@@ -193,13 +199,22 @@ export function getDemographicsPercentages(
   const total = Math.abs(demographics[populationKey]);
   const group =
     demographicsGroups.find(group => group.total === populationKey) || demographicsGroups[0];
-  const selectedDemographics = pick(demographics, group.subgroups);
+  // Fall back to the "population" group's subgroups when the selected group has none
+  // (e.g. DE adjusted data has no racial breakdown)
+  const subgroups =
+    group.subgroups.length > 0
+      ? group.subgroups
+      : (demographicsGroups.find(g => g.total === "population")?.subgroups || []);
+  const selectedDemographics = pick(demographics, subgroups);
   const renamedDemographics =
     populationKey === "population"
       ? selectedDemographics
-      : mapKeys(selectedDemographics, (val, key) =>
-          key.slice(populationKey.length + 1).toLowerCase()
-        );
+      : mapKeys(selectedDemographics, (val, key) => {
+          // Strip the group prefix if present (e.g. "VAP White" -> "white")
+          // For adj_population fallback to population subgroups, keys have no prefix
+          const prefixLen = populationKey.length + 1;
+          return key.startsWith(populationKey + " ") ? key.slice(prefixLen).toLowerCase() : key;
+        });
   const percentages = mapValues(renamedDemographics, (population: number) =>
     Math.min((total ? population / total : 0) * 100, 100)
   );
@@ -500,10 +515,11 @@ export function assignGeounitsToDistrict(
 
 export function getPopulationPerRepresentative(
   geojson: DistrictsGeoJSON,
-  numberOfMembers: readonly number[]
+  numberOfMembers: readonly number[],
+  populationKey: GroupTotal = "population"
 ) {
   const totalPopulation = geojson.features.reduce(
-    (total, feature) => total + feature.properties.demographics.population,
+    (total, feature) => total + (feature.properties.demographics[populationKey] ?? feature.properties.demographics.population),
     0
   );
   const totalReps = numberOfMembers.reduce((total, numberOfReps) => total + numberOfReps, 0);

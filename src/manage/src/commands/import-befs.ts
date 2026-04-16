@@ -130,7 +130,8 @@ export default class ImportBefs extends Command {
       const stateDir = join(csvDir, stateAbbr);
       const csvFiles = readdirSync(stateDir)
         .filter(f => f.endsWith(".csv") && !f.includes("_district_names"))
-        .sort();
+        .sort()
+        .reverse(); // Upload alphabetically descending, homepage displays most recent first based on updateDt so it gets reversed again
 
       if (csvFiles.length === 0) {
         this.log(`  ${stateAbbr}: no CSV files, skipping`);

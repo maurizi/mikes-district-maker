@@ -90,6 +90,12 @@ export default class PrepareDevData extends Command {
     befDir: Flags.string({
       description:
         "Directory containing per-state BEF CSV subdirectories (e.g. dev-data/befs). Blocks referenced in any CSV under <befDir>/<stateAbbr>/ are allowed to fall back to the nearest precinct when outside precinct coverage; all other blocks outside precinct coverage are dropped."
+    }),
+    adjDir: Flags.string({
+      description:
+        "Directory containing normalized adjusted-PL CSVs (e.g. dev-data/adjusted-pl). " +
+        "If <adjDir>/<STATE>.csv exists, adjusted population fields (adj_population, etc.) " +
+        "are merged into block demographics."
     })
   };
 
@@ -374,6 +380,40 @@ export default class PrepareDevData extends Command {
         writeFileSync(cacheCountyPath, JSON.stringify(Object.fromEntries(countyNames)));
         this.log(`   Saved cache to ${cacheBase}.*`);
       }
+    }
+
+    // Load adjusted population data if available (runs regardless of cache)
+    const adjCsvPath = flags.adjDir
+      ? join(flags.adjDir, `${stateAbbr}.csv`)
+      : "";
+    if (adjCsvPath && existsSync(adjCsvPath)) {
+      this.log(`\nLoading adjusted population from ${adjCsvPath}...`);
+      const adjContent = readFileSync(adjCsvPath, "utf-8");
+      const adjLines = adjContent.split("\n").map(l => l.replace(/\r$/, "")).filter(l => l.trim());
+      const adjHeader = adjLines[0].split(",");
+      const adjGeoidIdx = adjHeader.indexOf("GEOID");
+      let adjMatched = 0;
+      let adjUnmatched = 0;
+      for (let i = 1; i < adjLines.length; i++) {
+        const cols = adjLines[i].split(",");
+        const geoid = cols[adjGeoidIdx];
+        const demo = blockDemographics.get(geoid);
+        if (demo) {
+          for (let c = 0; c < adjHeader.length; c++) {
+            const field = adjHeader[c];
+            if (field !== "GEOID") {
+              // Allow negative values (expected for some prison reallocation blocks)
+              demo[field] = Math.round(parseFloat(cols[c]) || 0);
+            }
+          }
+          adjMatched++;
+        } else {
+          adjUnmatched++;
+        }
+      }
+      this.log(
+        `   Adjusted pop merged: ${adjMatched} blocks matched, ${adjUnmatched} unmatched`
+      );
     }
 
     // ── Step 2: Load VEST precinct polygons with geometry ──
@@ -991,6 +1031,23 @@ export default class PrepareDevData extends Command {
     let splitBlocks = 0;
     let noMatch = 0;
     let totalSubBlocks = 0;
+    // Detect which adjusted fields are present (varies by state)
+    const adjFieldCandidates = [
+      "adj_population",
+      "adj_white",
+      "adj_black",
+      "adj_asian",
+      "adj_hispanic",
+      "adj_other"
+    ];
+    const firstDemo = blockDemographics.values().next().value;
+    const adjFields = firstDemo
+      ? adjFieldCandidates.filter(f => f in firstDemo)
+      : [];
+    if (adjFields.length > 0) {
+      this.log(`   Adjusted fields detected: ${adjFields.join(", ")}`);
+    }
+
     const demoKeys = [
       "population",
       "white",
@@ -998,6 +1055,7 @@ export default class PrepareDevData extends Command {
       "asian",
       "hispanic",
       "other",
+      ...adjFields,
       "VAP",
       "VAP White",
       "VAP Black",

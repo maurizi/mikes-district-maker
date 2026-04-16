@@ -1,6 +1,6 @@
 import { type ThemeUIStyleObject, Container, Box } from "theme-ui";
 
-import { type IProject, type IStaticMetadata } from "../../../shared/entities";
+import { type IProject, type IStaticMetadata, type GroupTotal } from "../../../shared/entities";
 import {
   type DistrictsGeoJSON,
   type EvaluateMetricWithValue,
@@ -11,7 +11,8 @@ import store from "../../store";
 import {
   hasMultipleElections,
   isMajorityMinority,
-  getPopulationPerRepresentative
+  getPopulationPerRepresentative,
+  getDeviationPopulationKey
 } from "../../functions";
 import ProjectEvaluateMetricDetail from "./ProjectEvaluateMetricDetail";
 import ProjectEvaluateSummary from "./ProjectEvaluateSummary";
@@ -37,11 +38,13 @@ const ProjectEvaluateSidebar = ({
   geojson,
   metric,
   project,
-  staticMetadata
+  staticMetadata,
+  populationKey = "population"
 }: {
   readonly geojson?: DistrictsGeoJSON;
   readonly metric: EvaluateMetricWithValue | undefined;
   readonly project?: IProject;
+  readonly populationKey?: GroupTotal;
   readonly staticMetadata?: IStaticMetadata;
   readonly isArchived: boolean;
 }) => {
@@ -64,16 +67,23 @@ const ProjectEvaluateSidebar = ({
   const geoLevel =
     staticMetadata?.geoLevelHierarchy[staticMetadata.geoLevelHierarchy.length - 1].id;
 
+  const devPopKey = getDeviationPopulationKey(populationKey);
+  const populationPerRepresentative =
+    geojson && project && getPopulationPerRepresentative(geojson, project?.numberOfMembers, devPopKey);
+
   const numEqualPopDistricts =
     geojson &&
+    populationPerRepresentative !== undefined &&
     popThreshold !== undefined &&
-    geojson?.features.filter(f => {
+    geojson?.features.filter((f, idx) => {
+      if (f.id === 0) return false;
+      const districtPop = f.properties.demographics[devPopKey] ?? f.properties.demographics.population;
+      const targetPop = populationPerRepresentative * (project?.numberOfMembers[idx - 1] ?? 1);
+      const deviation = districtPop - targetPop;
+      const pctDeviation = targetPop !== 0 ? deviation / targetPop : 0;
       return (
-        f.id !== 0 &&
-        f.properties.percentDeviation !== undefined &&
-        f.properties.populationDeviation !== undefined &&
-        (Math.abs(f.properties.percentDeviation) <= popThreshold / 100.0 ||
-          Math.abs(f.properties.populationDeviation) < 1)
+        Math.abs(pctDeviation) <= popThreshold / 100.0 ||
+        Math.abs(deviation) < 1
       );
     }).length;
   const numDistrictsWithGeometries =
@@ -131,8 +141,6 @@ const ProjectEvaluateSidebar = ({
     }
   }, [electionYear, geojson, metric, numDistrictsWithGeometries]);
 
-  const populationPerRepresentative =
-    geojson && project && getPopulationPerRepresentative(geojson, project?.numberOfMembers);
   const multipleElections = hasMultipleElections(staticMetadata);
 
   const requiredMetrics: readonly EvaluateMetricWithValue[] = [
@@ -253,6 +261,7 @@ const ProjectEvaluateSidebar = ({
         />
       ) : geoLevel ? (
         <ProjectEvaluateMetricDetail
+          key={populationKey}
           geojson={geojson}
           metric={metric}
           project={project}

@@ -21,6 +21,7 @@ import {
   projectReferenceLayersFetch
 } from "../actions/projectData";
 import { resetProjectState } from "../actions/root";
+import { setPopulationKey } from "../actions/projectOptions";
 import { userFetch } from "../actions/user";
 import "../App.css";
 import AddReferenceLayerModal from "../components/AddReferenceLayerModal";
@@ -168,6 +169,17 @@ const ProjectScreen = ({
     store.dispatch(clearDuplicationState());
   }, []);
 
+  // Initialize populationKey from chamber default when project loads
+  useEffect(() => {
+    if (project?.chamber?.defaultPopulationField && staticMetadata) {
+      const groups = staticMetadata.demographicsGroups || [];
+      const hasGroup = groups.some(g => g.total === project.chamber!.defaultPopulationField);
+      if (hasGroup) {
+        store.dispatch(setPopulationKey(project.chamber.defaultPopulationField));
+      }
+    }
+  }, [project?.id, staticMetadata]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     isLoggedIn && store.dispatch(userFetch());
     projectId && store.dispatch(projectReferenceLayersFetch(projectId));
@@ -314,6 +326,7 @@ const ProjectScreen = ({
                       project={project}
                       staticMetadata={staticMetadata}
                       isArchived={isArchived}
+                      populationKey={projectOptions.populationKey}
                     />
                   )}
                 </Box>

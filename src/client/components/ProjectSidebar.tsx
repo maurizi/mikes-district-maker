@@ -42,7 +42,8 @@ import {
   isMajorityMinority,
   getMajorityRaceDisplay,
   capitalizeFirstLetter,
-  getPopulationPerRepresentative
+  getPopulationPerRepresentative,
+  getDeviationPopulationKey
 } from "../functions";
 import store from "../store";
 import { type DistrictGeoJSON, type DistrictsGeoJSON, type SavingState } from "../types";
@@ -935,9 +936,10 @@ const SidebarRows = ({
     cachedPopulationKey
   ]);
 
+  const devPopKey = getDeviationPopulationKey(populationKey);
   const popPerRep = useMemo(
-    () => getPopulationPerRepresentative(geojson, project.numberOfMembers),
-    [geojson, project.numberOfMembers]
+    () => getPopulationPerRepresentative(geojson, project.numberOfMembers, devPopKey),
+    [geojson, project.numberOfMembers, devPopKey]
   );
   const demographicsMetricFields = useMemo(
     () => getDemographicsMetricFields(staticMetadata),
@@ -967,7 +969,7 @@ const SidebarRows = ({
 
         const targetPopulation =
           districtId !== 0 ? popPerRep * (project.numberOfMembers[districtId - 1] || 0) : 0;
-        const deviation = feature.properties.demographics.population - targetPopulation;
+        const deviation = (feature.properties.demographics[devPopKey] ?? feature.properties.demographics.population) - targetPopulation;
 
         return (
           <SidebarRow

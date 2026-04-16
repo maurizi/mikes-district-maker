@@ -44,6 +44,7 @@ import {
   getAvailableElectionYears,
   calculatePVI,
   getPopulationPerRepresentative,
+  getDeviationPopulationKey,
   getDemographicsPercentages
 } from "../../functions";
 import {
@@ -540,7 +541,8 @@ const DistrictsMap = ({
 
   // Update districts source when geojson is fetched or find type is changed
   useEffect(() => {
-    const popPerRep = getPopulationPerRepresentative(geojson, project.numberOfMembers);
+    const devPopKey = getDeviationPopulationKey(populationKey);
+    const popPerRep = getPopulationPerRepresentative(geojson, project.numberOfMembers, devPopKey);
 
     geojson.features.forEach((feature, id) => {
       // Add a color property to the geojson, so it can be used for styling
@@ -562,8 +564,9 @@ const DistrictsMap = ({
 
       // The population goal for the unassigned district is 0,
       // so it's deviation is equal to its population
+      const districtPop = feature.properties.demographics[devPopKey] ?? feature.properties.demographics.population;
       const targetPopulation = feature.id !== 0 ? popPerRep * project.numberOfMembers[id - 1] : 0;
-      const populationDeviation = feature.properties.demographics.population - targetPopulation;
+      const populationDeviation = districtPop - targetPopulation;
 
       feature.properties.percentDeviation =
         feature.properties.demographics.population !== 0 && feature.id !== 0

@@ -332,6 +332,7 @@ export interface IChamber {
   readonly name: string;
   readonly numberOfDistricts: number;
   readonly numberOfMembers?: readonly number[];
+  readonly defaultPopulationField?: GroupTotal;
   readonly regionConfig: IRegionConfig;
 }
 

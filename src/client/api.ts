@@ -35,7 +35,7 @@ import {
   type PaginatedResponse,
   type ReferenceLayerWithGeojson
 } from "./types";
-import { getJWT, setJWT } from "./jwt";
+import { clearJWT, getJWT, setJWT } from "./jwt";
 import { fetchStaticMetadata } from "./s3";
 import { importCsv as workerImportCsv } from "./worker-functions";
 
@@ -47,6 +47,17 @@ function setAxiosAuthHeaders(jwt: JWT): void {
 
   apiAxios.defaults.headers.common.Authorization = `Bearer ${jwt}`;
 }
+
+// If the server rejects our JWT (expired, invalid, unknown user after DB reset),
+// clear it from localStorage so the user isn't stuck in a limbo auth state.
+apiAxios.interceptors.response.use(undefined, error => {
+  if (error.response?.status === 401) {
+    clearJWT();
+    delete apiAxios.defaults.headers.common.Authorization;
+    window.location.replace("/login");
+  }
+  return Promise.reject(error);
+});
 
 const authToken = getJWT();
 // Disabling 'functional/no-conditional-statement' without naming it.

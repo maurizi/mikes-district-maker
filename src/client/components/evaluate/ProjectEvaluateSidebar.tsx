@@ -69,7 +69,9 @@ const ProjectEvaluateSidebar = ({
 
   const devPopKey = getDeviationPopulationKey(populationKey);
   const populationPerRepresentative =
-    geojson && project && getPopulationPerRepresentative(geojson, project?.numberOfMembers, devPopKey);
+    geojson &&
+    project &&
+    getPopulationPerRepresentative(geojson, project?.numberOfMembers, devPopKey);
 
   const numEqualPopDistricts =
     geojson &&
@@ -77,14 +79,12 @@ const ProjectEvaluateSidebar = ({
     popThreshold !== undefined &&
     geojson?.features.filter((f, idx) => {
       if (f.id === 0) return false;
-      const districtPop = f.properties.demographics[devPopKey] ?? f.properties.demographics.population;
+      const districtPop =
+        f.properties.demographics[devPopKey] ?? f.properties.demographics.population;
       const targetPop = populationPerRepresentative * (project?.numberOfMembers[idx - 1] ?? 1);
       const deviation = districtPop - targetPop;
       const pctDeviation = targetPop !== 0 ? deviation / targetPop : 0;
-      return (
-        Math.abs(pctDeviation) <= popThreshold / 100.0 ||
-        Math.abs(deviation) < 1
-      );
+      return Math.abs(pctDeviation) <= popThreshold / 100.0 || Math.abs(deviation) < 1;
     }).length;
   const numDistrictsWithGeometries =
     geojson && geojson.features.filter(f => f.id !== 0 && f.geometry.coordinates.length > 0).length;

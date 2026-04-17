@@ -329,9 +329,7 @@ const LandingScreen = ({ user }: StateProps) => {
               >
                 terms and conditions
               </a>{" "}
-              — noncommercial and nonpartisan use only, no gerrymandering. Thanks in particular to{" "}
-              <strong>Ben Rosenblatt</strong>, whose New York precinct-level election data is
-              distributed through RDH.
+              — noncommercial and nonpartisan use only, no gerrymandering.
             </Text>
           </Box>
           <Box sx={style.partnerCard}>
@@ -348,32 +346,6 @@ const LandingScreen = ({ user }: StateProps) => {
                 © OpenStreetMap contributors
               </a>
               .
-            </Text>
-          </Box>
-        </Box>
-
-        <Heading as="h3" sx={{ ...style.sectionHeading, fontSize: 3, mt: 5, mb: 3 }}>
-          Open-source software
-        </Heading>
-        <Box sx={style.partnersGrid}>
-          <Box sx={style.partnerCard}>
-            <Heading as="h3" sx={{ fontSize: 2, mb: 1 }}>
-              Protomaps
-            </Heading>
-            <Text sx={{ fontSize: 1, color: "gray.7" }}>
-              Open-source vector basemap tiles.{" "}
-              <a href="https://protomaps.com" rel="noreferrer noopener" target="_blank">
-                protomaps.com
-              </a>
-              .
-            </Text>
-          </Box>
-          <Box sx={style.partnerCard}>
-            <Heading as="h3" sx={{ fontSize: 2, mb: 1 }}>
-              MapLibre GL
-            </Heading>
-            <Text sx={{ fontSize: 1, color: "gray.7" }}>
-              Open-source library powering interactive map rendering in the browser.
             </Text>
           </Box>
         </Box>

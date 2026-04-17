@@ -52,16 +52,28 @@ const CHAMBERS_BY_STATE: Record<string, ChamberSpec[]> = {
   CO: [
     { name: "U.S. House", numberOfDistricts: 8 },
     { name: "Senate", numberOfDistricts: 35, defaultPopulationField: "adj_population" },
-    { name: "House of Representatives", numberOfDistricts: 65, defaultPopulationField: "adj_population" }
+    {
+      name: "House of Representatives",
+      numberOfDistricts: 65,
+      defaultPopulationField: "adj_population"
+    }
   ],
   CT: [
     { name: "U.S. House", numberOfDistricts: 5 },
     { name: "State Senate", numberOfDistricts: 36, defaultPopulationField: "adj_population" },
-    { name: "House of Representatives", numberOfDistricts: 151, defaultPopulationField: "adj_population" }
+    {
+      name: "House of Representatives",
+      numberOfDistricts: 151,
+      defaultPopulationField: "adj_population"
+    }
   ],
   DE: [
     { name: "Senate", numberOfDistricts: 21, defaultPopulationField: "adj_population" },
-    { name: "House of Representatives", numberOfDistricts: 41, defaultPopulationField: "adj_population" }
+    {
+      name: "House of Representatives",
+      numberOfDistricts: 41,
+      defaultPopulationField: "adj_population"
+    }
   ],
   // DC has no state legislature and no US House voting member.
   DC: [],
@@ -125,7 +137,12 @@ const CHAMBERS_BY_STATE: Record<string, ChamberSpec[]> = {
     { name: "U.S. House", numberOfDistricts: 8, defaultPopulationField: "adj_population" },
     { name: "Senate", numberOfDistricts: 47, defaultPopulationField: "adj_population" },
     // 141 seats, 3 per district.
-    { name: "House of Delegates", numberOfDistricts: 47, uniformMultiMember: 3, defaultPopulationField: "adj_population" }
+    {
+      name: "House of Delegates",
+      numberOfDistricts: 47,
+      uniformMultiMember: 3,
+      defaultPopulationField: "adj_population"
+    }
   ],
   MA: [
     { name: "U.S. House", numberOfDistricts: 9 },
@@ -155,7 +172,11 @@ const CHAMBERS_BY_STATE: Record<string, ChamberSpec[]> = {
   MT: [
     { name: "U.S. House", numberOfDistricts: 2, defaultPopulationField: "adj_population" },
     { name: "Senate", numberOfDistricts: 50, defaultPopulationField: "adj_population" },
-    { name: "House of Representatives", numberOfDistricts: 100, defaultPopulationField: "adj_population" }
+    {
+      name: "House of Representatives",
+      numberOfDistricts: 100,
+      defaultPopulationField: "adj_population"
+    }
   ],
   // Nebraska is unicameral.
   NE: [
@@ -182,7 +203,12 @@ const CHAMBERS_BY_STATE: Record<string, ChamberSpec[]> = {
     { name: "U.S. House", numberOfDistricts: 12, defaultPopulationField: "adj_population" },
     { name: "Senate", numberOfDistricts: 40, defaultPopulationField: "adj_population" },
     // 80 seats, 2 per district.
-    { name: "General Assembly", numberOfDistricts: 40, uniformMultiMember: 2, defaultPopulationField: "adj_population" }
+    {
+      name: "General Assembly",
+      numberOfDistricts: 40,
+      uniformMultiMember: 2,
+      defaultPopulationField: "adj_population"
+    }
   ],
   NM: [
     { name: "U.S. House", numberOfDistricts: 3 },
@@ -222,7 +248,11 @@ const CHAMBERS_BY_STATE: Record<string, ChamberSpec[]> = {
   PA: [
     { name: "U.S. House", numberOfDistricts: 17 },
     { name: "State Senate", numberOfDistricts: 50, defaultPopulationField: "adj_population" },
-    { name: "House of Representatives", numberOfDistricts: 203, defaultPopulationField: "adj_population" }
+    {
+      name: "House of Representatives",
+      numberOfDistricts: 203,
+      defaultPopulationField: "adj_population"
+    }
   ],
   RI: [
     { name: "U.S. House", numberOfDistricts: 2 },
@@ -273,7 +303,12 @@ const CHAMBERS_BY_STATE: Record<string, ChamberSpec[]> = {
     { name: "U.S. House", numberOfDistricts: 10, defaultPopulationField: "adj_population" },
     { name: "State Senate", numberOfDistricts: 49, defaultPopulationField: "adj_population" },
     // 98 seats, 2 per district.
-    { name: "House of Representatives", numberOfDistricts: 49, uniformMultiMember: 2, defaultPopulationField: "adj_population" }
+    {
+      name: "House of Representatives",
+      numberOfDistricts: 49,
+      uniformMultiMember: 2,
+      defaultPopulationField: "adj_population"
+    }
   ],
   WV: [
     { name: "U.S. House", numberOfDistricts: 2 },
@@ -330,7 +365,9 @@ export default class SeedUsChambers extends Command {
           }
           if (updated) {
             await chamberRepo.save(existing);
-            this.log(`  Updated ${code} ${spec.name} (defaultPopulationField=${spec.defaultPopulationField ?? "null"})`);
+            this.log(
+              `  Updated ${code} ${spec.name} (defaultPopulationField=${spec.defaultPopulationField ?? "null"})`
+            );
           }
           skipped++;
           continue;

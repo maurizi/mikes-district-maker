@@ -383,13 +383,14 @@ export default class PrepareDevData extends Command {
     }
 
     // Load adjusted population data if available (runs regardless of cache)
-    const adjCsvPath = flags.adjDir
-      ? join(flags.adjDir, `${stateAbbr}.csv`)
-      : "";
+    const adjCsvPath = flags.adjDir ? join(flags.adjDir, `${stateAbbr}.csv`) : "";
     if (adjCsvPath && existsSync(adjCsvPath)) {
       this.log(`\nLoading adjusted population from ${adjCsvPath}...`);
       const adjContent = readFileSync(adjCsvPath, "utf-8");
-      const adjLines = adjContent.split("\n").map(l => l.replace(/\r$/, "")).filter(l => l.trim());
+      const adjLines = adjContent
+        .split("\n")
+        .map(l => l.replace(/\r$/, ""))
+        .filter(l => l.trim());
       const adjHeader = adjLines[0].split(",");
       const adjGeoidIdx = adjHeader.indexOf("GEOID");
       let adjMatched = 0;
@@ -411,9 +412,7 @@ export default class PrepareDevData extends Command {
           adjUnmatched++;
         }
       }
-      this.log(
-        `   Adjusted pop merged: ${adjMatched} blocks matched, ${adjUnmatched} unmatched`
-      );
+      this.log(`   Adjusted pop merged: ${adjMatched} blocks matched, ${adjUnmatched} unmatched`);
     }
 
     // ── Step 2: Load VEST precinct polygons with geometry ──
@@ -1041,9 +1040,7 @@ export default class PrepareDevData extends Command {
       "adj_other"
     ];
     const firstDemo = blockDemographics.values().next().value;
-    const adjFields = firstDemo
-      ? adjFieldCandidates.filter(f => f in firstDemo)
-      : [];
+    const adjFields = firstDemo ? adjFieldCandidates.filter(f => f in firstDemo) : [];
     if (adjFields.length > 0) {
       this.log(`   Adjusted fields detected: ${adjFields.join(", ")}`);
     }

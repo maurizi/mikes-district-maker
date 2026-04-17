@@ -969,7 +969,9 @@ const SidebarRows = ({
 
         const targetPopulation =
           districtId !== 0 ? popPerRep * (project.numberOfMembers[districtId - 1] || 0) : 0;
-        const deviation = (feature.properties.demographics[devPopKey] ?? feature.properties.demographics.population) - targetPopulation;
+        const deviation =
+          (feature.properties.demographics[devPopKey] ??
+            feature.properties.demographics.population) - targetPopulation;
 
         return (
           <SidebarRow

@@ -33,9 +33,11 @@ const LoginScreen = ({ passwordResetNoticeShown, user }: StateProps) => {
     <Navigate to={to} replace />
   ) : (
     <CenteredContent>
-      <Heading as="h1" sx={{ textAlign: "center" }}>
-        <Logo sx={{ maxWidth: "15rem" }} />
-      </Heading>
+      <Link to="/">
+        <Heading as="h1" sx={{ textAlign: "center" }}>
+          <Logo sx={{ maxWidth: "15rem" }} />
+        </Heading>
+      </Link>
       <Card sx={{ variant: "cards.floating" }}>
         <LoginContent>
           <Heading as="h2" sx={{ fontSize: 4, mb: 5 }}>

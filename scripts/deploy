@@ -172,9 +172,10 @@ DSQL_ENDPOINT=$(tf output -raw dsql_endpoint)
 ##########
 
 say "Reading RUM config from terraform"
-export VITE_RUM_APP_MONITOR_ID=$(tf output -raw rum_app_monitor_id)
-export VITE_RUM_GUEST_ROLE_ARN=$(tf output -raw rum_guest_role_arn)
-export VITE_RUM_IDENTITY_POOL_ID=$(tf output -raw rum_identity_pool_id)
+VITE_RUM_APP_MONITOR_ID=$(tf output -raw rum_app_monitor_id)
+VITE_RUM_GUEST_ROLE_ARN=$(tf output -raw rum_guest_role_arn)
+VITE_RUM_IDENTITY_POOL_ID=$(tf output -raw rum_identity_pool_id)
+export VITE_RUM_APP_MONITOR_ID VITE_RUM_GUEST_ROLE_ARN VITE_RUM_IDENTITY_POOL_ID
 export VITE_RUM_REGION="us-east-1"
 echo "  monitor:     $VITE_RUM_APP_MONITOR_ID"
 echo "  pool:        $VITE_RUM_IDENTITY_POOL_ID"

@@ -50,7 +50,7 @@ import { type Resource } from "../resource";
 import store from "../store";
 import { type DistrictsGeoJSON, type EvaluateMetricWithValue } from "../types";
 
-import useIsMobile, { useIsNarrowViewport } from "../hooks/useIsMobile";
+import { useIsNarrowViewport } from "../hooks/useIsMobile";
 import PageNotFoundScreen from "./PageNotFoundScreen";
 
 interface StateProps {
@@ -178,7 +178,7 @@ const ProjectScreen = ({
         store.dispatch(setPopulationKey(project.chamber.defaultPopulationField));
       }
     }
-  }, [project?.id, staticMetadata]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [project?.id, staticMetadata]);
 
   useEffect(() => {
     isLoggedIn && store.dispatch(userFetch());

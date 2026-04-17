@@ -564,7 +564,8 @@ const DistrictsMap = ({
 
       // The population goal for the unassigned district is 0,
       // so it's deviation is equal to its population
-      const districtPop = feature.properties.demographics[devPopKey] ?? feature.properties.demographics.population;
+      const districtPop =
+        feature.properties.demographics[devPopKey] ?? feature.properties.demographics.population;
       const targetPopulation = feature.id !== 0 ? popPerRep * project.numberOfMembers[id - 1] : 0;
       const populationDeviation = districtPop - targetPopulation;
 

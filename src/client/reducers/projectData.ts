@@ -590,15 +590,21 @@ const projectDataReducer = (
           }
         };
         const findCoords = getFindCoords(state.findTool, geojson);
-        // Persist the thumbnail in two cases:
+        // Persist thumbnail + isComplete in three cases:
         //  1. The user just saved — state.saving === "saving".
         //  2. The project has no server-side thumbnail yet (new project from
         //     the create or import flow that didn't supply one). Without this
-        //     the home-page preview stays blank until the first save. The
-        //     check reads the pre-merge project from state, so it only fires
-        //     once per project — subsequent views already have a thumbnail.
+        //     the home-page preview stays blank until the first save.
+        //  3. The stored isComplete is stale (e.g. an import that created the
+        //     project already complete — the server defaults isComplete to
+        //     false and the import flow may supply a thumbnail, so case 2
+        //     wouldn't catch it and the project stays hidden from /maps until
+        //     the user saves an unrelated change).
+        // Each check reads the pre-merge project from state, so it only fires
+        // when there's actually something new to persist.
         const wasTriggeredBySave = state.saving === "saving";
         const needsInitialThumbnail = !project.thumbnail;
+        const needsCompletenessUpdate = project.isComplete !== isComplete;
         const nextState = updateCurrentState(
           {
             ...state,
@@ -615,7 +621,7 @@ const projectDataReducer = (
             districtsDefinition: project.districtsDefinition
           }
         );
-        return wasTriggeredBySave || needsInitialThumbnail
+        return wasTriggeredBySave || needsInitialThumbnail || needsCompletenessUpdate
           ? loop(
               nextState,
               Cmd.run(() => patchProject(project.id, { thumbnail, isComplete }))

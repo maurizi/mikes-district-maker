@@ -279,7 +279,8 @@ const style: Record<string, ThemeUIStyleObject> = {
 async function getStateFromCsv(file: Blob): Promise<string | undefined> {
   const contents = await new Response(file).text();
   const [, record] = contents.split(/\r?\n/, 2);
-  const stateFips = record && record.slice(0, 2);
+  const firstField = record && record.split(",", 1)[0].replace(/^"|"$/g, "");
+  const stateFips = firstField && firstField.slice(0, 2);
   const stateAbbrev = stateFips && FIPS[stateFips];
   return stateAbbrev;
 }

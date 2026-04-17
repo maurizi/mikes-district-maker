@@ -139,80 +139,82 @@ const SiteHeader = ({ user }: Props) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [resendEmail, setResendEmail] = useState<WriteResource<void, void>>({ data: void 0 });
 
-  const navLinks = "resource" in user ? (
-    <React.Fragment>
-      <span sx={style.linkItem}>
-        <NavLink to="/" onClick={() => setMobileMenuOpen(false)}>
-          My maps
-        </NavLink>
-      </span>
-      {user.resource.organizations.length > 0 && (
-        <OrganizationDropdown organizations={user.resource.organizations} />
-      )}
-      <span sx={style.linkItem}>
-        <NavLink to="/maps" onClick={() => setMobileMenuOpen(false)}>
-          Community maps
-        </NavLink>
-      </span>
-      <span
-        sx={{
-          svg: { display: "none" },
-          span: {
-            backgroundColor: "transparent !important"
-          }
-        }}
-      >
-        <SupportMenu />
-      </span>
-    </React.Fragment>
-  ) : null;
+  const navLinks =
+    "resource" in user ? (
+      <React.Fragment>
+        <span sx={style.linkItem}>
+          <NavLink to="/" onClick={() => setMobileMenuOpen(false)}>
+            My maps
+          </NavLink>
+        </span>
+        {user.resource.organizations.length > 0 && (
+          <OrganizationDropdown organizations={user.resource.organizations} />
+        )}
+        <span sx={style.linkItem}>
+          <NavLink to="/maps" onClick={() => setMobileMenuOpen(false)}>
+            Community maps
+          </NavLink>
+        </span>
+        <span
+          sx={{
+            svg: { display: "none" },
+            span: {
+              backgroundColor: "transparent !important"
+            }
+          }}
+        >
+          <SupportMenu />
+        </span>
+      </React.Fragment>
+    ) : null;
 
-  const userMenu = "resource" in user ? (
-    <Wrapper onSelection={handleSelection(navigate)} sx={isMobile ? {} : { ml: 3 }}>
-      <MenuButton sx={style.menuButton}>
-        <Avatar
-          name={user.resource.name}
-          round={true}
-          size={"2.5rem"}
-          color={"#2c485e"}
-          maxInitials={3}
-          sx={style.avatar}
-        />
-        <Box sx={{ ml: 2, color: "heading" }}>
-          <Icon name="angle-down" />
-        </Box>
-      </MenuButton>
-      <Menu sx={style.menu}>
-        <ul sx={style.menuList}>
-          {isMobile && (
-            <React.Fragment>
-              <li key={UserMenuKeys.MyMaps}>
-                <MenuItem value={UserMenuKeys.MyMaps} sx={style.menuListItem}>
-                  My maps
-                </MenuItem>
-              </li>
-              <li key={UserMenuKeys.CommunityMaps}>
-                <MenuItem value={UserMenuKeys.CommunityMaps} sx={style.menuListItem}>
-                  Community maps
-                </MenuItem>
-              </li>
-              <li sx={{ borderBottom: "1px solid", borderColor: "gray.2", my: 1 }} />
-            </React.Fragment>
-          )}
-          <li key={UserMenuKeys.Account}>
-            <MenuItem value={UserMenuKeys.Account} sx={style.menuListItem}>
-              Account
-            </MenuItem>
-          </li>
-          <li key={UserMenuKeys.Logout}>
-            <MenuItem value={UserMenuKeys.Logout} sx={style.menuListItem}>
-              Logout
-            </MenuItem>
-          </li>
-        </ul>
-      </Menu>
-    </Wrapper>
-  ) : null;
+  const userMenu =
+    "resource" in user ? (
+      <Wrapper onSelection={handleSelection(navigate)} sx={isMobile ? {} : { ml: 3 }}>
+        <MenuButton sx={style.menuButton}>
+          <Avatar
+            name={user.resource.name}
+            round={true}
+            size={"2.5rem"}
+            color={"#2c485e"}
+            maxInitials={3}
+            sx={style.avatar}
+          />
+          <Box sx={{ ml: 2, color: "heading" }}>
+            <Icon name="angle-down" />
+          </Box>
+        </MenuButton>
+        <Menu sx={style.menu}>
+          <ul sx={style.menuList}>
+            {isMobile && (
+              <React.Fragment>
+                <li key={UserMenuKeys.MyMaps}>
+                  <MenuItem value={UserMenuKeys.MyMaps} sx={style.menuListItem}>
+                    My maps
+                  </MenuItem>
+                </li>
+                <li key={UserMenuKeys.CommunityMaps}>
+                  <MenuItem value={UserMenuKeys.CommunityMaps} sx={style.menuListItem}>
+                    Community maps
+                  </MenuItem>
+                </li>
+                <li sx={{ borderBottom: "1px solid", borderColor: "gray.2", my: 1 }} />
+              </React.Fragment>
+            )}
+            <li key={UserMenuKeys.Account}>
+              <MenuItem value={UserMenuKeys.Account} sx={style.menuListItem}>
+                Account
+              </MenuItem>
+            </li>
+            <li key={UserMenuKeys.Logout}>
+              <MenuItem value={UserMenuKeys.Logout} sx={style.menuListItem}>
+                Logout
+              </MenuItem>
+            </li>
+          </ul>
+        </Menu>
+      </Wrapper>
+    ) : null;
 
   return (
     <Flex sx={{ flexDirection: "column" }}>

@@ -204,17 +204,21 @@ export function getDemographicsPercentages(
   const subgroups =
     group.subgroups.length > 0
       ? group.subgroups
-      : (demographicsGroups.find(g => g.total === "population")?.subgroups || []);
+      : demographicsGroups.find(g => g.total === "population")?.subgroups || [];
   const selectedDemographics = pick(demographics, subgroups);
-  const renamedDemographics =
-    populationKey === "population"
-      ? selectedDemographics
-      : mapKeys(selectedDemographics, (val, key) => {
-          // Strip the group prefix if present (e.g. "VAP White" -> "white")
-          // For adj_population fallback to population subgroups, keys have no prefix
-          const prefixLen = populationKey.length + 1;
-          return key.startsWith(populationKey + " ") ? key.slice(prefixLen).toLowerCase() : key;
-        });
+  // Strip the group prefix so the chart gets lowercase race keys (white, black, ...).
+  // VAP/CVAP subgroups are formatted "VAP White"/"CVAP Black" (space-separated).
+  // adj_population subgroups are formatted "adj_white"/"adj_black" (underscore).
+  // population group keys are already the right shape.
+  const stripPrefix = (key: string): string => {
+    if (populationKey === "population") return key;
+    if (populationKey === "adj_population" && key.startsWith("adj_") && key !== "adj_population")
+      return key.slice(4);
+    if (key.startsWith(populationKey + " "))
+      return key.slice(populationKey.length + 1).toLowerCase();
+    return key;
+  };
+  const renamedDemographics = mapKeys(selectedDemographics, (_v, key) => stripPrefix(key));
   const percentages = mapValues(renamedDemographics, (population: number) =>
     Math.min((total ? population / total : 0) * 100, 100)
   );
@@ -519,7 +523,10 @@ export function getPopulationPerRepresentative(
   populationKey: GroupTotal = "population"
 ) {
   const totalPopulation = geojson.features.reduce(
-    (total, feature) => total + (feature.properties.demographics[populationKey] ?? feature.properties.demographics.population),
+    (total, feature) =>
+      total +
+      (feature.properties.demographics[populationKey] ??
+        feature.properties.demographics.population),
     0
   );
   const totalReps = numberOfMembers.reduce((total, numberOfReps) => total + numberOfReps, 0);

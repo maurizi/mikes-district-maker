@@ -281,9 +281,7 @@ const MapHeader = ({
                 max={5}
                 step={1}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                  store.dispatch(
-                    setPaintBrushSize(parseInt(e.target.value, 10) as PaintBrushSize)
-                  );
+                  store.dispatch(setPaintBrushSize(parseInt(e.target.value, 10) as PaintBrushSize));
                 }}
                 sx={{ width: "110px", position: "relative", top: "2px", mx: 2 }}
                 value={paintBrushSize}
@@ -304,10 +302,7 @@ const MapHeader = ({
           </Box>
         </Flex>
       )}
-      <Flex
-        className="geolevel-button-group"
-        sx={{ flexShrink: 0 }}
-      >
+      <Flex className="geolevel-button-group" sx={{ flexShrink: 0 }}>
         {geoLevelOptions}
       </Flex>
       <Flex
@@ -320,7 +315,14 @@ const MapHeader = ({
           justifyContent: "flex-end"
         }}
       >
-        <Box sx={{ lineHeight: "1", flex: 1, maxWidth: labelsWrapped ? "none" : "250px", ml: labelsWrapped ? 0 : 3 }}>
+        <Box
+          sx={{
+            lineHeight: "1",
+            flex: 1,
+            maxWidth: labelsWrapped ? "none" : "250px",
+            ml: labelsWrapped ? 0 : 3
+          }}
+        >
           <LabelAutocomplete metadata={metadata} selectedLabel={label} />
         </Box>
         <Box

@@ -1,8 +1,8 @@
 import { type DistrictsDefinition, type GeoUnitHierarchy } from "./entities";
 
 // Parse a simple two-column `BLOCKID,DISTRICT` CSV (header row + data rows).
-// This intentionally does not handle quoted fields — BEF files are flat
-// integer/string pairs. Empty trailing lines are skipped.
+// Strips surrounding double quotes from each field. Empty trailing lines are
+// skipped.
 export function parseBlockDistrictCsv(csvText: string): [string, string][] {
   const lines = csvText.split(/\r?\n/);
   const records: [string, string][] = [];
@@ -12,9 +12,17 @@ export function parseBlockDistrictCsv(csvText: string): [string, string][] {
     if (!line) continue;
     const commaIdx = line.indexOf(",");
     if (commaIdx === -1) continue;
-    records.push([line.slice(0, commaIdx), line.slice(commaIdx + 1)]);
+    records.push([unquote(line.slice(0, commaIdx)), unquote(line.slice(commaIdx + 1))]);
   }
   return records;
+}
+
+function unquote(field: string): string {
+  const trimmed = field.trim();
+  if (trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
 }
 
 // Build split-block lookup: base block → its sub-block variants

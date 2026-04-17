@@ -1,5 +1,5 @@
 import { Box, Flex, Heading, Text, type ThemeUIStyleObject } from "theme-ui";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 import { type ProjectNest } from "../../shared/entities";
 import ProjectDistrictsMap from "./map/ProjectDistrictsMap";
@@ -10,9 +10,8 @@ const style: Record<string, ThemeUIStyleObject> = {
     bg: "#fff",
     borderRadius: "2px",
     boxShadow: "small",
-    "&:hover": {
-      cursor: "pointer"
-    }
+    textDecoration: "none",
+    color: "inherit"
   },
   mapLabel: {
     p: "15px",
@@ -23,13 +22,8 @@ const style: Record<string, ThemeUIStyleObject> = {
 };
 
 const FeaturedProjectCard = ({ project }: { readonly project: ProjectNest }) => {
-  const navigate = useNavigate();
-  function goToProject(project: ProjectNest) {
-    navigate(`/projects/${project.id}`);
-  }
-
   return (
-    <Flex sx={style.featuredProject} onClick={() => goToProject(project)}>
+    <Flex as={Link} {...({ to: `/projects/${project.id}` } as any)} sx={style.featuredProject}>
       <ProjectDistrictsMap project={project} context={"communityMaps"} />
       <Box sx={style.mapLabel}>
         <Heading

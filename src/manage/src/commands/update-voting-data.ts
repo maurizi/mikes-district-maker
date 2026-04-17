@@ -22,15 +22,18 @@ import {
   extractVotingData,
   reprojectFeature,
   abbrev,
-  mkTypedArray
+  mkTypedArray,
+  disaggregateBlockVotes,
+  reconcilePrecinctVotes,
+  type PartyVotes
 } from "../lib/voting-data";
 import { createInterface } from "readline";
 
 interface VestYear {
-  readonly precinctVoting: Map<
-    string,
-    Record<string, { democrat: number; republican: number; other: number }>
-  >;
+  readonly precinctVoting: Map<string, Record<string, PartyVotes>>;
+  // Sum of democrat+republican+other per precinct per office, used as the
+  // denominator in vote share. Precomputed once so the per-block loop stays cheap.
+  readonly precinctTotalVotes: Map<string, Record<string, number>>;
   readonly votingIds: string[];
   readonly electionYear: string;
   readonly officesFound: Set<string>;
@@ -70,7 +73,6 @@ export default class UpdateVotingData extends Command {
     const { args, flags } = await this.parse(UpdateVotingData);
     const dir = args.outputDir;
 
-    // Validate inputs
     if (!existsSync(join(dir, "static-metadata.json"))) {
       this.error("static-metadata.json not found in output directory");
     }
@@ -95,6 +97,17 @@ export default class UpdateVotingData extends Command {
     const precinctLevel = geoLevelIds.find((id: string) => id === "precinct") || geoLevelIds[1];
     if (!precinctLevel) {
       this.error("Cannot determine precinct geolevel from hierarchy");
+    }
+
+    // ── Step 0: Backfill VAP_MOD if absent ──
+    // Older output dirs (built before the VAP_MOD methodology change) lack
+    // VAP_MOD on their block features. One-time fix: fetch the prison count
+    // (P5_003N), compute VAP_MOD = max(0, VAP - prison) per block, inject it
+    // into block-full + higher-level *-full geojsons, write VAP_MOD.buf, and
+    // record VAP_MOD in static-metadata. After this the dir is permanently
+    // VAP_MOD-equipped and future runs use it directly.
+    if (!metadata.demographics.some(d => d.id === "VAP_MOD")) {
+      await this.backfillVapMod(dir, metadata, geoLevelIds, baseGeoLevel);
     }
 
     // ── Step 1: Load all VEST data ──
@@ -123,10 +136,7 @@ export default class UpdateVotingData extends Command {
       this.log(`  ${vestFeatures.length} precincts loaded (${vestShp})`);
 
       // Extract voting data per precinct
-      const precinctVoting = new Map<
-        string,
-        Record<string, { democrat: number; republican: number; other: number }>
-      >();
+      const precinctVoting = new Map<string, Record<string, PartyVotes>>();
       const officesFound = new Set<string>();
       let electionYear = "";
 
@@ -151,6 +161,16 @@ export default class UpdateVotingData extends Command {
         }
       }
 
+      // Precompute per-precinct, per-office vote totals for share-of-vote math.
+      const precinctTotalVotes = new Map<string, Record<string, number>>();
+      for (const [pid, byOffice] of precinctVoting) {
+        const totals: Record<string, number> = {};
+        for (const [office, v] of Object.entries(byOffice)) {
+          totals[office] = v.democrat + v.republican + v.other;
+        }
+        precinctTotalVotes.set(pid, totals);
+      }
+
       this.log(`  Election year: 20${electionYear}`);
       this.log(`  Offices: ${Array.from(officesFound).sort().join(", ")}`);
       this.log(`  Unique precincts: ${precinctVoting.size}`);
@@ -163,7 +183,13 @@ export default class UpdateVotingData extends Command {
         votingIds.push(`${prefix}democrat${yy}`, `${prefix}republican${yy}`, `${prefix}other${yy}`);
       }
 
-      vestYears.push({ precinctVoting, votingIds, electionYear, officesFound });
+      vestYears.push({
+        precinctVoting,
+        precinctTotalVotes,
+        votingIds,
+        electionYear,
+        officesFound
+      });
       allNewVotingIds.push(...votingIds);
     }
 
@@ -179,17 +205,18 @@ export default class UpdateVotingData extends Command {
 
     this.log("\nUpdating block-level features...");
 
-    // Collect voting data for .buf files (one array per voting column)
-    const votingDataArrays: Record<string, number[]> = {};
-    for (const id of allNewVotingIds) votingDataArrays[id] = [];
+    // Pass 1: read every block into memory, do the per-block disaggregation
+    // (rounded), and remember which blocks belong to which precinct so we can
+    // reconcile rounding residuals at precinct level afterwards. Reconciliation
+    // requires seeing every block in a precinct at once, so we can't stream it.
+    type BlockEntry = { feature: any; weight: number };
+    const blocks: BlockEntry[] = [];
 
-    // Collect aggregates for higher geolevels: gl → levelValue → votingId → sum
-    const aggregates: Record<string, Record<string, Record<string, number>>> = {};
-    for (const gl of geoLevelIds.slice(1)) aggregates[gl] = {};
-
-    // Stream-update: read line by line, write to temp file
-    const tmpBlockPath = blockFullPath + ".tmp";
-    const outFd = openSync(tmpBlockPath, "w");
+    // Per-year: precinct id → office → assignments (for reconcilePrecinctVotes).
+    // Keyed by string precinct id (not numeric pi like prepare-dev-data) because
+    // we're matching against the precinct property already baked into block-full.
+    const yearAssigned: Map<string, Map<string, { featureIdx: number; weight: number }[]>>[] =
+      vestYears.map(() => new Map());
 
     const rl = createInterface({
       input: createReadStream(blockFullPath),
@@ -220,20 +247,42 @@ export default class UpdateVotingData extends Command {
       const rawPrecinctId =
         precinctProp && precinctProp.length > 4 ? precinctProp.substring(4) : precinctProp;
 
+      // Disaggregation weight: VAP_MOD if available (post-prison-adjustment
+      // pipeline), else fall back to plain VAP for older outputs.
+      const weight =
+        typeof props.VAP_MOD === "number"
+          ? props.VAP_MOD
+          : typeof props.VAP === "number"
+            ? props.VAP
+            : 0;
+
       let anyMatch = false;
-      for (const vy of vestYears) {
-        const vestData = rawPrecinctId ? vy.precinctVoting.get(rawPrecinctId) : null;
-        if (vestData) {
+      for (let yi = 0; yi < vestYears.length; yi++) {
+        const vy = vestYears[yi];
+        const vestData = rawPrecinctId ? vy.precinctVoting.get(rawPrecinctId) : undefined;
+        const vestTotals = rawPrecinctId ? vy.precinctTotalVotes.get(rawPrecinctId) : undefined;
+        if (vestData && vestTotals) {
           anyMatch = true;
+          Object.assign(
+            props,
+            disaggregateBlockVotes(vestData, vestTotals, weight, vy.officesFound, vy.electionYear)
+          );
+          // Track this block under its precinct for reconciliation.
+          let precMap = yearAssigned[yi].get(rawPrecinctId!);
+          if (!precMap) {
+            precMap = new Map();
+            yearAssigned[yi].set(rawPrecinctId!, precMap);
+          }
           for (const office of Array.from(vy.officesFound)) {
-            const v = vestData[office] || { democrat: 0, republican: 0, other: 0 };
-            const prefix = office === "PRE" ? "" : `${office}_`;
-            props[`${prefix}democrat${vy.electionYear}`] = v.democrat;
-            props[`${prefix}republican${vy.electionYear}`] = v.republican;
-            props[`${prefix}other${vy.electionYear}`] = v.other;
+            let arr = precMap.get(office);
+            if (!arr) {
+              arr = [];
+              precMap.set(office, arr);
+            }
+            arr.push({ featureIdx: blocks.length, weight });
           }
         } else {
-          // No match for this year — zero out
+          // No precinct match this year — zero votes for this block this year.
           for (const id of vy.votingIds) props[id] = 0;
         }
       }
@@ -241,17 +290,45 @@ export default class UpdateVotingData extends Command {
       if (anyMatch) matched++;
       else unmatched++;
 
-      // Add voting abbreviations
+      blocks.push({ feature, weight });
+    }
+
+    this.log(`  Matched: ${matched}, Unmatched: ${unmatched}`);
+
+    // Reconcile rounding residuals so per-precinct sums match VEST exactly.
+    let totalReconciled = 0;
+    for (let yi = 0; yi < vestYears.length; yi++) {
+      const vy = vestYears[yi];
+      totalReconciled += reconcilePrecinctVotes(
+        yearAssigned[yi],
+        (precinctId: string) => vy.precinctVoting.get(precinctId) || {},
+        (idx, field) => blocks[idx].feature.properties[field] || 0,
+        (idx, field, value) => {
+          blocks[idx].feature.properties[field] = value;
+        },
+        vy.electionYear
+      );
+    }
+    this.log(`  Reconciled ${totalReconciled} precinct-party totals`);
+
+    // Pass 2: now that votes are reconciled, write blocks back, fill in
+    // abbreviations, collect .buf arrays, and aggregate to higher geolevels.
+    const votingDataArrays: Record<string, number[]> = {};
+    for (const id of allNewVotingIds) votingDataArrays[id] = [];
+    const aggregates: Record<string, Record<string, Record<string, number>>> = {};
+    for (const gl of geoLevelIds.slice(1)) aggregates[gl] = {};
+
+    const tmpBlockPath = blockFullPath + ".tmp";
+    const outFd = openSync(tmpBlockPath, "w");
+
+    for (const { feature } of blocks) {
+      const props = feature.properties;
+
       for (const id of allNewVotingIds) {
         props[abbrev(id)] = abbreviateNumber(props[id] || 0);
-      }
-
-      // Collect data for .buf files
-      for (const id of allNewVotingIds) {
         votingDataArrays[id].push(props[id] || 0);
       }
 
-      // Collect aggregates for higher geolevels using string geolevel properties
       for (const gl of geoLevelIds.slice(1)) {
         const levelValue = props[gl];
         if (levelValue !== undefined) {
@@ -270,8 +347,6 @@ export default class UpdateVotingData extends Command {
 
     closeSync(outFd);
     renameSync(tmpBlockPath, blockFullPath);
-
-    this.log(`  Matched: ${matched}, Unmatched: ${unmatched}`);
 
     // ── Step 3: Update higher-level *-full.geojson files ──
     for (const gl of geoLevelIds.slice(1)) {
@@ -427,4 +502,127 @@ export default class UpdateVotingData extends Command {
 
     process.exit(0);
   }
+
+  // One-time backfill: derive VAP_MOD from existing VAP + freshly-fetched
+  // P5_003N (adult correctional pop), inject it into block-full and higher
+  // *-full geojsons, write VAP_MOD.buf, and add the demographic to metadata.
+  // Mutates `metadata.demographics` so the caller sees the new entry.
+  private async backfillVapMod(
+    dir: string,
+    metadata: IStaticMetadata,
+    geoLevelIds: readonly string[],
+    baseGeoLevel: string
+  ): Promise<void> {
+    const blockFullPath = join(dir, `${baseGeoLevel}-full.geojson`);
+    if (!existsSync(blockFullPath)) {
+      this.error(`${blockFullPath} not found; can't backfill VAP_MOD`);
+    }
+
+    this.log("\nVAP_MOD missing from metadata; backfilling...");
+
+    // Pass 1: load every feature into memory, derive state FIPS from the first
+    // GEOID, and sum VAP per base block (so split sub-blocks share their
+    // parent's prison count proportionally to their VAP share).
+    type Feat = { feature: any; baseGeoid: string };
+    const feats: Feat[] = [];
+    const baseVap = new Map<string, number>();
+    let stateFips = "";
+
+    const rl = createInterface({
+      input: createReadStream(blockFullPath),
+      crlfDelay: Infinity
+    });
+    for await (const line of rl) {
+      const t = (line as string).trim();
+      if (!t) continue;
+      const f = JSON.parse(t);
+      const geoid = String(f.properties.block || "");
+      if (!stateFips && geoid.length >= 2) stateFips = geoid.substring(0, 2);
+      const base = geoid.split("-")[0];
+      baseVap.set(base, (baseVap.get(base) || 0) + (f.properties.VAP || 0));
+      feats.push({ feature: f, baseGeoid: base });
+    }
+    if (!stateFips) this.error("Could not determine state FIPS from block GEOIDs");
+
+    // Fetch P5_003N for the state (one API call, ~few seconds).
+    this.log(`  Fetching P5_003N for state FIPS ${stateFips}...`);
+    const url = `https://api.census.gov/data/2020/dec/pl?get=P5_003N&for=block:*&in=state:${stateFips}&in=county:*&in=tract:*`;
+    const resp = await fetch(url);
+    if (!resp.ok) this.error(`Census API failed: ${resp.status}`);
+    const data: string[][] = await resp.json();
+    const prisonByBase = new Map<string, number>();
+    for (let i = 1; i < data.length; i++) {
+      const [v, st, cty, tr, blk] = data[i];
+      prisonByBase.set(`${st}${cty}${tr}${blk}`, parseInt(v) || 0);
+    }
+    this.log(`  Loaded prison pop for ${prisonByBase.size} base blocks`);
+
+    // Compute VAP_MOD per feature, apportioning each base block's prison count
+    // across its sub-blocks proportionally to VAP. Collect per-block values for
+    // the .buf and sums per higher geolevel for higher-level *-full updates.
+    const blockVapMod: number[] = [];
+    const aggByLevel: Record<string, Record<string, number>> = {};
+    for (const gl of geoLevelIds.slice(1)) aggByLevel[gl] = {};
+
+    const tmpPath = blockFullPath + ".tmp";
+    const outFd = openSync(tmpPath, "w");
+    for (const { feature, baseGeoid } of feats) {
+      const props = feature.properties;
+      const vap = typeof props.VAP === "number" ? props.VAP : 0;
+      const baseV = baseVap.get(baseGeoid) || 0;
+      const prison = prisonByBase.get(baseGeoid) || 0;
+      const subPrison = baseV > 0 ? Math.round((prison * vap) / baseV) : prison;
+      const vapMod = Math.max(0, vap - subPrison);
+      props.VAP_MOD = vapMod;
+      blockVapMod.push(vapMod);
+      for (const gl of geoLevelIds.slice(1)) {
+        const lv = props[gl];
+        if (lv !== undefined) aggByLevel[gl][lv] = (aggByLevel[gl][lv] || 0) + vapMod;
+      }
+      writeSync(outFd, JSON.stringify(feature) + "\n");
+    }
+    closeSync(outFd);
+    renameSync(tmpPath, blockFullPath);
+    this.log(`  Injected VAP_MOD into ${feats.length} block features`);
+
+    // Update higher-level *-full.geojson files (precinct, county, ...).
+    for (const gl of geoLevelIds.slice(1)) {
+      const path = join(dir, `${gl}-full.geojson`);
+      if (!existsSync(path)) continue;
+      const tmp = path + ".tmp";
+      const fd = openSync(tmp, "w");
+      const r = createInterface({ input: createReadStream(path), crlfDelay: Infinity });
+      for await (const line of r) {
+        const t = (line as string).trim();
+        if (!t) continue;
+        const f = JSON.parse(t);
+        const lv = f.properties[gl];
+        f.properties.VAP_MOD = lv !== undefined ? aggByLevel[gl][lv] || 0 : 0;
+        writeSync(fd, JSON.stringify(f) + "\n");
+      }
+      closeSync(fd);
+      renameSync(tmp, path);
+    }
+
+    // Write VAP_MOD.buf and update static-metadata. (demographics is readonly
+    // on the type — rebuild the array instead of mutating in place.)
+    const typed = mkTypedArray(blockVapMod);
+    writeFileSync(join(dir, "VAP_MOD.buf"), typed);
+    const newDemographic: IStaticFile = {
+      id: "VAP_MOD",
+      fileName: "VAP_MOD.buf",
+      bytesPerElement: typed.BYTES_PER_ELEMENT,
+      unsigned:
+        typed instanceof Uint8Array ||
+        typed instanceof Uint16Array ||
+        typed instanceof Uint32Array
+    };
+    (metadata as unknown as { demographics: IStaticFile[] }).demographics = [
+      ...metadata.demographics,
+      newDemographic
+    ];
+    writeFileSync(join(dir, "static-metadata.json"), JSON.stringify(metadata));
+    this.log(`  Wrote VAP_MOD.buf (${typed.constructor.name}) and updated metadata`);
+  }
 }
+

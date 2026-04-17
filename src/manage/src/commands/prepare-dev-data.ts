@@ -23,7 +23,9 @@ import {
   findShapefile,
   extractVotingData,
   apportion,
-  reprojectFeature
+  reprojectFeature,
+  disaggregateBlockVotes,
+  reconcilePrecinctVotes
 } from "../lib/voting-data";
 import { createInterface } from "readline";
 
@@ -179,6 +181,24 @@ export default class PrepareDevData extends Command {
       this.log(
         `   ${blockFeatures.length} blocks, ${blockDemographics.size} demographics loaded from cache`
       );
+
+      // Backfill VAP_MOD for caches written before the prison adjustment was added.
+      const sampleDemo = blockDemographics.values().next().value;
+      if (sampleDemo && sampleDemo.VAP_MOD === undefined) {
+        this.log("   Cache missing VAP_MOD; fetching P5_003N to backfill...");
+        const prisonUrl = `https://api.census.gov/data/2020/dec/pl?get=P5_003N&for=block:*&in=state:${stateFips}&in=county:*&in=tract:*`;
+        const prisonResp = await fetch(prisonUrl);
+        if (!prisonResp.ok) throw new Error(`Census P5 API failed: ${prisonResp.status}`);
+        const prisonData: string[][] = await prisonResp.json();
+        for (let i = 1; i < prisonData.length; i++) {
+          const [prisonAdult, st, cty, tr, blk] = prisonData[i];
+          const geoId = `${st}${cty}${tr}${blk}`;
+          const demo = blockDemographics.get(geoId);
+          if (demo) demo.VAP_MOD = Math.max(0, (demo.VAP || 0) - (parseInt(prisonAdult) || 0));
+        }
+        writeFileSync(cacheDemoPath, JSON.stringify(Object.fromEntries(blockDemographics)));
+        this.log(`   VAP_MOD backfilled and cache rewritten`);
+      }
     } else {
       // Download Census block shapefile
       this.log("\n1a. Downloading Census 2020 block shapefile...");
@@ -197,7 +217,12 @@ export default class PrepareDevData extends Command {
 
       // Fetch demographics from Census API
       this.log("\n1b. Fetching demographics from Census API...");
-      const censusUrl = `https://api.census.gov/data/2020/dec/pl?get=P1_001N,P1_003N,P1_004N,P1_006N,P2_002N,P3_001N,P3_003N,P3_004N,P3_006N,P4_002N&for=block:*&in=state:${stateFips}&in=county:*&in=tract:*`;
+      // P5_003N = adult correctional facilities group quarters. Used to
+      // compute VAP_MOD = VAP - prison, which weights vote disaggregation.
+      // Incarcerated adults are counted in VAP but can't vote, so VAP-weighted
+      // disaggregation still over-allocates votes to blocks housing prisons.
+      // VAP_MOD fixes that. Matches RDH's approach.
+      const censusUrl = `https://api.census.gov/data/2020/dec/pl?get=P1_001N,P1_003N,P1_004N,P1_006N,P2_002N,P3_001N,P3_003N,P3_004N,P3_006N,P4_002N,P5_003N&for=block:*&in=state:${stateFips}&in=county:*&in=tract:*`;
       const censusResp = await fetch(censusUrl);
       if (!censusResp.ok) throw new Error(`Census API failed: ${censusResp.status}`);
       const censusData: string[][] = await censusResp.json();
@@ -215,6 +240,7 @@ export default class PrepareDevData extends Command {
           vapBlack,
           vapAsian,
           vapHispanic,
+          prisonAdult,
           state,
           county,
           tract,
@@ -233,6 +259,7 @@ export default class PrepareDevData extends Command {
         const vapAsianN = parseInt(vapAsian) || 0;
         const vapHispanicN = parseInt(vapHispanic) || 0;
         const vapOtherN = Math.max(0, vapN - vapWhiteN - vapBlackN - vapAsianN - vapHispanicN);
+        const prisonN = parseInt(prisonAdult) || 0;
         blockDemographics.set(geoId, {
           population: popN,
           white: whiteN,
@@ -245,7 +272,8 @@ export default class PrepareDevData extends Command {
           "VAP Black": vapBlackN,
           "VAP Asian": vapAsianN,
           "VAP Hispanic": vapHispanicN,
-          "VAP Other": vapOtherN
+          "VAP Other": vapOtherN,
+          VAP_MOD: Math.max(0, vapN - prisonN)
         });
       }
       this.log(`   ${blockDemographics.size} block demographics loaded`);
@@ -1059,6 +1087,7 @@ export default class PrepareDevData extends Command {
       "VAP Asian",
       "VAP Hispanic",
       "VAP Other",
+      "VAP_MOD",
       "CVAP",
       "CVAP White",
       "CVAP Black",
@@ -1352,7 +1381,7 @@ export default class PrepareDevData extends Command {
           detectedYear
         );
         writeSync(geomFd, JSON.stringify(geoJSON || blockFeature.geometry) + "\n");
-        trackAssignment(bestPi, featureProps.length, demo.population || 0);
+        trackAssignment(bestPi, featureProps.length, demo.VAP_MOD || 0);
         featureProps.push(props);
         continue;
       }
@@ -1416,7 +1445,7 @@ export default class PrepareDevData extends Command {
           detectedYear
         );
         writeSync(geomFd, JSON.stringify(subGeoJSON || blockFeature.geometry) + "\n");
-        trackAssignment(pi, featureProps.length, subDemo.population || 0);
+        trackAssignment(pi, featureProps.length, subDemo.VAP_MOD || 0);
         featureProps.push(props);
       }
 
@@ -1434,9 +1463,12 @@ export default class PrepareDevData extends Command {
     // precinctVoting. This fixes residuals from per-capita scaling + rounding
     // and guarantees sum(block votes) === precinct votes for every precinct.
     const primaryReconciled = reconcilePrecinctVotes(
-      featureProps,
       primaryAssigned,
       (pi: number) => precinctVoting.get(pi)!.votes,
+      (idx, field) => featureProps[idx][field] || 0,
+      (idx, field, value) => {
+        featureProps[idx][field] = value;
+      },
       detectedYear
     );
     this.log(`   Reconciled ${primaryReconciled} precinct-party totals (primary year)`);
@@ -1888,9 +1920,12 @@ export default class PrepareDevData extends Command {
     // Reconcile precinct totals
     this.log(`   Reconciling precinct totals...`);
     const reconciled = reconcilePrecinctVotes(
-      featureProps,
       precinctAssigned,
       (pi: number) => precinctData.get(pi)!.votes,
+      (idx, field) => featureProps[idx][field] || 0,
+      (idx, field, value) => {
+        featureProps[idx][field] = value;
+      },
       yy
     );
     this.log(`   Reconciled ${reconciled} precinct-party totals`);
@@ -1908,76 +1943,12 @@ function buildBlockProps(
   officesFound: Set<string>,
   electionYear: string
 ): Record<string, any> {
-  const props: Record<string, any> = {
+  return {
     block: blockId,
     precinct: `${countyFp}-${precinctId}`,
     county: countyFp,
     county_name: countyNames.get(countyFp) || countyFp,
-    ...demo
+    ...demo,
+    ...disaggregateBlockVotes(votes, totalVotes, demo.VAP_MOD || 0, officesFound, electionYear)
   };
-
-  // Disaggregate precinct-level votes to this block by per-capita scaling.
-  // Reconciliation later fixes up residuals so precinct totals match exactly.
-  // Presidential (PRE) uses bare names: democrat20, republican20 (for PVI calculation)
-  // Other offices use prefixed names: USS_democrat20, GOV_democrat20, etc.
-  const yy = electionYear; // e.g. "20" for 2020
-  const pop = demo.population || 0;
-  for (const office of Array.from(officesFound)) {
-    const v = votes[office] || { democrat: 0, republican: 0, other: 0 };
-    const total = totalVotes[office] || 0;
-    const prefix = office === "PRE" ? "" : `${office}_`;
-    if (total > 0 && pop > 0) {
-      props[`${prefix}democrat${yy}`] = Math.round((v.democrat / total) * pop);
-      props[`${prefix}republican${yy}`] = Math.round((v.republican / total) * pop);
-      props[`${prefix}other${yy}`] = Math.round((v.other / total) * pop);
-    } else {
-      props[`${prefix}democrat${yy}`] = 0;
-      props[`${prefix}republican${yy}`] = 0;
-      props[`${prefix}other${yy}`] = 0;
-    }
-  }
-
-  return props;
-}
-
-/**
- * Reconcile per-block votes so their sum matches each precinct's exact totals.
- * Adjusts residuals from rounding / per-capita scaling by apportioning the
- * diff across assigned blocks weighted by population contribution.
- */
-function reconcilePrecinctVotes(
-  featureProps: Record<string, any>[],
-  precinctAssigned: Map<number, Map<string, { featureIdx: number; weight: number }[]>>,
-  getPrecinctVotes: (
-    pi: number
-  ) => Record<string, { democrat: number; republican: number; other: number }>,
-  electionYear: string
-): number {
-  const yy = electionYear;
-  let reconciled = 0;
-  for (const [pi, officeMap] of Array.from(precinctAssigned.entries())) {
-    const votes = getPrecinctVotes(pi);
-    for (const [office, assignments] of Array.from(officeMap.entries())) {
-      const v = votes[office] || { democrat: 0, republican: 0, other: 0 };
-      const prefix = office === "PRE" ? "" : `${office}_`;
-      for (const party of ["democrat", "republican", "other"] as const) {
-        const fieldName = `${prefix}${party}${yy}`;
-        const expected = v[party];
-        const actual = assignments.reduce(
-          (sum, a) => sum + (featureProps[a.featureIdx][fieldName] || 0),
-          0
-        );
-        const diff = expected - actual;
-        if (diff === 0) continue;
-        reconciled++;
-        const weights = assignments.map(a => a.weight);
-        const adjustments = apportion(Math.abs(diff), weights);
-        const sign = diff > 0 ? 1 : -1;
-        for (let i = 0; i < assignments.length; i++) {
-          featureProps[assignments[i].featureIdx][fieldName] += sign * adjustments[i];
-        }
-      }
-    }
-  }
-  return reconciled;
 }

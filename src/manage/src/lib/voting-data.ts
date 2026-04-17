@@ -171,6 +171,96 @@ export function extractVotingData(props: Record<string, any>): {
   return { byOffice, electionYear };
 }
 
+export type PartyVotes = { democrat: number; republican: number; other: number };
+
+// Field name for an (office, party, year) triple. Matches the naming convention
+// used by our .buf and topojson outputs: PRE uses bare names (democrat20),
+// other offices use a prefix (USS_democrat20, GOV_democrat20, ...).
+export function voteFieldName(
+  office: string,
+  party: "democrat" | "republican" | "other",
+  electionYear: string
+): string {
+  const prefix = office === "PRE" ? "" : `${office}_`;
+  return `${prefix}${party}${electionYear}`;
+}
+
+// Disaggregate one precinct's votes onto one block, weighted by that block's
+// share of the precinct's voter-eligible population. Returns per-party rounded
+// vote counts keyed by canonical field name. The caller MUST run
+// reconcilePrecinctVotes afterward so rounding residuals don't drift the
+// per-precinct totals.
+//
+// We weight by VAP_MOD (Voting Age Population minus adult correctional
+// facility group quarters): kids and incarcerated adults can't vote, so
+// weighting by total population over-allocates to child-heavy and
+// prison-housing blocks. Matches RDH's election-disag methodology.
+export function disaggregateBlockVotes(
+  votes: Record<string, PartyVotes>,
+  totalVotes: Record<string, number>,
+  weight: number,
+  officesFound: Iterable<string>,
+  electionYear: string
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const office of officesFound) {
+    const v = votes[office] || { democrat: 0, republican: 0, other: 0 };
+    const total = totalVotes[office] || 0;
+    for (const party of ["democrat", "republican", "other"] as const) {
+      const f = voteFieldName(office, party, electionYear);
+      out[f] = total > 0 && weight > 0 ? Math.round((v[party] / total) * weight) : 0;
+    }
+  }
+  return out;
+}
+
+// Reconcile per-block votes so their sum matches each precinct's exact totals.
+// Adjusts rounding residuals from disaggregateBlockVotes by apportioning the
+// diff across the precinct's assigned blocks weighted by the same VAP_MOD used
+// for disaggregation. Falls back to uniform weights when all blocks in a
+// precinct have weight 0 (e.g. a nursing-home-only precinct) so votes don't
+// silently drop.
+//
+// Generic over precinct key K (numeric pi or string precinct id) and the
+// storage shape via getVote/setVote callbacks: callers pass arrows that read
+// and write whichever data structure they're holding their per-block votes in
+// (an array of feature props, a per-column array, etc.).
+export function reconcilePrecinctVotes<K>(
+  precinctAssigned: Map<K, Map<string, { featureIdx: number; weight: number }[]>>,
+  getPrecinctVotes: (pi: K) => Record<string, PartyVotes>,
+  getVote: (featureIdx: number, fieldName: string) => number,
+  setVote: (featureIdx: number, fieldName: string, value: number) => void,
+  electionYear: string
+): number {
+  let reconciled = 0;
+  for (const [pi, officeMap] of Array.from(precinctAssigned.entries())) {
+    const votes = getPrecinctVotes(pi);
+    for (const [office, assignments] of Array.from(officeMap.entries())) {
+      const v = votes[office] || { democrat: 0, republican: 0, other: 0 };
+      for (const party of ["democrat", "republican", "other"] as const) {
+        const fieldName = voteFieldName(office, party, electionYear);
+        const expected = v[party];
+        const actual = assignments.reduce(
+          (sum, a) => sum + getVote(a.featureIdx, fieldName),
+          0
+        );
+        const diff = expected - actual;
+        if (diff === 0) continue;
+        reconciled++;
+        const rawWeights = assignments.map(a => a.weight);
+        const weights = rawWeights.some(w => w > 0) ? rawWeights : rawWeights.map(() => 1);
+        const adjustments = apportion(Math.abs(diff), weights);
+        const sign = diff > 0 ? 1 : -1;
+        for (let i = 0; i < assignments.length; i++) {
+          const a = assignments[i];
+          setVote(a.featureIdx, fieldName, getVote(a.featureIdx, fieldName) + sign * adjustments[i]);
+        }
+      }
+    }
+  }
+  return reconciled;
+}
+
 // Apportion an integer total into parts proportional to ratios,
 // using largest-remainder method to preserve the sum
 export function apportion(total: number, ratios: number[]): number[] {

@@ -46,11 +46,13 @@ const ProjectSidebarHeader = ({
   isLoading,
   expandedProjectMetrics,
   isReadOnly,
-  saving
+  saving,
+  onClose
 }: {
   readonly selectedGeounits: GeoUnits;
   readonly saving: SavingState;
   readonly expandedProjectMetrics: boolean;
+  readonly onClose?: () => void;
 } & LoadingProps &
   StateProps) => {
   return (
@@ -59,16 +61,34 @@ const ProjectSidebarHeader = ({
         <Heading as="h2" sx={{ variant: "text.h4", m: "0" }}>
           Districts
         </Heading>
-        <Box sx={style.expandedToggle}>
-          <Button
-            sx={style.expandButton}
-            onClick={() => store.dispatch(toggleExpandedMetrics(!expandedProjectMetrics))}
-          >
-            {expandedProjectMetrics ? <Icon name="compress" /> : <Icon name="expand" />}
-          </Button>
-        </Box>
+        {!onClose && (
+          <Box sx={style.expandedToggle}>
+            <Button
+              sx={style.expandButton}
+              onClick={() => store.dispatch(toggleExpandedMetrics(!expandedProjectMetrics))}
+            >
+              {expandedProjectMetrics ? <Icon name="compress" /> : <Icon name="expand" />}
+            </Button>
+          </Box>
+        )}
       </Flex>
-      {isLoading || saving === "saving" ? (
+      {onClose ? (
+        <Flex sx={{ variant: "styles.header.right" }}>
+          <Button
+            sx={{
+              bg: "transparent",
+              color: "gray.7",
+              p: 1,
+              cursor: "pointer",
+              "&:hover": { color: "gray.8" }
+            }}
+            onClick={onClose}
+            aria-label="Close"
+          >
+            <Icon name="times" />
+          </Button>
+        </Flex>
+      ) : isLoading || saving === "saving" ? (
         <Flex sx={{ alignItems: "center", justifyContent: "center" }}>
           <Spinner variant="styles.spinner.small" />
         </Flex>

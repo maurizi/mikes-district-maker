@@ -1,4 +1,13 @@
-import { Box, Button, Flex, type ThemeUIStyleObject, Heading, Text, Select } from "theme-ui";
+import {
+  Box,
+  Button,
+  Flex,
+  IconButton,
+  type ThemeUIStyleObject,
+  Heading,
+  Text,
+  Select
+} from "theme-ui";
 import { type IProject, type IStaticMetadata } from "../../../shared/entities";
 import Icon from "../Icon";
 import {
@@ -40,7 +49,8 @@ const ProjectEvaluateMetricDetail = ({
   electionYear,
   pviBuckets,
   setElectionYear,
-  staticMetadata
+  staticMetadata,
+  onClose
 }: {
   readonly geojson?: DistrictsGeoJSON;
   readonly metric: EvaluateMetricWithValue;
@@ -50,10 +60,14 @@ const ProjectEvaluateMetricDetail = ({
   readonly pviBuckets: readonly (PviBucket | undefined)[] | undefined;
   readonly setElectionYear: (year: ElectionYear) => void;
   readonly staticMetadata?: IStaticMetadata;
+  readonly onClose?: () => void;
 }) => {
   return (
     <Flex sx={{ variant: "styles.sidebar.white" }}>
-      <Flex sx={style.header} className="evaluate-metric-header">
+      <Flex
+        sx={{ ...style.header, flexDirection: "row", justifyContent: "space-between" }}
+        className="evaluate-metric-header"
+      >
         <Box sx={{ display: "block" }}>
           <Button
             variant="linkStyle"
@@ -62,6 +76,11 @@ const ProjectEvaluateMetricDetail = ({
             <Icon name="long-arrow-left" /> Back to summary
           </Button>
         </Box>
+        {onClose && (
+          <IconButton variant="icon" onClick={onClose} aria-label="Close">
+            <Icon name="times" />
+          </IconButton>
+        )}
       </Flex>
       <Flex
         sx={{

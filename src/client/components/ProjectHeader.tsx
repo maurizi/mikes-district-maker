@@ -171,19 +171,19 @@ const ProjectHeader = ({
       </Flex>
       <Flex sx={{ variant: "styles.header.right", flex: isMobile ? "none" : "1" }}>
         {mobileOwnProject ? (
-          <MobileActionsMenu>
-            <Box sx={{ px: 2, py: 1 }}>
-              <ShareMenu invert={true} project={project} />
-            </Box>
-            <Box sx={{ px: 2, py: 1 }}>
-              {project ? (
-                <ExportMenu isArchived={isArchived} invert={true} project={project} />
-              ) : null}
-            </Box>
-            <Box sx={{ px: 2, py: 1 }}>
-              <EvaluateButton evaluateMode={evaluateMode} />
-            </Box>
-          </MobileActionsMenu>
+          <React.Fragment>
+            <EvaluateButton evaluateMode={evaluateMode} />
+            <MobileActionsMenu>
+              <Box sx={{ px: 2, py: 1 }}>
+                <ShareMenu invert={true} project={project} />
+              </Box>
+              <Box sx={{ px: 2, py: 1 }}>
+                {project ? (
+                  <ExportMenu isArchived={isArchived} invert={true} project={project} />
+                ) : null}
+              </Box>
+            </MobileActionsMenu>
+          </React.Fragment>
         ) : !isReadOnly ? (
           <React.Fragment>
             {map && (
@@ -213,21 +213,21 @@ const ProjectHeader = ({
             <SubmitMapButton project={project} />
           </React.Fragment>
         ) : isMobile ? (
-          <MobileActionsMenu>
-            {!isArchived && (
-              <Box sx={{ px: 2, py: 1 }}>
-                <CopyMapButton invert={true} />
-              </Box>
-            )}
-            {project && (
-              <Box sx={{ px: 2, py: 1 }}>
-                <ExportMenu isArchived={isArchived} invert={true} project={project} />
-              </Box>
-            )}
-            <Box sx={{ px: 2, py: 1 }}>
-              <EvaluateButton evaluateMode={evaluateMode} />
-            </Box>
-          </MobileActionsMenu>
+          <React.Fragment>
+            <EvaluateButton evaluateMode={evaluateMode} />
+            <MobileActionsMenu>
+              {!isArchived && (
+                <Box sx={{ px: 2, py: 1 }}>
+                  <CopyMapButton invert={true} />
+                </Box>
+              )}
+              {project && (
+                <Box sx={{ px: 2, py: 1 }}>
+                  <ExportMenu isArchived={isArchived} invert={true} project={project} />
+                </Box>
+              )}
+            </MobileActionsMenu>
+          </React.Fragment>
         ) : (
           <React.Fragment>
             {!isArchived && <CopyMapButton invert={true} />}

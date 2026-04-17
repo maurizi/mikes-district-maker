@@ -247,7 +247,7 @@ const ProjectScreen = ({
                 }}
                 onClick={() => setMobileSidebarOpen(true)}
               >
-                <Icon name="bars" /> Districts
+                <Icon name="bars" /> {evaluateMode ? "Evaluate" : "Districts"}
               </Button>
             )}
             {mobileSidebarOpen && (
@@ -266,37 +266,16 @@ const ProjectScreen = ({
                   borderTopRightRadius: "8px"
                 }}
               >
-                <Flex
-                  sx={{
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    px: 3,
-                    py: 2,
-                    borderBottom: "1px solid",
-                    borderColor: "gray.2",
-                    flexShrink: 0
-                  }}
-                >
-                  <span sx={{ fontWeight: "bold", fontFamily: "heading" }}>Districts</span>
-                  <Button
-                    sx={{
-                      bg: "transparent",
-                      color: "gray.7",
-                      p: 1,
-                      cursor: "pointer",
-                      "&:hover": { color: "gray.8" }
-                    }}
-                    onClick={() => setMobileSidebarOpen(false)}
-                  >
-                    <Icon name="times" />
-                  </Button>
-                </Flex>
                 <Box
                   sx={{
                     flex: 1,
                     overflowY: "auto",
                     overflowX: "auto",
-                    ".map-sidebar": { minWidth: "unset !important", height: "auto !important" }
+                    ".map-sidebar": { minWidth: "unset !important", height: "auto !important" },
+                    ".evaluate-sidebar, .evaluate-sidebar > *": {
+                      minWidth: "unset !important",
+                      maxWidth: "unset !important"
+                    }
                   }}
                 >
                   {!evaluateMode ? (
@@ -318,6 +297,7 @@ const ProjectScreen = ({
                       populationKey={projectOptions.populationKey}
                       isReadOnly={effectiveReadOnly}
                       pinnedMetrics={districtDrawing.undoHistory.present.state.pinnedMetricFields}
+                      onClose={() => setMobileSidebarOpen(false)}
                     />
                   ) : (
                     <ProjectEvaluateSidebar
@@ -327,6 +307,7 @@ const ProjectScreen = ({
                       staticMetadata={staticMetadata}
                       isArchived={isArchived}
                       populationKey={projectOptions.populationKey}
+                      onClose={() => setMobileSidebarOpen(false)}
                     />
                   )}
                 </Box>

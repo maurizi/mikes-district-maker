@@ -54,10 +54,12 @@ const style: Record<string, ThemeUIStyleObject> = {
 
 const ProjectEvaluateView = ({
   requiredMetrics,
-  optionalMetrics
+  optionalMetrics,
+  onClose
 }: {
   readonly requiredMetrics: readonly EvaluateMetricWithValue[];
   readonly optionalMetrics: readonly EvaluateMetricWithValue[];
+  readonly onClose?: () => void;
 }) => {
   function formatMetricValue(metric: EvaluateMetricWithValue): string {
     switch (metric.type) {
@@ -81,7 +83,10 @@ const ProjectEvaluateView = ({
             Evaluate
           </Heading>
           <Box>
-            <IconButton variant="icon" onClick={() => store.dispatch(toggleEvaluate(false))}>
+            <IconButton
+              variant="icon"
+              onClick={() => (onClose ? onClose() : store.dispatch(toggleEvaluate(false)))}
+            >
               <Icon name={"times"} />
             </IconButton>
           </Box>

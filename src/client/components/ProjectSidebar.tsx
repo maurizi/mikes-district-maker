@@ -261,7 +261,8 @@ const ProjectSidebar = ({
   saving,
   isReadOnly,
   pinnedMetrics,
-  populationKey
+  populationKey,
+  onClose
 }: {
   readonly project?: IProject;
   readonly geojson?: DistrictsGeoJSON;
@@ -279,6 +280,7 @@ const ProjectSidebar = ({
   readonly isReadOnly: boolean;
   readonly pinnedMetrics?: readonly string[];
   readonly populationKey: GroupTotal;
+  readonly onClose?: () => void;
 } & LoadingProps) => {
   const availableYears = getAvailableElectionYears(staticMetadata);
   // PVI uses the two most recent presidential years when available,
@@ -399,6 +401,7 @@ const ProjectSidebar = ({
         isLoading={isLoading}
         expandedProjectMetrics={expandedProjectMetrics}
         saving={saving}
+        onClose={onClose}
       />
       <Box sx={{ overflowY: "auto", flex: 1 }}>
         <table sx={style.table}>

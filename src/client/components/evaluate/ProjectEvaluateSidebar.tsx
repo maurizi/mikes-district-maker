@@ -39,7 +39,8 @@ const ProjectEvaluateSidebar = ({
   metric,
   project,
   staticMetadata,
-  populationKey = "population"
+  populationKey = "population",
+  onClose
 }: {
   readonly geojson?: DistrictsGeoJSON;
   readonly metric: EvaluateMetricWithValue | undefined;
@@ -47,6 +48,7 @@ const ProjectEvaluateSidebar = ({
   readonly populationKey?: GroupTotal;
   readonly staticMetadata?: IStaticMetadata;
   readonly isArchived: boolean;
+  readonly onClose?: () => void;
 }) => {
   const [electionYear, setEvaluateElectionYear] = useState<ElectionYear>("combined");
   const popThreshold = project && project.populationDeviation;
@@ -258,6 +260,7 @@ const ProjectEvaluateSidebar = ({
         <ProjectEvaluateSummary
           requiredMetrics={requiredMetrics}
           optionalMetrics={optionalMetrics}
+          onClose={onClose}
         />
       ) : geoLevel ? (
         <ProjectEvaluateMetricDetail
@@ -270,6 +273,7 @@ const ProjectEvaluateSidebar = ({
           geoLevel={geoLevel}
           pviBuckets={pviBuckets}
           staticMetadata={staticMetadata}
+          onClose={onClose}
         />
       ) : (
         <Box>Loading...</Box>

@@ -253,36 +253,43 @@ function pviForYear(voting: DemographicCounts, year: string): number | undefined
   return share - baseline;
 }
 
+// Cook PVI combines two presidential elections, weighting the more recent one
+// 3x the older one: pvi = (3 * pvi_newer + pvi_older) / 4.
+// https://thearp.org/blog/reference/cook-political-report-announces-new-formula-partisan-voter-index/
+function combineTwoYearPvi(
+  voting: DemographicCounts,
+  olderY: string,
+  newerY: string
+): number | undefined {
+  const pvOlder = pviForYear(voting, olderY);
+  const pvNewer = pviForYear(voting, newerY);
+  if (pvOlder === undefined || pvNewer === undefined) return undefined;
+  return (3 * pvNewer + pvOlder) / 4;
+}
+
 export function calculatePVI(voting: DemographicCounts, year?: ElectionYear): number | undefined {
-  // Explicit year override (tooltip / flyout can pin to a specific year).
-  if (year) {
+  // "combined:YY-YY": Cook-weighted PVI for the two listed years (older-newer).
+  if (year && year.startsWith("combined:")) {
+    const parts = year.slice("combined:".length).split("-").slice().sort();
+    if (parts.length === 2) {
+      return combineTwoYearPvi(voting, parts[0], parts[1]);
+    }
+    return undefined;
+  }
+
+  // Explicit single-year override (tooltip / flyout can pin to a specific year).
+  if (year && year !== "combined") {
     const pv = pviForYear(voting, year);
     if (pv !== undefined) return pv;
     // Fall through to defaults if the requested year isn't present.
   }
 
-  // Default: average of the two most recent presidential years present.
+  // Default / bare "combined": Cook-weighted PVI of the two most recent presidential years.
   const years = getPresidentialYearsInVoting(voting);
   if (years.length >= 2) {
-    const [y1, y2] = years.slice(-2);
-    const share1 = calculatePartyVoteShare(
-      (voting as Record<string, number>)[`democrat${y1}`],
-      (voting as Record<string, number>)[`republican${y1}`]
-    );
-    const share2 = calculatePartyVoteShare(
-      (voting as Record<string, number>)[`democrat${y2}`],
-      (voting as Record<string, number>)[`republican${y2}`]
-    );
-    const base1 = NATIONAL_DEM_VOTE_SHARE[y1];
-    const base2 = NATIONAL_DEM_VOTE_SHARE[y2];
-    if (
-      share1 !== undefined &&
-      share2 !== undefined &&
-      base1 !== undefined &&
-      base2 !== undefined
-    ) {
-      return (share1 + share2) / 2 - (base1 + base2) / 2;
-    }
+    const [olderY, newerY] = years.slice(-2);
+    const combined = combineTwoYearPvi(voting, olderY, newerY);
+    if (combined !== undefined) return combined;
   } else if (years.length === 1) {
     return pviForYear(voting, years[0]);
   }
@@ -304,6 +311,18 @@ export const getAvailableElectionYears = (staticMetadata?: IStaticMetadata): rea
   for (const file of staticMetadata?.voting || []) {
     const { year } = parseVotingId(file.id);
     if (year) years.add(year);
+  }
+  return Array.from(years).sort();
+};
+
+// Years for which presidential voting data exists (office code "").
+export const getAvailablePresidentialYears = (
+  staticMetadata?: IStaticMetadata
+): readonly string[] => {
+  const years = new Set<string>();
+  for (const file of staticMetadata?.voting || []) {
+    const { office, year } = parseVotingId(file.id);
+    if (office === "" && year) years.add(year);
   }
   return Array.from(years).sort();
 };

@@ -21,7 +21,7 @@ import {
   projectReferenceLayersFetch
 } from "../actions/projectData";
 import { resetProjectState } from "../actions/root";
-import { setPopulationKey } from "../actions/projectOptions";
+import { setElectionYear, setPopulationKey, setSelectedOffice } from "../actions/projectOptions";
 import { userFetch } from "../actions/user";
 import "../App.css";
 import AddReferenceLayerModal from "../components/AddReferenceLayerModal";
@@ -41,7 +41,12 @@ import ProjectSidebar from "../components/ProjectSidebar";
 import SiteHeader from "../components/SiteHeader";
 import SubmitMapModal from "../components/SubmitMapModal";
 import Tour from "../components/Tour";
-import { areAnyGeoUnitsSelected, destructureResource, isProjectReadOnly } from "../functions";
+import {
+  areAnyGeoUnitsSelected,
+  destructureResource,
+  getAvailablePresidentialYears,
+  isProjectReadOnly
+} from "../functions";
 import { isUserLoggedIn } from "../jwt";
 import { type State } from "../reducers";
 import { type DistrictDrawingState } from "../reducers/districtDrawing";
@@ -176,6 +181,17 @@ const ProjectScreen = ({
       const hasGroup = groups.some(g => g.total === project.chamber!.defaultPopulationField);
       if (hasGroup) {
         store.dispatch(setPopulationKey(project.chamber.defaultPopulationField));
+      }
+    }
+  }, [project?.id, staticMetadata]);
+
+  // Default the tooltip's election year + office to the latest presidential year available
+  useEffect(() => {
+    if (staticMetadata) {
+      const presYears = getAvailablePresidentialYears(staticMetadata);
+      if (presYears.length > 0) {
+        store.dispatch(setElectionYear(presYears[presYears.length - 1]));
+        store.dispatch(setSelectedOffice(""));
       }
     }
   }, [project?.id, staticMetadata]);

@@ -9,7 +9,7 @@ import {
 } from "../../types";
 import store from "../../store";
 import {
-  hasMultipleElections,
+  getAvailablePresidentialYears,
   isMajorityMinority,
   getPopulationPerRepresentative,
   getDeviationPopulationKey
@@ -50,7 +50,12 @@ const ProjectEvaluateSidebar = ({
   readonly isArchived: boolean;
   readonly onClose?: () => void;
 }) => {
-  const [electionYear, setEvaluateElectionYear] = useState<ElectionYear>("combined");
+  const [electionYear, setEvaluateElectionYear] = useState<ElectionYear>(() => {
+    const presYears = getAvailablePresidentialYears(staticMetadata);
+    return presYears.length >= 2
+      ? `combined:${presYears[presYears.length - 2]}-${presYears[presYears.length - 1]}`
+      : presYears[0] || "combined";
+  });
   const popThreshold = project && project.populationDeviation;
 
   const featuresWithCompactness = geojson?.features
@@ -143,7 +148,7 @@ const ProjectEvaluateSidebar = ({
     }
   }, [electionYear, geojson, metric, numDistrictsWithGeometries]);
 
-  const multipleElections = hasMultipleElections(staticMetadata);
+  const multipleElections = getAvailablePresidentialYears(staticMetadata).length > 1;
 
   const requiredMetrics: readonly EvaluateMetricWithValue[] = [
     {

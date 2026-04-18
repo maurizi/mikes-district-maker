@@ -18,6 +18,7 @@ import {
 } from "../../types";
 import store from "../../store";
 import { selectEvaluationMetric } from "../../actions/districtDrawing";
+import { getAvailablePresidentialYears } from "../../functions";
 import ContiguityMetricDetail from "./detail/Contiguity";
 import CompactnessMetricDetail from "./detail/Compactness";
 import CountySplitMetricDetail from "./detail/CountySplit";
@@ -68,7 +69,7 @@ const ProjectEvaluateMetricDetail = ({
         sx={{ ...style.header, flexDirection: "row", justifyContent: "space-between" }}
         className="evaluate-metric-header"
       >
-        <Box sx={{ display: "block" }}>
+        <Box sx={{ display: "block", my: "auto" }}>
           <Button
             variant="linkStyle"
             onClick={() => store.dispatch(selectEvaluationMetric(undefined))}
@@ -77,7 +78,7 @@ const ProjectEvaluateMetricDetail = ({
           </Button>
         </Box>
         {onClose && (
-          <IconButton variant="icon" onClick={onClose} aria-label="Close">
+          <IconButton variant="icon" onClick={onClose} aria-label="Close" sx={{ my: "auto" }}>
             <Icon name="times" />
           </IconButton>
         )}
@@ -110,23 +111,42 @@ const ProjectEvaluateMetricDetail = ({
           <Heading as="h1" sx={{ variant: "text.h4", m: 0, textTransform: "capitalize" }}>
             {metric.name}
           </Heading>
-          {"hasMultipleElections" in metric && metric.hasMultipleElections && (
-            <Box>
-              <Select
-                id="election-dropdown"
-                value={electionYear || undefined}
-                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-                  const year = e.currentTarget.value;
-                  (year === "16" || year === "20" || year === "combined") && setElectionYear(year);
-                }}
-                sx={{ width: "250px", ml: "20px" }}
-              >
-                <option value={"combined"}>Combined 2016 / 2020 PVI</option>
-                <option value={"16"}>2016 PVI</option>
-                <option value={"20"}>2020 PVI</option>
-              </Select>
-            </Box>
-          )}
+          {"hasMultipleElections" in metric &&
+            metric.hasMultipleElections &&
+            (() => {
+              const presYears = getAvailablePresidentialYears(staticMetadata);
+              // Adjacent pairs, latest first: [[20,24],[16,20]] for years [16,20,24].
+              const combinedPairs: readonly (readonly [string, string])[] = presYears
+                .slice(0, -1)
+                .map((y, i) => [y, presYears[i + 1]] as const)
+                .slice()
+                .reverse();
+              const combinedValues = combinedPairs.map(([a, b]) => `combined:${a}-${b}`);
+              const validValues = new Set<string>([...combinedValues, ...presYears]);
+              return (
+                <Box>
+                  <Select
+                    id="election-dropdown"
+                    value={electionYear || undefined}
+                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                      const year = e.currentTarget.value;
+                      if (validValues.has(year)) setElectionYear(year);
+                    }}
+                    sx={{ width: "250px", ml: "20px" }}
+                  >
+                    {combinedPairs.map(([a, b]) => (
+                      <option
+                        key={`combined:${a}-${b}`}
+                        value={`combined:${a}-${b}`}
+                      >{`Combined 20${a} / 20${b} PVI`}</option>
+                    ))}
+                    {presYears.map(y => (
+                      <option key={y} value={y}>{`20${y} PVI`}</option>
+                    ))}
+                  </Select>
+                </Box>
+              );
+            })()}
         </Flex>
         <Text sx={style.metricText}>{metric.longText || "Lorem ipsum lorem ipsum"}</Text>
       </Flex>

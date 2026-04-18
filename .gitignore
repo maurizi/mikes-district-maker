@@ -6,6 +6,9 @@ yarn-debug.log*
 yarn-error.log*
 report.*.json
 
+# Local data directory
+/dev-data
+
 # Tests
 coverage/
 

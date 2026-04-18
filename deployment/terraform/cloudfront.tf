@@ -51,6 +51,19 @@ resource "aws_cloudfront_distribution" "main" {
       name  = "X-CloudFront-Origin"
       value = "api"
     }
+    # Lambda Function URLs require the Host header to match their own
+    # hostname (enforced by the AllViewerExceptHostHeader origin request
+    # policy below). Surface the public hostname/proto as X-Forwarded-*
+    # so server code building absolute URLs (og:image, canonical) emits
+    # https://<domain>/... rather than the internal lambda-url.* host.
+    custom_header {
+      name  = "X-Forwarded-Host"
+      value = var.domain_name
+    }
+    custom_header {
+      name  = "X-Forwarded-Proto"
+      value = "https"
+    }
   }
 
   # Project thumbnails bucket. Public-read; CloudFront fetches anonymously.

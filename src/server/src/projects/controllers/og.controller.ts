@@ -53,6 +53,8 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
+const SITE_NAME = "Mike's District Maker";
+
 function renderOgHtml(fields: {
   readonly title: string;
   readonly description: string;
@@ -69,6 +71,7 @@ function renderOgHtml(fields: {
 <meta charset="utf-8">
 <title>${escapeHtml(title)}</title>
 <meta name="description" content="${escapeHtml(description)}">
+<meta property="og:site_name" content="${escapeHtml(SITE_NAME)}">
 <meta property="og:title" content="${escapeHtml(title)}">
 <meta property="og:description" content="${escapeHtml(description)}">
 <meta property="og:image" content="${escapeHtml(imageUrl)}">
@@ -83,6 +86,10 @@ function renderOgHtml(fields: {
 </head>
 <body></body>
 </html>`;
+}
+
+function truncate(s: string, max: number): string {
+  return s.length <= max ? s : s.slice(0, max - 1).trimEnd() + "…";
 }
 
 function buildBaseUrl(req: Request): string {
@@ -148,16 +155,21 @@ export class OgController {
       });
     }
 
-    const title = `${project.name} – Mike's District Maker`;
+    // Target 50–60 chars for og:title. Site name is emitted separately via
+    // og:site_name so the title itself stays focused on the project.
+    const title = truncate(project.name, 60);
+    const creator = project.user?.name?.trim();
     const breakdown = partisanBreakdown(project.districtProperties);
     const parts: string[] = [];
     if (breakdown) {
       parts.push(`${breakdown.dem} D`, `${breakdown.rep} R`);
       if (breakdown.tossup > 0) parts.push(`${breakdown.tossup} tied`);
     }
+    // Target 110–160 chars for og:description.
+    const byLine = creator ? ` by ${creator}` : "";
     const description = breakdown
-      ? `Proposed ${project.regionConfig.name} map: ${parts.join(" / ")} districts (based on the ${breakdown.year} presidential vote).`
-      : `Proposed ${project.regionConfig.name} map with ${project.numberOfDistricts} districts, drawn in Mike's District Maker.`;
+      ? `Proposed ${project.regionConfig.name} map${byLine}: ${parts.join(" / ")} across ${project.numberOfDistricts} districts, based on the ${breakdown.year} presidential vote. Explore and share at ${SITE_NAME}.`
+      : `Proposed ${project.regionConfig.name} map${byLine} with ${project.numberOfDistricts} districts. Explore, edit, and share at ${SITE_NAME}.`;
     const imageUrl = `${baseUrl}/thumbnails/${project.id}.png?v=${project.updatedDt.getTime()}`;
     return renderOgHtml({
       title,

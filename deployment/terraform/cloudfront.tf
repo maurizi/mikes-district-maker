@@ -5,6 +5,13 @@ resource "aws_cloudfront_function" "spa_rewrite" {
   code    = file("${path.module}/cloudfront-functions/spa-rewrite.js")
 }
 
+resource "aws_cloudfront_function" "thumbnails_rewrite" {
+  name    = "${var.project}-${var.environment}-thumbnails-rewrite"
+  runtime = "cloudfront-js-2.0"
+  publish = true
+  code    = file("${path.module}/cloudfront-functions/thumbnails-rewrite.js")
+}
+
 # CloudFront ACM cert must be in us-east-1.
 resource "aws_acm_certificate" "cloudfront" {
   provider          = aws.us_east_1
@@ -119,8 +126,10 @@ resource "aws_cloudfront_distribution" "main" {
     origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac"
   }
 
-  # /thumbnails/*.png → project-thumbnails S3 bucket via OAC. Long-TTL cache;
+  # /thumbnails/*.png → project-thumbnails S3 bucket. Long-TTL cache;
   # the client busts per-project with a ?v=<updatedDt> query string.
+  # A viewer-request function strips the `/thumbnails/` prefix because the
+  # bucket stores objects at the bare `<id>.png` key.
   ordered_cache_behavior {
     path_pattern           = "/thumbnails/*"
     target_origin_id       = "s3-thumbnails"
@@ -130,6 +139,11 @@ resource "aws_cloudfront_distribution" "main" {
     compress               = true
     # Managed cache policy "CachingOptimized".
     cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.thumbnails_rewrite.arn
+    }
   }
 
   viewer_certificate {

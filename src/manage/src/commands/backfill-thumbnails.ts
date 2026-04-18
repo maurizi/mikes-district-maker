@@ -695,24 +695,30 @@ async function renderPng(
 // like `http://chromium:3000`; we convert it to a ws URL and pass as
 // browserWSEndpoint because browserless's /json/version returns
 // `ws://0.0.0.0:3000` which puppeteer would fail to reach.
-async function withBrowser<T>(
-  browserUrl: string,
-  fn: (page: Page) => Promise<T>
-): Promise<T> {
+async function connectBrowser(browserUrl: string): Promise<Browser> {
   const wsEndpoint = browserUrl.replace(/^http/, "ws");
-  const browser: Browser = await puppeteer.connect({ browserWSEndpoint: wsEndpoint });
+  return await puppeteer.connect({ browserWSEndpoint: wsEndpoint });
+}
+
+// Renders in a fresh page every call so that a crashed target or accumulated
+// leaks in one project don't poison every subsequent render.
+async function renderPngInFreshPage(
+  getBrowser: () => Promise<Browser>,
+  thumbnail: ThumbnailGeoJSON,
+  bbox: readonly [number, number, number, number]
+): Promise<Buffer> {
+  const browser = await getBrowser();
+  const page = await browser.newPage();
   try {
-    const page = await browser.newPage();
     await page.setViewport({ width: 1200, height: 630, deviceScaleFactor: 1 });
     await page.setContent(HARNESS_HTML, { waitUntil: "networkidle0" });
-    try {
-      return await fn(page);
-    } finally {
-      await page.close();
-    }
+    return await renderPng(page, thumbnail, bbox);
   } finally {
-    // disconnect leaves the sidecar running for the next invocation.
-    browser.disconnect();
+    try {
+      await page.close();
+    } catch {
+      // Browser may already be dead — nothing useful to do.
+    }
   }
 }
 
@@ -793,7 +799,25 @@ export default class BackfillThumbnails extends Command {
     let updated = 0;
     let failed = 0;
 
-    const runner = async (page: Page | null) => {
+    // Lazily (re)connect the browser. A dropped/crashed sidecar leaves
+    // `browser.connected` false; we throw away the handle and reconnect.
+    // Hold the handle in a container so TS flow-analysis doesn't narrow
+    // `browser` to `null` across the closure boundary.
+    const state: { browser: Browser | null } = { browser: null };
+    const getBrowser = async (): Promise<Browser> => {
+      if (state.browser && state.browser.connected) return state.browser;
+      if (state.browser) {
+        try {
+          await state.browser.disconnect();
+        } catch {
+          // ignore
+        }
+      }
+      state.browser = await connectBrowser(browserUrl);
+      return state.browser;
+    };
+
+    const runner = async (withPng: boolean) => {
       for (const [, regionProjects] of projectsByRegion) {
         const regionConfig = regionProjects[0].regionConfig;
         this.log(
@@ -815,8 +839,9 @@ export default class BackfillThumbnails extends Command {
             const districtProperties: readonly DistrictProperties[] = thumbnail.features.map(
               f => f.properties
             );
-            const pngBuffer =
-              skipPng || !page ? null : await renderPng(page, thumbnail, region.bbox);
+            const pngBuffer = !withPng
+              ? null
+              : await renderPngInFreshPage(getBrowser, thumbnail, region.bbox);
             if (dryRun) {
               this.log(
                 `  ${project.name}: would write ${districtProperties.length} properties${
@@ -849,10 +874,16 @@ export default class BackfillThumbnails extends Command {
       }
     };
 
-    if (skipPng) {
-      await runner(null);
-    } else {
-      await withBrowser(browserUrl, async page => runner(page));
+    try {
+      await runner(!skipPng);
+    } finally {
+      if (state.browser) {
+        try {
+          await state.browser.disconnect();
+        } catch {
+          // ignore
+        }
+      }
     }
 
     this.log("");

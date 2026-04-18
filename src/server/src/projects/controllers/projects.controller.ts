@@ -14,6 +14,8 @@ import {
   UseGuards,
   UseInterceptors
 } from "@nestjs/common";
+import { PutObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import {
   Crud,
   CrudAuth,
@@ -37,6 +39,7 @@ import {
 } from "../../../../shared/constants";
 import { S3Client } from "@aws-sdk/client-s3";
 import type {
+  DistrictProperties,
   DistrictsDefinition,
   GeoUnitHierarchy,
   IStaticMetadata,
@@ -51,7 +54,7 @@ import { RegionConfig } from "../../region-configs/entities/region-config.entity
 import { User } from "../../users/entities/user.entity";
 import { CreateProjectDto } from "../entities/create-project.dto";
 import { Project } from "../entities/project.entity";
-import { ProjectsService } from "../services/projects.service";
+import { ProjectsService, thumbnailUrl } from "../services/projects.service";
 import { OrganizationsService } from "../../organizations/services/organizations.service";
 
 import { RegionConfigsService } from "../../region-configs/services/region-configs.service";
@@ -65,6 +68,12 @@ import { ProjectTemplate } from "../../project-templates/entities/project-templa
 import { ReferenceLayersService } from "../../reference-layers/services/reference-layers.service";
 import { ChambersService } from "../../chambers/services/chambers";
 import { ReferenceLayer } from "../../reference-layers/entities/reference-layer.entity";
+
+const THUMBNAIL_UPLOAD_URL_EXPIRES_SECONDS = 5 * 60;
+
+export function thumbnailS3Key(projectId: ProjectId): string {
+  return `${projectId}.png`;
+}
 
 function validateNumberOfMembers(
   dto: CreateProjectDto | UpdateProjectDto,
@@ -205,7 +214,11 @@ export class ProjectsController implements CrudController<Project> {
   ) {}
 
   private formatCreateProjectDto(
-    dto: CreateProjectDto,
+    // The duplicate flow feeds a Project entity through this helper, so
+    // districtProperties may arrive as null rather than absent.
+    dto: Omit<CreateProjectDto, "districtProperties"> & {
+      readonly districtProperties?: readonly DistrictProperties[] | null;
+    },
     districtsLength: number,
     regionConfig: RegionConfig,
     req: CrudRequest
@@ -314,6 +327,35 @@ export class ProjectsController implements CrudController<Project> {
   // Compute districts definition length from hierarchy
   private computeDistrictsDefLength(hierarchy: GeoUnitHierarchy): number {
     return hierarchy.length;
+  }
+
+  @UseInterceptors(CrudRequestInterceptor)
+  @UseGuards(JwtAuthGuard)
+  @Post(":id/thumbnail-upload-url")
+  async createThumbnailUploadUrl(
+    @ParsedRequest() req: CrudRequest,
+    @Param("id") projectId: ProjectId
+  ): Promise<{ uploadUrl: string }> {
+    // Client rendered a new PNG and needs to PUT it to S3. We re-verify
+    // ownership here (getProject via crud respects the auth filter) before
+    // handing out a signed URL.
+    const project = await this.getProject(req, projectId);
+    const bucket = process.env.THUMBNAILS_BUCKET;
+    if (!bucket) {
+      this.logger.error("THUMBNAILS_BUCKET env var not set");
+      throw new InternalServerErrorException();
+    }
+    const uploadUrl = await getSignedUrl(
+      this.s3,
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: thumbnailS3Key(project.id),
+        ContentType: "image/png",
+        CacheControl: "public, max-age=3600"
+      }),
+      { expiresIn: THUMBNAIL_UPLOAD_URL_EXPIRES_SECONDS }
+    );
+    return { uploadUrl };
   }
 
   @UseInterceptors(CrudRequestInterceptor)
@@ -506,7 +548,9 @@ export class ProjectsController implements CrudController<Project> {
   @Override()
   @UseGuards(OptionalJwtAuthGuard)
   async getOne(@Param("id") id: ProjectId, @ParsedRequest() req: CrudRequest): Promise<Project> {
-    return this.getProject(req, id);
+    const project = await this.getProject(req, id);
+    // eslint-disable-next-line functional/immutable-data
+    return Object.assign(project, { thumbnailUrl: thumbnailUrl(project) });
   }
 
   // Overriden to add JwtAuthGuard and support pagination

@@ -7,6 +7,7 @@ if [[ -n "${DB_DEBUG}" ]]; then
 fi
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    docker compose up -d database
+    # chromium is only needed by backfill-thumbnails but cheap to keep idle.
+    docker compose up -d database chromium
     docker compose run --no-deps --rm manage ./bin/run "$@"
 fi

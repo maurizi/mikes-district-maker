@@ -40,6 +40,10 @@ if [[ -z "${DSQL_ENDPOINT}" ]]; then
     exit 1
 fi
 
+if [[ -z "${THUMBNAILS_BUCKET:-}" ]]; then
+    THUMBNAILS_BUCKET="$(cd deployment/terraform && terraform output -raw thumbnails_bucket 2>/dev/null || true)"
+fi
+
 echo "Target: PRODUCTION DSQL (${DSQL_ENDPOINT})"
 echo "Command: $*"
 
@@ -56,6 +60,7 @@ docker compose run --no-deps --rm \
     -e DSQL_USER="${DSQL_USER:-admin}" \
     -e AWS_REGION="${AWS_REGION:-us-east-1}" \
     -e AWS_PROFILE="${AWS_PROFILE:-district-builder}" \
+    -e THUMBNAILS_BUCKET="${THUMBNAILS_BUCKET:-}" \
     -e POSTGRES_HOST= \
     -e POSTGRES_PORT= \
     -e POSTGRES_USER= \

@@ -7,6 +7,7 @@ import { RegionConfigsModule } from "../region-configs/region-configs.module";
 import { UsersModule } from "../users/users.module";
 
 import { GlobalProjectsController } from "./controllers/globalProjects.controller";
+import { OgController } from "./controllers/og.controller";
 import { ProjectsController } from "./controllers/projects.controller";
 import { Project } from "./entities/project.entity";
 import { ProjectsService } from "./services/projects.service";
@@ -23,7 +24,7 @@ import { ReferenceLayersModule } from "../reference-layers/reference-layers.modu
     forwardRef(() => ReferenceLayersModule),
     UsersModule
   ],
-  controllers: [ProjectsController, GlobalProjectsController],
+  controllers: [ProjectsController, GlobalProjectsController, OgController],
   providers: [ProjectsService],
   exports: [ProjectsService]
 })

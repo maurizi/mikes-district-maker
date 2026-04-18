@@ -23,6 +23,11 @@ output "region_artifacts_bucket" {
   value       = aws_s3_bucket.region_artifacts.bucket
 }
 
+output "thumbnails_bucket" {
+  description = "S3 bucket for project thumbnails — THUMBNAILS_BUCKET for the Lambda and manage-prod."
+  value       = aws_s3_bucket.thumbnails.bucket
+}
+
 output "cloudfront_distribution_id" {
   description = "CloudFront distribution id — used by CI for cache invalidation."
   value       = aws_cloudfront_distribution.main.id

@@ -52,6 +52,14 @@ data "aws_iam_policy_document" "api_inline" {
     ]
   }
 
+  # Write access to the project-thumbnails bucket, needed to presign PUT
+  # URLs the client uses to upload rendered thumbnails.
+  statement {
+    sid       = "S3WriteThumbnails"
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.thumbnails.arn}/*"]
+  }
+
   # Send transactional email via SES. Used by @nestjs-modules/mailer for
   # registration verification + password reset. Scope to identities we own
   # so a leak of these credentials can't be used to spam from arbitrary
@@ -101,6 +109,10 @@ resource "aws_lambda_function" "api" {
       # Region artifacts bucket (consumed via S3_CACHE_DIRECTORY logic in
       # src/server/src/common/functions.ts).
       REGION_ARTIFACTS_BUCKET = aws_s3_bucket.region_artifacts.bucket
+
+      # Destination bucket for client-uploaded project thumbnails. Presigned
+      # PUT URLs are minted against this bucket in ProjectsController.
+      THUMBNAILS_BUCKET = aws_s3_bucket.thumbnails.bucket
 
       NODE_ENV = var.environment
 

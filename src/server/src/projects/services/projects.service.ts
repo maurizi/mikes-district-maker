@@ -13,6 +13,20 @@ type AllProjectsOptions = IPaginationOptions & {
   readonly userId?: string;
 };
 
+// Convention-based URL: /thumbnails/<id>.png served from the thumbnails S3
+// bucket via CloudFront. The ?v=<updatedDt> query busts the client/CDN cache
+// whenever the client re-uploads after a save. Projects without an uploaded
+// PNG (pre-backfill, or mid-save races) return 404 at the CDN; the UI falls
+// back to a broken-image placeholder.
+export function thumbnailUrl(project: Pick<Project, "id" | "updatedDt">): string {
+  return `/thumbnails/${project.id}.png?v=${project.updatedDt.getTime()}`;
+}
+
+function attachThumbnailUrl<T extends Pick<Project, "id" | "updatedDt">>(p: T): T {
+  // eslint-disable-next-line functional/immutable-data
+  return Object.assign(p, { thumbnailUrl: thumbnailUrl(p) });
+}
+
 @Injectable()
 export class ProjectsService extends TypeOrmCrudService<Project> {
   constructor(@InjectRepository(Project) repo: Repository<Project>) {
@@ -41,7 +55,6 @@ export class ProjectsService extends TypeOrmCrudService<Project> {
         "project.updatedDt",
         "project.createdDt",
         "project.submittedDt",
-        "project.thumbnail",
         "chamber.name",
         "regionConfig.name",
         "regionConfig.id",
@@ -68,7 +81,8 @@ export class ProjectsService extends TypeOrmCrudService<Project> {
       ? builderWithFilter.andWhere("regionConfig.regionCode = :region", { region: options.region })
       : builderWithFilter;
 
-    return paginate<Project>(builderWithRegion, options);
+    const paginated = await paginate<Project>(builderWithRegion, options);
+    return { ...paginated, items: paginated.items.map(attachThumbnailUrl) };
   }
 
   async findAllUserProjectsPaginated(
@@ -80,6 +94,7 @@ export class ProjectsService extends TypeOrmCrudService<Project> {
       { userId }
     );
 
-    return paginate<Project>(builder, options);
+    const paginated = await paginate<Project>(builder, options);
+    return { ...paginated, items: paginated.items.map(attachThumbnailUrl) };
   }
 }

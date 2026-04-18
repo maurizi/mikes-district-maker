@@ -844,6 +844,20 @@
     "@smithy/types" "^4.14.0"
     tslib "^2.6.2"
 
+"@aws-sdk/s3-request-presigner@3.840.0":
+  version "3.840.0"
+  resolved "https://registry.yarnpkg.com/@aws-sdk/s3-request-presigner/-/s3-request-presigner-3.840.0.tgz#6b92a4c0416dead2b1b227a5e81692f65f3a88e3"
+  integrity sha512-1jcrhVoSZjiAQJGNswI0RGR36/+OG6yTV42wQamHdNHk+/68dn9MGTUVr+58AEFOyEAPE/EvkiYRD6n5WkUjMg==
+  dependencies:
+    "@aws-sdk/signature-v4-multi-region" "3.840.0"
+    "@aws-sdk/types" "3.840.0"
+    "@aws-sdk/util-format-url" "3.840.0"
+    "@smithy/middleware-endpoint" "^4.1.13"
+    "@smithy/protocol-http" "^5.1.2"
+    "@smithy/smithy-client" "^4.4.5"
+    "@smithy/types" "^4.3.1"
+    tslib "^2.6.2"
+
 "@aws-sdk/signature-v4-multi-region@3.840.0":
   version "3.840.0"
   resolved "https://registry.yarnpkg.com/@aws-sdk/signature-v4-multi-region/-/signature-v4-multi-region-3.840.0.tgz#75b3b97b53b9fb6573f1a85af762569368ebcca2"
@@ -932,6 +946,16 @@
     "@smithy/types" "^4.14.0"
     "@smithy/url-parser" "^4.2.13"
     "@smithy/util-endpoints" "^3.3.4"
+    tslib "^2.6.2"
+
+"@aws-sdk/util-format-url@3.840.0":
+  version "3.840.0"
+  resolved "https://registry.yarnpkg.com/@aws-sdk/util-format-url/-/util-format-url-3.840.0.tgz#386f703f9048f0a297ec2f4e37a9bfbb84a0aa18"
+  integrity sha512-VB1PWyI1TQPiPvg4w7tgUGGQER1xxXPNUqfh3baxUSFi1Oh8wHrDnFywkxLm3NMmgDmnLnSZ5Q326qAoyqKLSg==
+  dependencies:
+    "@aws-sdk/types" "3.840.0"
+    "@smithy/querystring-builder" "^4.0.4"
+    "@smithy/types" "^4.3.1"
     tslib "^2.6.2"
 
 "@aws-sdk/util-format-url@^3.972.9":
@@ -2950,6 +2974,15 @@
     "@smithy/types" "^4.14.0"
     tslib "^2.6.2"
 
+"@smithy/querystring-builder@^4.0.4":
+  version "4.2.14"
+  resolved "https://registry.yarnpkg.com/@smithy/querystring-builder/-/querystring-builder-4.2.14.tgz#102429e0fb004108babf219edfcf6f111e66d782"
+  integrity sha512-XYA5Z0IqTeF+5XDdh4BBmSA0HvbgVZIyv4cmOoUheDNR57K1HgBp9ukUMx3Cr3XpDHHpLBnexPE3LAtDsZkj2A==
+  dependencies:
+    "@smithy/types" "^4.14.1"
+    "@smithy/util-uri-escape" "^4.2.2"
+    tslib "^2.6.2"
+
 "@smithy/querystring-builder@^4.2.12":
   version "4.2.12"
   resolved "https://registry.yarnpkg.com/@smithy/querystring-builder/-/querystring-builder-4.2.12.tgz#20a0266b151a4b58409f901e1463257a72835c16"
@@ -3079,6 +3112,13 @@
   version "4.14.0"
   resolved "https://registry.yarnpkg.com/@smithy/types/-/types-4.14.0.tgz#72fb6fd315f2eff7d4878142db2d1db4ef94f9bc"
   integrity sha512-OWgntFLW88kx2qvf/c/67Vno1yuXm/f9M7QFAtVkkO29IJXGBIg0ycEaBTH0kvCtwmvZxRujrgP5a86RvsXJAQ==
+  dependencies:
+    tslib "^2.6.2"
+
+"@smithy/types@^4.14.1":
+  version "4.14.1"
+  resolved "https://registry.yarnpkg.com/@smithy/types/-/types-4.14.1.tgz#aba92b4cdb406f2a2b062e82f1e3728d809a7c23"
+  integrity sha512-59b5HtSVrVR/eYNei3BUj3DCPKD/G7EtDDe7OEJE7i7FtQFugYo6MxbotS8mVJkLNVf8gYaAlEBwwtJ9HzhWSg==
   dependencies:
     tslib "^2.6.2"
 

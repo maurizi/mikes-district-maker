@@ -2,7 +2,6 @@ import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { TypeOrmCrudService } from "@dataui/crud-typeorm";
 import { Repository } from "typeorm";
-import { Feature } from "geojson";
 
 import { ProjectTemplate } from "../entities/project-template.entity";
 import { ProjectVisibility } from "../../../../shared/constants";
@@ -11,12 +10,10 @@ import {
   DistrictProperties,
   UserId,
   ProjectId,
-  ProjectTemplateId,
-  ThumbnailGeoJSON
+  ProjectTemplateId
 } from "../../../../shared/entities";
 import { Organization } from "../../organizations/entities/organization.entity";
 import { Project } from "../../projects/entities/project.entity";
-import { MultiPolygon } from "geojson";
 
 export type ProjectExportRow = {
   readonly userId: UserId;
@@ -44,18 +41,14 @@ export class ProjectTemplatesService extends TypeOrmCrudService<ProjectTemplate>
   async findAdminOrgProjectsWithDistrictProperties(
     slug: OrganizationSlug
   ): Promise<ProjectExportRow[]> {
-    // Returns admin-only listing of all organization projects, with data for CSV export.
-    // The client-written thumbnail preserves feature properties (contiguity,
-    // compactness, demographics, voting) so we extract those here rather than
-    // reloading the full districts geometry.
-    //
-    // Previously used jsonb_path_query_array to extract features[*].properties
-    // at the SQL layer; DSQL doesn't support jsonb_* functions so we select the
-    // thumbnail as text (via simple-json TypeORM auto-parses) and project
-    // district properties in JS.
+    // Returns admin-only listing of all organization projects, with data for
+    // CSV export. The per-district metrics (contiguity, compactness,
+    // demographics, voting) are stored client-computed on projects.districtProperties.
     type Row = Omit<ProjectExportRow, "districtProperties"> & {
-      // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
-      readonly thumbnail: ThumbnailGeoJSON | null;
+      // simple-json is serialized as text in the database; TypeORM parses it
+      // back into an array when read as an entity, but raw SELECT returns it
+      // unparsed.
+      readonly districtProperties: string | readonly DistrictProperties[] | null;
     };
     const builder = this.repo
       .createQueryBuilder("projectTemplate")
@@ -80,14 +73,15 @@ export class ProjectTemplatesService extends TypeOrmCrudService<ProjectTemplate>
       .addSelect("regionConfig.name", "regionName")
       .addSelect("regionConfig.s3URI", "regionS3URI")
       .addSelect("chamber.name", "chamberName")
-      .addSelect("projects.thumbnail", "thumbnail")
+      .addSelect("projects.district_properties", "districtProperties")
       .orderBy("projects.name");
     const rows = await builder.getRawMany<Row>();
-    return rows.map(({ thumbnail, ...rest }) => ({
+    return rows.map(({ districtProperties, ...rest }) => ({
       ...rest,
-      districtProperties: (thumbnail?.features ?? []).map(
-        (f: Feature<MultiPolygon, DistrictProperties>) => f.properties as DistrictProperties
-      )
+      districtProperties:
+        typeof districtProperties === "string"
+          ? (JSON.parse(districtProperties) as readonly DistrictProperties[])
+          : (districtProperties ?? [])
     }));
   }
 
@@ -138,12 +132,24 @@ export class ProjectTemplatesService extends TypeOrmCrudService<ProjectTemplate>
         "project.isFeatured",
         "project.id",
         "project.updatedDt",
-        "project.thumbnail",
         "user.name"
       ])
       .orderBy("project.name")
       .getMany();
-    return data;
+    // Each featured project gets a thumbnailUrl pointing at the PNG endpoint.
+    // Projects that don't have a PNG yet will serve a 404 on the image; the UI
+    // renders the broken-image placeholder until the backfill fills them in.
+    return data.map(template => {
+      /* eslint-disable functional/immutable-data */
+      template.projects = (template.projects || []).map(project => {
+        const withUrl = Object.assign(project, {
+          thumbnailUrl: `/thumbnails/${project.id}.png?v=${project.updatedDt.getTime()}`
+        });
+        return withUrl;
+      });
+      /* eslint-enable functional/immutable-data */
+      return template;
+    });
   }
 
   async createFromProject(

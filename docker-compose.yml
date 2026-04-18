@@ -27,6 +27,9 @@ services:
       - NODE_OPTIONS=--max-old-space-size=16384
       - AWS_PROFILE=${AWS_PROFILE:-district-builder}
       - AWS_REGION=${AWS_REGION:-us-east-1}
+      # UUID project IDs make it safe for dev and prod to share one bucket.
+      # Override locally if you want isolation.
+      - THUMBNAILS_BUCKET=${THUMBNAILS_BUCKET:-districtbuilder-production-thumbnails}
       - JWT_SECRET=insecure
       - JWT_EXPIRATION_IN_MS=604800000 # 1 week
       - CLIENT_URL=http://localhost:3003
@@ -50,6 +53,7 @@ services:
     image:  node:24-bookworm-slim
     environment:
       - BASE_URL=${BASE_URL:-http://server:3005}
+      - THUMBNAILS_ORIGIN=${THUMBNAILS_ORIGIN:-https://districtbuilder-production-thumbnails.s3.us-east-1.amazonaws.com}
       - VITE_RUM_APP_MONITOR_ID=${VITE_RUM_APP_MONITOR_ID:-}
       - VITE_RUM_GUEST_ROLE_ARN=${VITE_RUM_GUEST_ROLE_ARN:-}
       - VITE_RUM_IDENTITY_POOL_ID=${VITE_RUM_IDENTITY_POOL_ID:-}
@@ -62,6 +66,19 @@ services:
     working_dir: /home/node/app
     command: yarn dev
 
+  # Standalone Chromium exposing CDP on port 3000, used by manage commands
+  # that need to rasterize HTML (backfill-thumbnails). Started on-demand when
+  # manage depends on it; `./scripts/manage` pulls this up automatically.
+  chromium:
+    image: ghcr.io/browserless/chromium:latest
+    environment:
+      - CONCURRENT=1
+      - TIMEOUT=120000
+      # Advertised hostname in CDP target URLs. Default is 0.0.0.0, which
+      # other containers on the docker network can't dial; set to the
+      # service name so puppeteer can follow the returned URLs.
+      - HOST=chromium
+
   manage:
     image: districtbuilder-manage
     environment:
@@ -71,6 +88,10 @@ services:
       - POSTGRES_PASSWORD=districtbuilder
       - POSTGRES_DB=districtbuilder
       - AWS_PROFILE=${AWS_PROFILE:-district-builder}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - THUMBNAILS_BUCKET=${THUMBNAILS_BUCKET:-districtbuilder-production-thumbnails}
+      # Reaches the chromium sidecar on the internal docker network.
+      - PUPPETEER_BROWSER_URL=${PUPPETEER_BROWSER_URL:-http://chromium:3000}
       - NODE_OPTIONS=--max-old-space-size=24384
     build:
       context: ./src/manage

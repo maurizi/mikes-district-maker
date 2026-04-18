@@ -121,9 +121,9 @@ export type DistrictsGeoJSON = FeatureCollection<MultiPolygon, DistrictPropertie
   readonly metadata?: ProjectProperties;
 };
 
-// Simplified, client-computed district geometry used to render project
-// thumbnails on listings. Feature properties are preserved so admin exports
-// can read per-district contiguity/compactness/demographics/voting from it.
+// Simplified, client-computed district geometry used as an intermediate in
+// the save flow: the client feeds it to the PNG renderer and extracts its
+// feature properties into districtProperties. Not stored server-side.
 export type ThumbnailGeoJSON = FeatureCollection<MultiPolygon, DistrictProperties>;
 
 export interface IStaticFile {
@@ -249,7 +249,8 @@ export type IProject = ProjectTemplateFields & {
   readonly planscoreUrl: string;
   readonly submittedDt?: Date;
   readonly isComplete: boolean;
-  readonly thumbnail?: ThumbnailGeoJSON;
+  readonly thumbnailUrl?: string;
+  readonly districtProperties?: readonly DistrictProperties[];
 };
 
 export type ProjectNest = Pick<
@@ -263,7 +264,7 @@ export type ProjectNest = Pick<
   | "isFeatured"
   | "visibility"
   | "submittedDt"
-  | "thumbnail"
+  | "thumbnailUrl"
 > & {
   readonly regionConfig: Pick<IRegionConfig, "name">;
 };
@@ -277,7 +278,7 @@ export interface CreateProjectData {
   readonly districtsDefinition?: DistrictsDefinition;
   readonly populationDeviation?: number;
   readonly projectTemplate?: Pick<IProjectTemplate, "id">;
-  readonly thumbnail?: ThumbnailGeoJSON;
+  readonly districtProperties?: readonly DistrictProperties[];
 }
 
 export interface CreateReferenceLayerData {
@@ -299,10 +300,11 @@ export type UpdateProjectData = Partial<
     | "visibility"
     | "archived"
     | "isComplete"
-    | "thumbnail"
     | "planscoreUrl"
   >
->;
+> & {
+  readonly districtProperties?: readonly DistrictProperties[];
+};
 
 export type ProjectTemplateId = string;
 

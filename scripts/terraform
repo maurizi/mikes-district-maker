@@ -1,0 +1,36 @@
+#!/bin/bash
+# Run terraform via the pinned docker image in docker-compose.ci.yml.
+#
+# Usage: ./scripts/terraform <subcommand> [args...]
+#
+# For commands that accept variable files (plan / apply / destroy / refresh /
+# import), production.tfvars is passed automatically so you don't have to.
+# Everything else (output, state, init, validate, fmt, ...) passes through
+# unchanged.
+
+set -euo pipefail
+
+if [[ -n "${DB_DEBUG:-}" ]]; then
+    set -x
+fi
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT_DIR"
+
+tf() {
+    docker compose -f docker-compose.ci.yml run --rm terraform "$@"
+}
+
+case "${1:-}" in
+    plan|apply|destroy|refresh|import|taint|untaint)
+        subcmd="$1"
+        shift
+        tf "$subcmd" -var-file=production.tfvars "$@"
+        ;;
+    "")
+        tf
+        ;;
+    *)
+        tf "$@"
+        ;;
+esac

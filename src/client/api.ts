@@ -267,6 +267,32 @@ export async function patchProject(
   });
 }
 
+// Ask the server for a short-lived presigned S3 PUT URL and upload the PNG
+// directly, bypassing the API Lambda. Called during the save flow after
+// rendering the districts thumbnail.
+export async function uploadProjectThumbnail(
+  projectId: ProjectId,
+  png: Blob
+): Promise<void> {
+  const response = await apiAxios.post<{ uploadUrl: string }>(
+    `/api/projects/${projectId}/thumbnail-upload-url`
+  );
+  const { uploadUrl } = response.data;
+  // The presigned URL encodes Content-Type and Cache-Control; the browser
+  // must send matching headers or S3 rejects the signature.
+  const put = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "image/png",
+      "Cache-Control": "public, max-age=3600"
+    },
+    body: png
+  });
+  if (!put.ok) {
+    throw new Error(`Thumbnail upload failed: ${put.status} ${put.statusText}`);
+  }
+}
+
 export async function convertGeoJsonToShapefile(
   geojson: DistrictsGeoJSON,
   projectName: string

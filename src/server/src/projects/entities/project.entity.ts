@@ -1,7 +1,7 @@
 import { Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
 
 import { ProjectVisibility } from "../../../../shared/constants";
-import type { DistrictsDefinition, IProject, ThumbnailGeoJSON } from "../../../../shared/entities";
+import type { DistrictProperties, DistrictsDefinition } from "../../../../shared/entities";
 import { RegionConfig } from "../../region-configs/entities/region-config.entity";
 import { Chamber } from "../../chambers/entities/chamber.entity";
 import { User } from "../../users/entities/user.entity";
@@ -13,7 +13,7 @@ import {
 
 @Entity()
 @Index(["updatedDt", "user"])
-export class Project implements IProject {
+export class Project {
   @PrimaryGeneratedColumn("uuid")
   id: string;
 
@@ -48,14 +48,15 @@ export class Project implements IProject {
   })
   districtsDefinition: DistrictsDefinition;
 
-  // Client-computed, simplified thumbnail geojson used to render project
-  // previews on listings. Written by the client on save.
+  // Per-district properties (contiguity, compactness, demographics, voting)
+  // previously kept inside thumbnail.features[*].properties. Extracted so
+  // admin CSV export can read them without parsing geometry.
   @Column({
     type: "simple-json",
-    name: "thumbnail",
+    name: "district_properties",
     nullable: true
   })
-  thumbnail?: ThumbnailGeoJSON;
+  districtProperties?: readonly DistrictProperties[] | null;
 
   // Whether every geounit is assigned to a district (i.e. the unassigned
   // district is empty). Used by the community-maps listing "completed" filter.

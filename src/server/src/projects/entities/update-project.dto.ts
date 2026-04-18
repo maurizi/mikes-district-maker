@@ -5,7 +5,6 @@ import {
   IsEnum,
   IsNotEmpty,
   IsNumber,
-  IsObject,
   IsOptional,
   IsString,
   Max,
@@ -14,8 +13,8 @@ import {
 
 import { ProjectVisibility } from "../../../../shared/constants";
 import type {
+  DistrictProperties,
   DistrictsDefinition,
-  ThumbnailGeoJSON,
   UpdateProjectData
 } from "../../../../shared/entities";
 
@@ -66,9 +65,9 @@ export class UpdateProjectDto implements UpdateProjectData {
   @IsOptional()
   readonly isComplete?: boolean;
 
-  @IsObject()
+  @IsArray()
   @IsOptional()
-  readonly thumbnail?: ThumbnailGeoJSON;
+  readonly districtProperties?: readonly DistrictProperties[];
 
   @IsString()
   @IsOptional()

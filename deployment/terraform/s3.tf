@@ -49,6 +49,67 @@ resource "aws_s3_bucket_policy" "static" {
   policy = data.aws_iam_policy_document.static_bucket.json
 }
 
+# Project thumbnails uploaded by the client on save via presigned S3 PUT
+# URLs, served back to the home-page mini-map and OG:image tag.
+#
+# These are inherently public content (Twitter/Bluesky og:image crawlers
+# fetch them anonymously), so the bucket is public-read — no CloudFront OAC,
+# no IAM dance. Dev can hit the bucket URL directly without touching prod
+# CloudFront. UUID object keys make dev/prod bucket sharing safe.
+resource "aws_s3_bucket" "thumbnails" {
+  bucket        = "${var.project}-${var.environment}-thumbnails"
+  force_destroy = !var.enable_production_safeguards
+}
+
+resource "aws_s3_bucket_public_access_block" "thumbnails" {
+  bucket                  = aws_s3_bucket.thumbnails.id
+  block_public_acls       = true
+  ignore_public_acls      = true
+  # Allow the public-read bucket policy below.
+  block_public_policy     = false
+  restrict_public_buckets = false
+}
+
+resource "aws_s3_bucket_ownership_controls" "thumbnails" {
+  bucket = aws_s3_bucket.thumbnails.id
+  rule {
+    object_ownership = "BucketOwnerEnforced"
+  }
+}
+
+# CORS for browser-side PUTs via the presigned URL minted by the API.
+resource "aws_s3_bucket_cors_configuration" "thumbnails" {
+  bucket = aws_s3_bucket.thumbnails.id
+  cors_rule {
+    allowed_methods = ["PUT"]
+    allowed_origins = [
+      "https://${var.domain_name}",
+      "http://localhost:3003"
+    ]
+    allowed_headers = ["*"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3000
+  }
+}
+
+data "aws_iam_policy_document" "thumbnails_bucket" {
+  statement {
+    sid       = "AllowPublicRead"
+    actions   = ["s3:GetObject"]
+    resources = ["${aws_s3_bucket.thumbnails.arn}/*"]
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "thumbnails" {
+  bucket = aws_s3_bucket.thumbnails.id
+  policy = data.aws_iam_policy_document.thumbnails_bucket.json
+  depends_on = [aws_s3_bucket_public_access_block.thumbnails]
+}
+
 # S3 bucket holding per-region TopoJSON and lookup artifacts. The server reads
 # these on demand and caches to /tmp. Populated locally via `manage` commands.
 resource "aws_s3_bucket" "region_artifacts" {

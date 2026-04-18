@@ -86,16 +86,19 @@ import {
 import {
   checkPlanScoreAPI,
   convertGeoJsonToShapefile,
+  fetchMemoizedStateBbox,
   fetchProjectData,
   fetchProjectReferenceLayers,
   patchReferenceLayer,
   patchProject,
   copyProject,
   deleteReferenceLayer,
-  submitProject
+  submitProject,
+  uploadProjectThumbnail
 } from "../api";
 import { fetchAllStaticData } from "../s3";
 import { mergeDistricts, exportCsv as workerExportCsv } from "../worker-functions";
+import { renderThumbnailPng } from "../thumbnail-render";
 import { saveAs } from "file-saver";
 import { toast } from "react-toastify";
 import { showSubmitMapModal } from "../actions/projectModals";
@@ -603,14 +606,15 @@ const projectDataReducer = (
         // Each check reads the pre-merge project from state, so it only fires
         // when there's actually something new to persist.
         const wasTriggeredBySave = state.saving === "saving";
-        const needsInitialThumbnail = !project.thumbnail;
+        const needsInitialThumbnail = !project.thumbnailUrl;
         const needsCompletenessUpdate = project.isComplete !== isComplete;
+        const regionConfig = project.regionConfig;
         const nextState = updateCurrentState(
           {
             ...state,
             saving: "saved",
             projectData: {
-              resource: { project: { ...project, isComplete, thumbnail }, geojson }
+              resource: { project: { ...project, isComplete }, geojson }
             },
             findIndex:
               state.findIndex !== undefined && findCoords && findCoords.length !== 0
@@ -624,7 +628,21 @@ const projectDataReducer = (
         return wasTriggeredBySave || needsInitialThumbnail || needsCompletenessUpdate
           ? loop(
               nextState,
-              Cmd.run(() => patchProject(project.id, { thumbnail, isComplete }))
+              Cmd.run(async () => {
+                const bbox = await fetchMemoizedStateBbox(regionConfig);
+                const thumbnailBlob = await renderThumbnailPng(thumbnail, bbox);
+                const districtProperties = thumbnail.features.map(f => f.properties);
+                // Upload is best-effort: a missing THUMBNAILS_BUCKET in dev or
+                // a transient S3 failure shouldn't block the save. Next save
+                // retries; the mini-map stays blank until one succeeds.
+                try {
+                  await uploadProjectThumbnail(project.id, thumbnailBlob);
+                } catch (e) {
+                  // eslint-disable-next-line no-console
+                  console.warn("Thumbnail upload failed:", e);
+                }
+                return patchProject(project.id, { districtProperties, isComplete });
+              })
             )
           : nextState;
       }

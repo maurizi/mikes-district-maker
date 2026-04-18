@@ -33,9 +33,15 @@ import {
 import { regionConfigsFetch } from "../actions/regionConfig";
 import { setImportFlagsModal } from "../actions/projectModals";
 
-import { createProject, importCsv, fetchTotalPopulation } from "../api";
+import {
+  createProject,
+  importCsv,
+  fetchTotalPopulation,
+  uploadProjectThumbnail
+} from "../api";
 import { fetchStaticMetadata } from "../s3";
 import { mergeDistricts } from "../worker-functions";
+import { renderThumbnailPng } from "../thumbnail-render";
 import Field, { InputField } from "../components/Field";
 import Icon from "../components/Icon";
 import ImportFlagsModal from "../components/ImportFlagsModal";
@@ -542,12 +548,12 @@ const ImportProjectScreen = ({ organization, regionConfigs, user }: StateProps) 
                 setCreateProjectResource({ data: formData, isPending: true });
                 // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 const { isCustom, isMultiMember, valid, ...validatedData } = validatedForm;
-                // Compute a thumbnail from the imported districtsDefinition
-                // so the project has a preview on the home page immediately.
-                // The template path doesn't carry numberOfDistricts at this
-                // level (it's inherited from the template server-side), so
-                // thumbnail generation only runs on the custom-import branch.
-                // Template imports rely on the auto-PATCH in
+                // Compute a thumbnail (PNG + per-district properties) from the
+                // imported districtsDefinition so the project has a preview on
+                // the home page immediately. The template path doesn't carry
+                // numberOfDistricts at this level (it's inherited from the
+                // template server-side), so this only runs on the custom-import
+                // branch. Template imports rely on the auto-PATCH in
                 // localMergeComplete on the user's first project view.
                 const regionForThumbnail =
                   "resource" in importResource ? importResource.data : null;
@@ -559,28 +565,51 @@ const ImportProjectScreen = ({ organization, regionConfigs, user }: StateProps) 
                   "districtsDefinition" in validatedData
                     ? validatedData.districtsDefinition
                     : undefined;
-                const thumbnailPromise =
+                const thumbnailPromise: Promise<{
+                  readonly png?: Blob;
+                  readonly data: Pick<CreateProjectData, "districtProperties">;
+                }> =
                   regionForThumbnail && definitionForThumbnail && numberOfDistricts
                     ? fetchStaticMetadata(regionForThumbnail.s3URI)
-                        .then(staticMetadata =>
-                          mergeDistricts(
+                        .then(async staticMetadata => {
+                          const { thumbnail } = await mergeDistricts(
                             staticMetadata,
                             regionForThumbnail.s3URI,
                             definitionForThumbnail,
                             numberOfDistricts
-                          )
-                        )
-                        .then(({ thumbnail }) => thumbnail)
-                        .catch(() => undefined)
-                    : Promise.resolve(undefined);
+                          );
+                          const png = await renderThumbnailPng(
+                            thumbnail,
+                            staticMetadata.bbox
+                          );
+                          return {
+                            png,
+                            data: {
+                              districtProperties: thumbnail.features.map(f => f.properties)
+                            }
+                          };
+                        })
+                        .catch(() => ({ data: {} }))
+                    : Promise.resolve({ data: {} });
 
                 thumbnailPromise
-                  .then(thumbnail => {
+                  .then(async ({ png, data }) => {
                     const baseData =
                       "name" in validatedForm.regionConfig
                         ? { ...validatedData, name: validatedForm.regionConfig.name }
                         : validatedData;
-                    return createProject(thumbnail ? { ...baseData, thumbnail } : baseData);
+                    const project = await createProject({ ...baseData, ...data });
+                    // Upload is best-effort; a failure shouldn't block the
+                    // project import — the next save regenerates the PNG.
+                    if (png) {
+                      try {
+                        await uploadProjectThumbnail(project.id, png);
+                      } catch (e) {
+                        // eslint-disable-next-line no-console
+                        console.warn("Thumbnail upload failed:", e);
+                      }
+                    }
+                    return project;
                   })
                   .then((project: IProject) =>
                     setCreateProjectResource({ data: formData, resource: project })

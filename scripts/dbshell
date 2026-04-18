@@ -24,6 +24,6 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
             up -d database server
 
         docker compose \
-            exec database psql -U districtbuilder districtbuilder
+            exec database psql -U districtbuilder districtbuilder "$@"
     fi
 fi

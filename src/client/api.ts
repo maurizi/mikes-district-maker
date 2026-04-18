@@ -270,10 +270,7 @@ export async function patchProject(
 // Ask the server for a short-lived presigned S3 PUT URL and upload the PNG
 // directly, bypassing the API Lambda. Called during the save flow after
 // rendering the districts thumbnail.
-export async function uploadProjectThumbnail(
-  projectId: ProjectId,
-  png: Blob
-): Promise<void> {
+export async function uploadProjectThumbnail(projectId: ProjectId, png: Blob): Promise<void> {
   const response = await apiAxios.post<{ uploadUrl: string }>(
     `/api/projects/${projectId}/thumbnail-upload-url`
   );

@@ -1751,7 +1751,10 @@ export default class PrepareDevData extends Command {
 
       const currentGeomLine = readNextLine();
       const props = featureProps[fi];
-      const pop = props.population || 0;
+      // Vote disaggregation weight: VAP_MOD (VAP minus adult correctional
+      // facility pop). Matches the primary-year weighting in buildBlockProps
+      // and RDH's methodology. Named `pop` for historical reasons below.
+      const pop = props.VAP_MOD || 0;
 
       // Parse geometry once — used for bbox, GEOS conversion, and candidate search
       const currentGeom = JSON.parse(currentGeomLine) as Polygon | MultiPolygon;

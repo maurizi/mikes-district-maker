@@ -33,12 +33,7 @@ import {
 import { regionConfigsFetch } from "../actions/regionConfig";
 import { setImportFlagsModal } from "../actions/projectModals";
 
-import {
-  createProject,
-  importCsv,
-  fetchTotalPopulation,
-  uploadProjectThumbnail
-} from "../api";
+import { createProject, importCsv, fetchTotalPopulation, uploadProjectThumbnail } from "../api";
 import { fetchStaticMetadata } from "../s3";
 import { mergeDistricts } from "../worker-functions";
 import { renderThumbnailPng } from "../thumbnail-render";
@@ -578,10 +573,7 @@ const ImportProjectScreen = ({ organization, regionConfigs, user }: StateProps) 
                             definitionForThumbnail,
                             numberOfDistricts
                           );
-                          const png = await renderThumbnailPng(
-                            thumbnail,
-                            staticMetadata.bbox
-                          );
+                          const png = await renderThumbnailPng(thumbnail, staticMetadata.bbox);
                           return {
                             png,
                             data: {

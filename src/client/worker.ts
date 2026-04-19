@@ -2,6 +2,7 @@
 // Modifications © 2026 Michael Maurizi Jr.
 
 import * as Comlink from "comlink";
+import { type MultiPolygon } from "geojson";
 
 import {
   type DemographicCounts,
@@ -332,6 +333,20 @@ const functions = {
     // i.e. nothing landed in the unassigned district (index 0).
     const isComplete = districtBlockIndices[0].length === 0;
     return { districts, thumbnail: simplifyForThumbnail(districts), isComplete };
+  },
+  // Dissolve the entire region into a single MultiPolygon by assigning every
+  // block to district 1 and running the boundary stitcher. Used to build an
+  // accurate state outline polygon for the basemap label `within` filter.
+  computeRegionOutline: async (
+    staticMetadata: IStaticMetadata,
+    regionURI: S3URI
+  ): Promise<MultiPolygon> => {
+    const data = await fetchRegionData(regionURI, staticMetadata).data;
+    const numBlocks = accumulateBaseIndices(data.geoUnitHierarchy).length;
+    const { adjacencyData, reverseIndex } = await getAdjacencyWithIndex(regionURI, numBlocks);
+    const assignment = new Uint8Array(numBlocks).fill(1);
+    const boundaries = computeDistrictBoundaries(adjacencyData, reverseIndex, assignment, 1);
+    return boundaries[1].geometry;
   },
   exportCsv: async (
     staticMetadata: IStaticMetadata,

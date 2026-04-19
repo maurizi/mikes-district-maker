@@ -54,6 +54,7 @@ import {
   GEOLEVELS_SOURCE_ID,
   DISTRICTS_SOURCE_ID,
   applyLabelRegionFilter,
+  bboxToPolygon,
   featureStateDistricts,
   generateMapLayers,
   getGeoLevelVisibility,
@@ -99,6 +100,7 @@ import store from "../../store";
 import { type State } from "../../reducers";
 import { connect } from "react-redux";
 import { getMapStyle, mergeBasemap } from "../../constants/map";
+import { computeRegionOutline } from "../../worker-functions";
 import { KEYBOARD_SHORTCUTS } from "./keyboardShortcuts";
 import Icon from "../Icon";
 import { ReferenceLayerTypes } from "../../../shared/constants";
@@ -382,6 +384,12 @@ const DistrictsMap = ({
 
   const [colorMode] = useColorMode();
   const mapModeRef = useRef<"dark" | "light" | null>(null);
+  // Dissolved region outline for the basemap label `within` filter — populated
+  // async by a worker after mount. The ref lets basemap-swap handlers re-apply
+  // the latest geometry without re-subscribing to state changes.
+  const regionOutlineRef = useRef<GeoJSON.Polygon | GeoJSON.MultiPolygon>(
+    bboxToPolygon(staticMetadata.bbox)
+  );
   // Bumped after a basemap swap (setStyle + reapply) to force downstream effects
   // that modify map layers to re-run against the fresh style.
   const [styleVersion, setStyleVersion] = useState(0);
@@ -442,6 +450,7 @@ const DistrictsMap = ({
       generateMapLayers(
         project.regionConfig.s3URI,
         project.regionConfig.regionCode,
+        staticMetadata.bbox,
         staticMetadata.geoLevelHierarchy,
         minZoom,
         maxZoom,
@@ -496,9 +505,10 @@ const DistrictsMap = ({
       const merged = mergeBasemap(map.getStyle(), target);
       map.once("style.load", () => {
         // The basemap label layers were replaced with fresh copies from the
-        // new flavor, so they've lost the iso_3166_2 region-filter wrapper
-        // applied on initial load. Re-apply it.
-        applyLabelRegionFilter(map, project.regionConfig.regionCode);
+        // new flavor, so they've lost the region-filter wrapper applied on
+        // initial load. Re-apply it with whatever outline we have so far
+        // (bbox at first, dissolved region outline once the worker finishes).
+        applyLabelRegionFilter(map, regionOutlineRef.current);
         // Bump the styleVersion so downstream effects that pin paint/layout
         // on map layers re-assert themselves against the new basemap layers.
         setStyleVersion(v => v + 1);
@@ -518,6 +528,27 @@ const DistrictsMap = ({
       };
     }
   }, [colorMode, map, project, staticMetadata, minZoom, maxZoom, geojson]);
+
+  // Upgrade the basemap label filter from bbox to the dissolved region outline
+  // once the worker returns it. Cheap to compute on the worker, piggybacks on
+  // the adjacency data already fetched for merge/boundary work.
+  useEffect(() => {
+    if (!map) return;
+    let cancelled = false;
+    computeRegionOutline(staticMetadata, project.regionConfig.s3URI)
+      .then(outline => {
+        if (cancelled) return;
+        regionOutlineRef.current = outline;
+        applyLabelRegionFilter(map, outline);
+      })
+      .catch(() => {
+        // Keep the bbox filter if outline computation fails — neighboring
+        // state labels will leak near borders but nothing worse.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [map, staticMetadata, project.regionConfig.s3URI]);
 
   const downHandler = useCallback(
     (key: KeyboardEvent) => {

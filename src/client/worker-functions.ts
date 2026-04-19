@@ -4,6 +4,7 @@
 import * as Comlink from "comlink";
 import stringify from "json-stable-stringify";
 import memoize from "memoizee";
+import { type MultiPolygon } from "geojson";
 
 import {
   type DemographicCounts,
@@ -49,6 +50,13 @@ export const mergeDistricts = memoize(
     normalizer: args => stringify([args[1], args[2]], { replacer }) || "",
     primitive: true
   }
+);
+
+export const computeRegionOutline = memoize(
+  async (staticMetadata: IStaticMetadata, regionURI: S3URI): Promise<MultiPolygon> => {
+    return worker.computeRegionOutline(staticMetadata, regionURI);
+  },
+  { normalizer: args => args[1], primitive: true }
 );
 
 export async function exportCsv(

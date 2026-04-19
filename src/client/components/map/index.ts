@@ -3,6 +3,7 @@
 
 import { type MapGeoJSONFeature } from "maplibre-gl";
 import type maplibregl from "maplibre-gl";
+import { convertFilter } from "@maplibre/maplibre-gl-style-spec";
 import { cloneDeep } from "lodash";
 import { s3ToHttps } from "../../s3";
 import {
@@ -214,6 +215,7 @@ export function getGeolevelLinePaintStyle(geoLevel: string) {
 export function generateMapLayers(
   path: string,
   regionCode: string,
+  bbox: readonly [number, number, number, number],
   geoLevels: readonly GeoLevelInfo[],
   minZoom: number,
   maxZoom: number,
@@ -583,58 +585,61 @@ export function generateMapLayers(
     });
   });
 
-  applyLabelRegionFilter(map, regionCode);
+  applyLabelRegionFilter(map, bboxToPolygon(bbox));
 }
 
-// Recursively check whether a filter is expression-style (uses lookups like
-// ["get", "prop"] anywhere in the tree) vs legacy-style (flat property names).
-// Protomaps' `pois` layer nests `["get", ...]` inside `["in", ...]` inside
-// `["all", ...]`, so we need to walk the whole tree.
-const EXPR_OPS = new Set([
-  "get",
-  "has",
-  "match",
-  "case",
-  "coalesce",
-  "let",
-  "interpolate",
-  "step",
-  "zoom",
-  "geometry-type",
-  "feature-state",
-  "literal",
-  "concat",
-  "+",
-  "-",
-  "*",
-  "/"
-]);
+export function bboxToPolygon(
+  bbox: readonly [number, number, number, number]
+): GeoJSON.Polygon {
+  const [minLng, minLat, maxLng, maxLat] = bbox;
+  return {
+    type: "Polygon",
+    coordinates: [
+      [
+        [minLng, minLat],
+        [maxLng, minLat],
+        [maxLng, maxLat],
+        [minLng, maxLat],
+        [minLng, minLat]
+      ]
+    ]
+  };
+}
 
-const isExpressionFilter = (f: unknown): boolean => {
-  if (!Array.isArray(f) || f.length === 0) return false;
-  const op = f[0];
-  if (typeof op !== "string") return false;
-  if (EXPR_OPS.has(op)) return true;
-  return f.slice(1).some(arg => isExpressionFilter(arg));
-};
+// Cache of each filtered layer's Protomaps-original filter, keyed by layer id.
+// Populated on first apply. Subsequent calls re-wrap the original instead of
+// the already-wrapped current filter, which avoids nested wrappers when the
+// geometry upgrades (bbox → dissolved outline) or a basemap swap restores the
+// original (keeping our cache consistent with the freshly restored filter).
+const originalLabelFilters = new Map<
+  string,
+  maplibregl.FilterSpecification | null | undefined
+>();
 
-// Wrap each basemap label layer's existing filter with an iso_3166_2 check so
-// only the active state's labels render. Called both on initial layer setup
-// and after a basemap swap (which wipes the wrapper by restoring Protomaps'
-// original filter). Silently skips layers where merging produces an invalid
-// filter spec — the worst case is neighboring-state labels leaking through.
-export function applyLabelRegionFilter(map: maplibregl.Map, regionCode: string) {
-  const regionKey = `US-${regionCode}`;
+// Wrap each basemap label layer's filter with a point-in-polygon check so only
+// labels inside the active region render. Protomaps' `places` and `pois` tiles
+// carry no region attribute, so we key off geometry via MapLibre's `within`
+// expression. Called on initial layer setup, after a basemap swap (which
+// restores Protomaps' originals), and once the dissolved region outline has
+// been computed (upgrading the bbox polygon to the precise outline).
+export function applyLabelRegionFilter(
+  map: maplibregl.Map,
+  geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon
+) {
+  const within = ["within", geometry];
   filteredLabelLayers.forEach(layer => {
     if (!map.getLayer(layer)) return;
-    const existing = map.getFilter(layer);
-    const merged: maplibregl.FilterSpecification = isExpressionFilter(existing)
-      ? ([
-          "all",
-          ["==", ["get", "iso_3166_2"], regionKey],
-          existing
-        ] as unknown as maplibregl.FilterSpecification)
-      : (["all", existing, ["==", "iso_3166_2", regionKey]] as maplibregl.FilterSpecification);
+    if (!originalLabelFilters.has(layer)) {
+      originalLabelFilters.set(
+        layer,
+        (map.getFilter(layer) ?? null) as maplibregl.FilterSpecification | null
+      );
+    }
+    const original = originalLabelFilters.get(layer);
+    // `within` is expression-only and Protomaps ships legacy-style filters,
+    // which can't mix under a shared `all`. Normalize to expression form.
+    const originalExpr = original ? convertFilter(original) : true;
+    const merged = ["all", within, originalExpr] as unknown as maplibregl.FilterSpecification;
     try {
       map.setFilter(layer, merged);
     } catch {

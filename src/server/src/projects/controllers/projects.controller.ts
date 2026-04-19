@@ -62,7 +62,11 @@ import { UsersService } from "../../users/services/users.service";
 import { UpdateProjectDto } from "../entities/update-project.dto";
 import { Errors } from "../../../../shared/types";
 import axios from "axios";
-import { getDemographicsMetricFields, getVotingMetricFields } from "../../../../shared/functions";
+import {
+  getDemographicsMetricFields,
+  getVotingMetricFields,
+  isBlankDistrictsDefinition
+} from "../../../../shared/functions";
 import { ProjectTemplatesService } from "../../project-templates/services/project-templates.service";
 import { ProjectTemplate } from "../../project-templates/entities/project-template.entity";
 import { ReferenceLayersService } from "../../reference-layers/services/reference-layers.service";
@@ -549,8 +553,9 @@ export class ProjectsController implements CrudController<Project> {
   @UseGuards(OptionalJwtAuthGuard)
   async getOne(@Param("id") id: ProjectId, @ParsedRequest() req: CrudRequest): Promise<Project> {
     const project = await this.getProject(req, id);
+    const isBlank = isBlankDistrictsDefinition(project.districtsDefinition);
     // eslint-disable-next-line functional/immutable-data
-    return Object.assign(project, { thumbnailUrl: thumbnailUrl(project) });
+    return Object.assign(project, { thumbnailUrl: thumbnailUrl(project, isBlank) });
   }
 
   // Overriden to add JwtAuthGuard and support pagination

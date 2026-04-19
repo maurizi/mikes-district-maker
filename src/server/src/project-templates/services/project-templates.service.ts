@@ -14,6 +14,7 @@ import {
 } from "../../../../shared/entities";
 import { Organization } from "../../organizations/entities/organization.entity";
 import { Project } from "../../projects/entities/project.entity";
+import { thumbnailUrl } from "../../projects/services/projects.service";
 
 export type ProjectExportRow = {
   readonly userId: UserId;
@@ -132,19 +133,19 @@ export class ProjectTemplatesService extends TypeOrmCrudService<ProjectTemplate>
         "project.isFeatured",
         "project.id",
         "project.updatedDt",
+        "project.regionConfigId",
         "user.name"
       ])
       .orderBy("project.name")
       .getMany();
-    // Each featured project gets a thumbnailUrl pointing at the PNG endpoint.
+    // Featured projects are admin-curated maps with real assignments, so they
+    // always hit the per-project PNG URL (never the per-region blank fallback).
     // Projects that don't have a PNG yet will serve a 404 on the image; the UI
     // renders the broken-image placeholder until the backfill fills them in.
     return data.map(template => {
       /* eslint-disable functional/immutable-data */
       template.projects = (template.projects || []).map(project => {
-        const withUrl = Object.assign(project, {
-          thumbnailUrl: `/thumbnails/${project.id}.png?v=${project.updatedDt.getTime()}`
-        });
+        const withUrl = Object.assign(project, { thumbnailUrl: thumbnailUrl(project, false) });
         return withUrl;
       });
       /* eslint-enable functional/immutable-data */

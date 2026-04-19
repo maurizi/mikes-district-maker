@@ -20,6 +20,9 @@ export class Project {
   @Column({ type: "character varying" })
   name: string;
 
+  @Column({ name: "region_config_id", type: "uuid" })
+  regionConfigId: string;
+
   @ManyToOne(() => RegionConfig, { nullable: false })
   @JoinColumn({ name: "region_config_id" })
   regionConfig: RegionConfig;

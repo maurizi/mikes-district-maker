@@ -99,6 +99,7 @@ import {
 import { fetchAllStaticData } from "../s3";
 import { mergeDistricts, exportCsv as workerExportCsv } from "../worker-functions";
 import { renderThumbnailPng } from "../thumbnail-render";
+import { isBlankDistrictsDefinition } from "../../shared/functions";
 import { saveAs } from "file-saver";
 import { toast } from "react-toastify";
 import { showSubmitMapModal } from "../actions/projectModals";
@@ -595,9 +596,11 @@ const projectDataReducer = (
         const findCoords = getFindCoords(state.findTool, geojson);
         // Persist thumbnail + isComplete in three cases:
         //  1. The user just saved — state.saving === "saving".
-        //  2. The project has no server-side thumbnail yet (new project from
-        //     the create or import flow that didn't supply one). Without this
-        //     the home-page preview stays blank until the first save.
+        //  2. The project has real assignments but districtProperties hasn't
+        //     been written yet — i.e. no per-project PNG has been uploaded.
+        //     Happens for template-backed projects, whose first render
+        //     happens here. Blank new projects are left alone so the
+        //     per-region fallback URL is used until the user draws something.
         //  3. The stored isComplete is stale (e.g. an import that created the
         //     project already complete — the server defaults isComplete to
         //     false and the import flow may supply a thumbnail, so case 2
@@ -606,7 +609,8 @@ const projectDataReducer = (
         // Each check reads the pre-merge project from state, so it only fires
         // when there's actually something new to persist.
         const wasTriggeredBySave = state.saving === "saving";
-        const needsInitialThumbnail = !project.thumbnailUrl;
+        const isBlank = isBlankDistrictsDefinition(project.districtsDefinition);
+        const needsInitialThumbnail = !isBlank && project.districtProperties == null;
         const needsCompletenessUpdate = project.isComplete !== isComplete;
         const regionConfig = project.regionConfig;
         const nextState = updateCurrentState(

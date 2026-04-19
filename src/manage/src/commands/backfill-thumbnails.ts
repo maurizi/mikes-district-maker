@@ -603,9 +603,7 @@ async function loadRegionData(s3URI: S3URI): Promise<RegionData> {
   // partisan breakdown in districtProperties that the OG card description
   // reads — skipping this would mean backfilled projects fall back to the
   // generic "N districts" copy until the user re-saves through the editor.
-  const staticVoting = metadata.voting
-    ? await fetchStaticTypedArrays(s3URI, metadata.voting)
-    : [];
+  const staticVoting = metadata.voting ? await fetchStaticTypedArrays(s3URI, metadata.voting) : [];
   return {
     geoUnitHierarchy,
     numBlocks,
@@ -845,7 +843,9 @@ export default class BackfillThumbnails extends Command {
             if (dryRun) {
               this.log(
                 `  ${project.name}: would write ${districtProperties.length} properties${
-                  pngBuffer ? ` and upload ${pngBuffer.length}B PNG to s3://${bucket}/${project.id}.png` : " (no PNG)"
+                  pngBuffer
+                    ? ` and upload ${pngBuffer.length}B PNG to s3://${bucket}/${project.id}.png`
+                    : " (no PNG)"
                 }`
               );
             } else {

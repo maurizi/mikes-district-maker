@@ -3,8 +3,69 @@ import { Request, Response } from "express";
 import isUUID from "validator/lib/isUUID";
 
 import { ProjectVisibility } from "../../../../shared/constants";
-import type { DistrictProperties, ProjectId } from "../../../../shared/entities";
-import { ProjectsService } from "../services/projects.service";
+import type { DemographicCounts, DistrictProperties, ProjectId } from "../../../../shared/entities";
+import { isBlankDistrictsDefinition } from "../../../../shared/functions";
+import { ProjectsService, thumbnailUrl } from "../services/projects.service";
+
+const SITE_NAME = "Mike's District Maker";
+const GENERIC_DESCRIPTION =
+  "Mike's District Maker is free, open source software for drawing electoral district maps.";
+
+type Winner = "dem" | "rep" | "tossup";
+type DistrictResult = { readonly year: string; readonly winner: Winner };
+type Breakdown = {
+  readonly dem: number;
+  readonly rep: number;
+  readonly tossup: number;
+  readonly year: number;
+};
+
+type OgFields = {
+  readonly title: string;
+  readonly description: string;
+  readonly imageUrl: string;
+  readonly canonicalUrl: string;
+  readonly spaUrl: string;
+};
+
+const HTML_ESCAPES: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;"
+};
+
+const escapeHtml = (value: string): string => value.replace(/[&<>"']/g, c => HTML_ESCAPES[c]);
+
+const truncate = (s: string, max: number): string =>
+  s.length <= max ? s : s.slice(0, max - 1).trimEnd() + "…";
+
+const headerString = (req: Request, name: string): string | undefined => {
+  const v = req.headers[name];
+  return typeof v === "string" ? v : undefined;
+};
+
+// Respect CloudFront / proxy headers so the generated URLs use the public
+// hostname, not the Lambda internal URL.
+const buildBaseUrl = (req: Request): string => {
+  const host =
+    headerString(req, "x-forwarded-host") || req.headers.host || "mikesdistrictmaker.com";
+  const proto = headerString(req, "x-forwarded-proto") || "https";
+  return `${proto}://${host}`;
+};
+
+const districtResult = (voting: DemographicCounts): DistrictResult | null => {
+  const years = Object.keys(voting)
+    .map(k => /^democrat(\d{2})$/.exec(k)?.[1])
+    .filter((yy): yy is string => !!yy && `republican${yy}` in voting)
+    .sort();
+  if (years.length === 0) return null;
+  const latest = years[years.length - 1];
+  const d = voting[`democrat${latest}`];
+  const r = voting[`republican${latest}`];
+  return { year: latest, winner: d > r ? "dem" : r > d ? "rep" : "tossup" };
+};
 
 // For each district, decide which party won the most recent presidential year
 // present in its voting record. Also returns the 4-digit year used (the
@@ -12,60 +73,31 @@ import { ProjectsService } from "../services/projects.service";
 // region's voting files are the same for every district). Returns null when
 // no district has usable voting data — callers fall back to a generic
 // description.
-function partisanBreakdown(
+const partisanBreakdown = (
   properties: readonly DistrictProperties[] | null | undefined
-): { dem: number; rep: number; tossup: number; year: number } | null {
-  if (!properties || properties.length === 0) return null;
-  let dem = 0;
-  let rep = 0;
-  let tossup = 0;
-  let decided = 0;
-  let latestYy = "";
-  // Skip index 0 (unassigned district, not an electable district).
-  for (let i = 1; i < properties.length; i++) {
-    const voting = properties[i]?.voting;
-    if (!voting) continue;
-    const years: string[] = [];
-    for (const key of Object.keys(voting)) {
-      const m = key.match(/^democrat(\d{2})$/);
-      if (m && `republican${m[1]}` in voting) years.push(m[1]);
-    }
-    if (years.length === 0) continue;
-    const latest = years.sort()[years.length - 1];
-    if (latest > latestYy) latestYy = latest;
-    const d = (voting as Record<string, number>)[`democrat${latest}`];
-    const r = (voting as Record<string, number>)[`republican${latest}`];
-    decided++;
-    if (d > r) dem++;
-    else if (r > d) rep++;
-    else tossup++;
-  }
-  if (decided === 0 || !latestYy) return null;
-  return { dem, rep, tossup, year: 2000 + parseInt(latestYy, 10) };
-}
+): Breakdown | null => {
+  if (!properties || properties.length <= 1) return null;
+  const results = properties
+    // Skip index 0 (unassigned district, not an electable district).
+    .slice(1)
+    .map(p => p?.voting)
+    .filter((v): v is DemographicCounts => !!v)
+    .map(districtResult)
+    .filter((r): r is DistrictResult => r !== null);
+  if (results.length === 0) return null;
+  const counts = results.reduce((acc, { winner }) => ({ ...acc, [winner]: acc[winner] + 1 }), {
+    dem: 0,
+    rep: 0,
+    tossup: 0
+  } as Record<Winner, number>);
+  const latestYy = results.reduce((acc, { year }) => (year > acc ? year : acc), "");
+  return { ...counts, year: 2000 + parseInt(latestYy, 10) };
+};
 
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-const SITE_NAME = "Mike's District Maker";
-
-function renderOgHtml(fields: {
-  readonly title: string;
-  readonly description: string;
-  readonly imageUrl: string;
-  readonly canonicalUrl: string;
-  readonly spaUrl: string;
-}): string {
-  const { title, description, imageUrl, canonicalUrl, spaUrl } = fields;
-  // Belt-and-suspenders: if a human lands here by accident, send them to the
-  // SPA. Bots parse the <meta> tags before executing the refresh.
-  return `<!DOCTYPE html>
+// Belt-and-suspenders: if a human lands here by accident, send them to the
+// SPA. Bots parse the <meta> tags before executing the refresh.
+const renderOgHtml = ({ title, description, imageUrl, canonicalUrl, spaUrl }: OgFields): string =>
+  `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -86,27 +118,35 @@ function renderOgHtml(fields: {
 </head>
 <body></body>
 </html>`;
-}
 
-function truncate(s: string, max: number): string {
-  return s.length <= max ? s : s.slice(0, max - 1).trimEnd() + "…";
-}
+const fallbackFields = (baseUrl: string, spaUrl: string): OgFields => ({
+  title: SITE_NAME,
+  description: GENERIC_DESCRIPTION,
+  imageUrl: `${baseUrl}/favicon.ico`,
+  canonicalUrl: spaUrl,
+  spaUrl
+});
 
-function buildBaseUrl(req: Request): string {
-  // Respect CloudFront / proxy headers so the generated URLs use the public
-  // hostname, not the Lambda internal URL.
-  const forwardedHost =
-    typeof req.headers["x-forwarded-host"] === "string"
-      ? req.headers["x-forwarded-host"]
-      : undefined;
-  const host = forwardedHost || req.headers.host || "mikesdistrictmaker.com";
-  const forwardedProto =
-    typeof req.headers["x-forwarded-proto"] === "string"
-      ? req.headers["x-forwarded-proto"]
-      : undefined;
-  const proto = forwardedProto || "https";
-  return `${proto}://${host}`;
-}
+type ProjectForDescription = {
+  readonly regionConfig: { readonly name: string };
+  readonly numberOfDistricts: number;
+  readonly user?: { readonly name?: string } | null;
+  readonly districtProperties?: readonly DistrictProperties[] | null;
+};
+
+const describeProject = (project: ProjectForDescription): string => {
+  const byLine = project.user?.name?.trim() ? ` by ${project.user.name.trim()}` : "";
+  const breakdown = partisanBreakdown(project.districtProperties);
+  if (!breakdown) {
+    return `Proposed ${project.regionConfig.name} map${byLine} with ${project.numberOfDistricts} districts. Explore, edit, and share at ${SITE_NAME}.`;
+  }
+  const parts = [
+    `${breakdown.dem} D`,
+    `${breakdown.rep} R`,
+    ...(breakdown.tossup > 0 ? [`${breakdown.tossup} tied`] : [])
+  ];
+  return `Proposed ${project.regionConfig.name} map${byLine}: ${parts.join(" / ")} across ${project.numberOfDistricts} districts, based on the ${breakdown.year} presidential vote. Explore and share at ${SITE_NAME}.`;
+};
 
 @Controller("og/projects")
 export class OgController {
@@ -122,59 +162,32 @@ export class OgController {
   ): Promise<string> {
     const baseUrl = buildBaseUrl(req);
     const spaUrl = `${baseUrl}/projects/${encodeURIComponent(id)}`;
-    if (!isUUID(id)) {
-      res.status(HttpStatus.NOT_FOUND);
-      return renderOgHtml({
-        title: "Mike's District Maker",
-        description:
-          "Mike's District Maker is free, open source software for drawing electoral district maps.",
-        imageUrl: `${baseUrl}/favicon.ico`,
-        canonicalUrl: spaUrl,
-        spaUrl
-      });
-    }
-    const project = await this.projectsService.repository
-      .createQueryBuilder("project")
-      .leftJoinAndSelect("project.regionConfig", "regionConfig")
-      .leftJoinAndSelect("project.user", "user")
-      .where("project.id = :id", { id })
-      .getOne();
+
+    const project = isUUID(id)
+      ? await this.projectsService.repository
+          .createQueryBuilder("project")
+          .leftJoinAndSelect("project.regionConfig", "regionConfig")
+          .leftJoinAndSelect("project.user", "user")
+          .where("project.id = :id", { id })
+          .getOne()
+      : null;
 
     const isPublic =
       project !== null && !project.archived && project.visibility !== ProjectVisibility.Private;
 
     if (!project || !isPublic) {
       res.status(HttpStatus.NOT_FOUND);
-      return renderOgHtml({
-        title: "Mike's District Maker",
-        description:
-          "Mike's District Maker is free, open source software for drawing electoral district maps.",
-        imageUrl: `${baseUrl}/favicon.ico`,
-        canonicalUrl: spaUrl,
-        spaUrl
-      });
+      return renderOgHtml(fallbackFields(baseUrl, spaUrl));
     }
 
-    // Target 50–60 chars for og:title. Site name is emitted separately via
-    // og:site_name so the title itself stays focused on the project.
-    const title = truncate(project.name, 60);
-    const creator = project.user?.name?.trim();
-    const breakdown = partisanBreakdown(project.districtProperties);
-    const parts: string[] = [];
-    if (breakdown) {
-      parts.push(`${breakdown.dem} D`, `${breakdown.rep} R`);
-      if (breakdown.tossup > 0) parts.push(`${breakdown.tossup} tied`);
-    }
-    // Target 110–160 chars for og:description.
-    const byLine = creator ? ` by ${creator}` : "";
-    const description = breakdown
-      ? `Proposed ${project.regionConfig.name} map${byLine}: ${parts.join(" / ")} across ${project.numberOfDistricts} districts, based on the ${breakdown.year} presidential vote. Explore and share at ${SITE_NAME}.`
-      : `Proposed ${project.regionConfig.name} map${byLine} with ${project.numberOfDistricts} districts. Explore, edit, and share at ${SITE_NAME}.`;
-    const imageUrl = `${baseUrl}/thumbnails/${project.id}.png?v=${project.updatedDt.getTime()}`;
+    const isBlank = isBlankDistrictsDefinition(project.districtsDefinition);
     return renderOgHtml({
-      title,
-      description,
-      imageUrl,
+      // Target 50–60 chars for og:title. Site name is emitted separately via
+      // og:site_name so the title itself stays focused on the project.
+      title: truncate(project.name, 60),
+      // Target 110–160 chars for og:description.
+      description: describeProject(project),
+      imageUrl: `${baseUrl}${thumbnailUrl(project, isBlank)}`,
       canonicalUrl: spaUrl,
       spaUrl
     });

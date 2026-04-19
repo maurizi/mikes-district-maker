@@ -1,6 +1,8 @@
 import {
   type TypedArray,
   type DemographicCounts,
+  type DistrictsDefinition,
+  type GeoUnitCollection,
   type IStaticMetadata,
   type IStaticFile,
   type MetricsList,
@@ -9,6 +11,18 @@ import {
   type DemographicsGroup
 } from "../shared/entities";
 import { CORE_METRIC_FIELDS, DEMOGRAPHIC_FIELDS_ORDER } from "./constants";
+
+// A DistrictsDefinition is "blank" when every leaf assignment is 0 — i.e.
+// no geounit has been placed into any district yet. Newly-created projects
+// that aren't seeded from a template start in this state; template-backed
+// projects inherit real assignments and so never look blank.
+export function isBlankDistrictsDefinition(def: DistrictsDefinition): boolean {
+  return def.every(isZero);
+}
+
+function isZero(node: GeoUnitCollection): boolean {
+  return typeof node === "number" ? node === 0 : node.every(isZero);
+}
 
 // Helper for finding all indices in an array buffer matching a value.
 // Note: mutation is used, because the union type of array buffers proved

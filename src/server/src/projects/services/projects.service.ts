@@ -5,6 +5,7 @@ import { Repository, SelectQueryBuilder, DeepPartial } from "typeorm";
 
 import { Project } from "../entities/project.entity";
 import { ProjectVisibility } from "../../../../shared/constants";
+import { type ProjectId } from "../../../../shared/entities";
 import { paginate, Pagination, IPaginationOptions } from "nestjs-typeorm-paginate";
 
 type AllProjectsOptions = IPaginationOptions & {
@@ -13,18 +14,29 @@ type AllProjectsOptions = IPaginationOptions & {
   readonly userId?: string;
 };
 
+type ProjectForThumbnail = Pick<Project, "id" | "updatedDt" | "regionConfigId">;
+
 // Convention-based URL: /thumbnails/<id>.png served from the thumbnails S3
 // bucket via CloudFront. The ?v=<updatedDt> query busts the client/CDN cache
-// whenever the client re-uploads after a save. Projects without an uploaded
-// PNG (pre-backfill, or mid-save races) return 404 at the CDN; the UI falls
-// back to a broken-image placeholder.
-export function thumbnailUrl(project: Pick<Project, "id" | "updatedDt">): string {
+// whenever the client re-uploads after a save. For projects that have never
+// been touched (districtsDefinition is all zeros) we point at a per-region
+// blank PNG instead, avoiding an S3 write per brand-new project for a
+// thumbnail that would look identical for every blank project in that region.
+//
+// isBlank is passed in rather than derived here: the definition is stored as
+// text and can be multiple MB per row for block-level assignments, so list
+// views check blankness via a lightweight second SQL query against just the
+// paginated IDs instead of pulling the full JSON into the main select.
+export function thumbnailUrl(project: ProjectForThumbnail, isBlank: boolean): string {
+  if (isBlank) {
+    return `/thumbnails/region-${project.regionConfigId}.png`;
+  }
   return `/thumbnails/${project.id}.png?v=${project.updatedDt.getTime()}`;
 }
 
-function attachThumbnailUrl<T extends Pick<Project, "id" | "updatedDt">>(p: T): T {
+function attachThumbnailUrl<T extends ProjectForThumbnail>(p: T, isBlank: boolean): T {
   // eslint-disable-next-line functional/immutable-data
-  return Object.assign(p, { thumbnailUrl: thumbnailUrl(p) });
+  return Object.assign(p, { thumbnailUrl: thumbnailUrl(p, isBlank) });
 }
 
 @Injectable()
@@ -55,6 +67,7 @@ export class ProjectsService extends TypeOrmCrudService<Project> {
         "project.updatedDt",
         "project.createdDt",
         "project.submittedDt",
+        "project.regionConfigId",
         "chamber.name",
         "regionConfig.name",
         "regionConfig.id",
@@ -82,7 +95,11 @@ export class ProjectsService extends TypeOrmCrudService<Project> {
       : builderWithFilter;
 
     const paginated = await paginate<Project>(builderWithRegion, options);
-    return { ...paginated, items: paginated.items.map(attachThumbnailUrl) };
+    const blankIds = await this.findBlankProjectIds(paginated.items.map(p => p.id));
+    return {
+      ...paginated,
+      items: paginated.items.map(p => attachThumbnailUrl(p, blankIds.has(p.id)))
+    };
   }
 
   async findAllUserProjectsPaginated(
@@ -95,6 +112,26 @@ export class ProjectsService extends TypeOrmCrudService<Project> {
     );
 
     const paginated = await paginate<Project>(builder, options);
-    return { ...paginated, items: paginated.items.map(attachThumbnailUrl) };
+    const blankIds = await this.findBlankProjectIds(paginated.items.map(p => p.id));
+    return {
+      ...paginated,
+      items: paginated.items.map(p => attachThumbnailUrl(p, blankIds.has(p.id)))
+    };
+  }
+
+  // Returns the subset of the given project IDs whose districts_definition has
+  // no non-zero digits — i.e. nothing has been drawn yet. The definition is
+  // stored as text, so a POSIX regex for any digit 1-9 is a cheap way to
+  // check blankness without pulling the full JSON payload back in the primary
+  // list query. Intended only for small batches (a single page of results).
+  async findBlankProjectIds(ids: readonly ProjectId[]): Promise<Set<ProjectId>> {
+    if (ids.length === 0) return new Set();
+    const rows = await this.repo
+      .createQueryBuilder("project")
+      .select("project.id", "id")
+      .where("project.id IN (:...ids)", { ids })
+      .andWhere("project.districts_definition !~ '[1-9]'")
+      .getRawMany<{ readonly id: ProjectId }>();
+    return new Set(rows.map(r => r.id));
   }
 }

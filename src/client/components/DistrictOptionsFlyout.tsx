@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Modifications © 2026 Michael Maurizi Jr.
+
 import { Button } from "theme-ui";
 import { type DistrictId } from "../../shared/entities";
 import store from "../store";

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Modifications © 2026 Michael Maurizi Jr.
+
 import { createAction } from "typesafe-actions";
 import { type DistrictId, type GeoUnits, type ReferenceLayerId } from "../../shared/entities";
 import { type SavingState, type EvaluateMetricWithValue } from "../types";

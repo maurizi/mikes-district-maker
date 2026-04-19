@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Modifications © 2026 Michael Maurizi Jr.
+
 import { Box, Button, Input, Flex, Label, Radio, type ThemeUIStyleObject } from "theme-ui";
 import { Button as MenuButton, Wrapper, Menu, MenuItem } from "react-aria-menubutton";
 import { useClipboard } from "use-clipboard-copy";

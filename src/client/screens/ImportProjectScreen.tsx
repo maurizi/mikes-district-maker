@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Modifications © 2026 Michael Maurizi Jr.
+
 import { darken } from "@theme-ui/color";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { FileDrop } from "react-file-drop";

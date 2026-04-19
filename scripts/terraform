@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# © 2026 Michael Maurizi Jr.
+
 # Run terraform via the pinned docker image in docker-compose.ci.yml.
 #
 # Usage: ./scripts/terraform <subcommand> [args...]

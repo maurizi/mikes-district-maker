@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// © 2026 Michael Maurizi Jr.
+
 import { MigrationInterface, QueryRunner } from "typeorm";
 
 // Squashed baseline schema. Targets DSQL in production and vanilla Postgres

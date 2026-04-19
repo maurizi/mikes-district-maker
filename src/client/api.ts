@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Modifications © 2026 Michael Maurizi Jr.
+
 import axios, { type AxiosResponse } from "axios";
 import { saveAs } from "file-saver";
 import * as shpwrite from "@mapbox/shp-write";

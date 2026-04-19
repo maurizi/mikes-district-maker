@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Modifications © 2026 Michael Maurizi Jr.
+
 import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, Check } from "typeorm";
 import { FeatureCollection, MultiPolygon, Point } from "geojson";
 import { IReferenceLayer, ReferenceLayerProperties } from "../../../../shared/entities";

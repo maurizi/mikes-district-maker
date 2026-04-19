@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// © 2026 Michael Maurizi Jr.
+
 import { useColorMode, type ThemeUIStyleObject } from "theme-ui";
 
 import Logo from "../media/logos/logo.svg?react";

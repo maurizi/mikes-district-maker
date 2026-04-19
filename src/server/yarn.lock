@@ -5939,6 +5939,11 @@ eslint-plugin-functional@7.3.1:
     ts-api-utils "^2.0.0"
     ts-declaration-location "^1.0.5"
 
+eslint-plugin-headers@^1.3.4:
+  version "1.3.4"
+  resolved "https://registry.yarnpkg.com/eslint-plugin-headers/-/eslint-plugin-headers-1.3.4.tgz#7ec2219ba79b9bf9fdd66dfa4d03c12877bd2e35"
+  integrity sha512-sfgmrq+geMaB7yilx1wbbzSHTmLRPm+hX6kxJhb6LQQwmF00CqZ8d3ks2ZADlDdREhP31THPHgRhcQuDogVZ4w==
+
 eslint-plugin-import@2.32.0:
   version "2.32.0"
   resolved "https://registry.yarnpkg.com/eslint-plugin-import/-/eslint-plugin-import-2.32.0.tgz#602b55faa6e4caeaa5e970c198b5c00a37708980"

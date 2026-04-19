@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// © 2026 Michael Maurizi Jr.
+
 import { Module } from "@nestjs/common";
 import { APP_FILTER } from "@nestjs/core";
 import { StructuredLoggerExceptionFilter } from "./structured-logger.filter";

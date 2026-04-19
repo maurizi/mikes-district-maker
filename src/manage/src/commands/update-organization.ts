@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Modifications © 2026 Michael Maurizi Jr.
+
 import { Args, Command } from "@oclif/core";
 import { readFileSync } from "fs";
 import yaml from "js-yaml";

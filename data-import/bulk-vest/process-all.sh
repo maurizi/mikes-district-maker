@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# © 2026 Michael Maurizi Jr.
+
 # No set -e — background job management needs flexible error handling
 # Individual states have set -e in process-state.sh
 

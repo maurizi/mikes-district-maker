@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Modifications © 2026 Michael Maurizi Jr.
+
 import { Args, Command } from "@oclif/core";
 import _ from "lodash";
 import { S3Client } from "@aws-sdk/client-s3";

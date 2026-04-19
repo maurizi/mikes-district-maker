@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Modifications © 2026 Michael Maurizi Jr.
+
 import { DataType, type IBackup, newDb } from "pg-mem";
 import { v4 } from "uuid";
 import type * as typeorm from "typeorm";

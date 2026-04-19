@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Modifications © 2026 Michael Maurizi Jr.
+
 import { type IOrganization, type IUser, type CreateProjectData } from "../../shared/entities";
 import { Box, Heading, type ThemeUIStyleObject } from "theme-ui";
 import TemplateCard from "./TemplateCard";

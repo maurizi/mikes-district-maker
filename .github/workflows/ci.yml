@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Modifications © 2026 Michael Maurizi Jr.
+
 name: CI
 
 on:
@@ -24,6 +27,11 @@ jobs:
       VITE_RUM_REGION: ${{ secrets.VITE_RUM_REGION }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The license-header lint rule diffs against the fork-point tag
+          # (see eslint-rules/fork-touched-files.mjs). Without this, the tag
+          # isn't present in the shallow clone and lint fails loudly.
+          fetch-tags: true
 
       - uses: actions/setup-node@v4
         with:

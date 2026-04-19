@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Modifications © 2026 Michael Maurizi Jr.
+
 /* eslint-disable @typescript-eslint/no-empty-object-type */
 import { Args, Command, Flags, ux } from "@oclif/core";
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";

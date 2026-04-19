@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# © 2026 Michael Maurizi Jr.
+
 """
 Normalize adjusted PL 94-171 data from various state-specific formats
 into a uniform CSV per state.

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Modifications © 2026 Michael Maurizi Jr.
+
 // Not sure why, but eslint thinks these decorators are unused
 import {
   Controller,

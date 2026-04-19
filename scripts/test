@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Modifications © 2026 Michael Maurizi Jr.
 
 set -e
 
@@ -17,6 +19,9 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     if [ "${1:-}" = "--help" ]; then
         usage
     else
+        echo "Snapshotting fork-touched files for the license-header lint"
+        ./scripts/precompute-fork-files
+
         echo "Linting Bash scripts"
         docker compose \
             -f docker-compose.ci.yml \

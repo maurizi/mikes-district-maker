@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Modifications © 2026 Michael Maurizi Jr.
+
 import { Controller, UseGuards } from "@nestjs/common";
 import { Crud, CrudAuth, CrudController } from "@dataui/crud";
 

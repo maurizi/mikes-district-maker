@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# © 2026 Michael Maurizi Jr.
+
 # CloudWatch RUM for frontend telemetry + structured-log alarm for backend errors.
 # Replaces the prior Rollbar + GTM integrations.
 

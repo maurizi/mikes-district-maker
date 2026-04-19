@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# © 2026 Michael Maurizi Jr.
+
 # S3 bucket serving the Vite client build through CloudFront.
 resource "aws_s3_bucket" "static" {
   bucket        = "${var.project}-${var.environment}-static"

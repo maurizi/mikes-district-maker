@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// © 2026 Michael Maurizi Jr.
+
 import { Controller, Get, Header, HttpStatus, Param, Req, Res } from "@nestjs/common";
 import { Request, Response } from "express";
 import isUUID from "validator/lib/isUUID";

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// © 2026 Michael Maurizi Jr.
+
 /**
  * Native GEOS helper via koffi FFI bindings to libgeos_c.
  * No WASM memory limits — uses the system's native GEOS library.

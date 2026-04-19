@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# © 2026 Michael Maurizi Jr.
+
 # SES domain identity for transactional mail.
 #
 # Verifies the apex domain so the app can send FROM any address

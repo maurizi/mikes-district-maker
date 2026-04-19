@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// © 2026 Michael Maurizi Jr.
+
 /* eslint-disable no-console, functional/no-loop-statements */
 // Migration runner for DSQL.
 //

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Modifications © 2026 Michael Maurizi Jr.
+
 import React from "react";
 import { Button as MenuButton, Menu, Wrapper } from "react-aria-menubutton";
 import { connect } from "react-redux";

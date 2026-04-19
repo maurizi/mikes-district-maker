@@ -1,10 +1,17 @@
 # DistrictBuilder
 
-This project is a continuation of the original version of DistrictBuilder, now called [DistrictBuilder Classic](https://github.com/PublicMapping/districtbuilder-classic), which is no longer being maintained. This repository is where active development of DistrictBuilder will continue to occur.
+This repository is an independent personal fork of [DistrictBuilder](https://github.com/PublicMapping/districtbuilder), which was originally developed by Azavea, Inc. (acquired by Element 84 in 2023) and the Public Mapping Project. The user-facing product running from this fork is rebranded as "Mike's District Maker" and is not affiliated with, supported by, or endorsed by PublicMapping, Azavea, or Element 84.
 
 ## Overview
 
 DistrictBuilder is web-based, open source software for collaborative redistricting.
+
+## License
+
+- The original DistrictBuilder code is © 2020 Azavea, Inc. and licensed under the Apache License, Version 2.0 (see [`LICENSE`](LICENSE)).
+- Modifications on this fork are © 2026 Michael Maurizi Jr. and licensed under the GNU Affero General Public License, version 3 or later (see [`LICENSE-AGPL`](LICENSE-AGPL)).
+- The combined work, as distributed here, is licensed under AGPL-3.0-or-later (Apache-2.0 → AGPL-3.0 is a one-way compatible upgrade). See [`NOTICE`](NOTICE) for the full attribution statement.
+- When this code is run as a network service, AGPL §13 requires that the Corresponding Source be offered to users of the service. Operators deploying this fork must ensure their running UI links to the public source at the deployed commit.
 
 - [Requirements](#requirements)
 - [Development](#development)

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Modifications © 2026 Michael Maurizi Jr.
+
 import { useState } from "react";
 import { Checkbox, Flex, Label, Radio, Select, Heading, type ThemeUIStyleObject } from "theme-ui";
 import { Button as MenuButton, Wrapper, Menu } from "react-aria-menubutton";

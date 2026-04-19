@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Modifications © 2026 Michael Maurizi Jr.
+
 import { darken } from "@theme-ui/color";
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import AriaModal from "react-aria-modal";

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Modifications © 2026 Michael Maurizi Jr.
+
 import { Box, Flex, type ThemeUIStyleObject, Heading } from "theme-ui";
 import { getEqualPopulationStops } from "../../map/index";
 import { type DistrictsGeoJSON, type EvaluateMetricWithValue } from "../../../types";

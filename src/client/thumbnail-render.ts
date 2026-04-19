@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// © 2026 Michael Maurizi Jr.
+
 import maplibregl from "maplibre-gl";
 
 import { type ThumbnailGeoJSON } from "../shared/entities";

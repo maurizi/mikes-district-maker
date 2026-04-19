@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// © 2026 Michael Maurizi Jr.
+
 import { MigrationInterface, QueryRunner } from "typeorm";
 
 export class AddChamberDefaultPopulationField1776374174709 implements MigrationInterface {

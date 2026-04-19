@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Modifications © 2026 Michael Maurizi Jr.
+
 import "reflect-metadata";
 import { BadRequestException, ClassSerializerInterceptor, ValidationPipe } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";

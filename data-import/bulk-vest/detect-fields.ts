@@ -1,4 +1,7 @@
 #!/usr/bin/env npx ts-node
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// © 2026 Michael Maurizi Jr.
+
 /**
  * Detect precinct field names from VEST shapefiles for the multi-year CSV.
  * Updates states.csv precinct_field_20XX columns.

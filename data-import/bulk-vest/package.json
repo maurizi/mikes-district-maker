@@ -1,6 +1,7 @@
 {
   "name": "bulk-vest-tools",
   "private": true,
+  "license": "AGPL-3.0-or-later",
   "type": "module",
   "dependencies": {
     "csv-parse": "^5.5.0",

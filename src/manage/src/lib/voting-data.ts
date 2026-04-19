@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// © 2026 Michael Maurizi Jr.
+
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from "fs";
 import { type TypedArray } from "../../../shared/entities";
 import { join } from "path";

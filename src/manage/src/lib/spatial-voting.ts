@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// © 2026 Michael Maurizi Jr.
+
 import { readFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";

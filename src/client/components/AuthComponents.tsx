@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Modifications © 2026 Michael Maurizi Jr.
+
 import React, { useState } from "react";
 import { Box, Button, Flex, Heading, Text, type ThemeUIStyleObject, Divider } from "theme-ui";
 

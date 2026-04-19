@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Modifications © 2026 Michael Maurizi Jr.
+
 import { isThisYear, isToday } from "date-fns";
 import format from "date-fns/format";
 import { type FeatureCollection, type Feature, type Point } from "geojson";

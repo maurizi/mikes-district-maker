@@ -1,4 +1,6 @@
-/** @jsxImportSource theme-ui */
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// © 2026 Michael Maurizi Jr.
+
 import React, { useEffect } from "react";
 import { connect } from "react-redux";
 import { Link } from "react-router-dom";
@@ -17,6 +19,7 @@ import { type UserState } from "../reducers/user";
 import store from "../store";
 import { userFetch } from "../actions/user";
 import { isUserLoggedIn } from "../jwt";
+import { SOURCE_CODE_URL } from "../constants/license";
 
 interface StateProps {
   readonly user: UserState;
@@ -464,6 +467,14 @@ const LandingScreen = ({ user }: StateProps) => {
               sx={style.footerLink as unknown as ThemeUIStyleObject}
             >
               Contact
+            </a>
+            <a
+              href={SOURCE_CODE_URL}
+              rel="noreferrer noopener"
+              target="_blank"
+              sx={style.footerLink as unknown as ThemeUIStyleObject}
+            >
+              Source code
             </a>
           </Box>
         </Box>

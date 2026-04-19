@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// © 2026 Michael Maurizi Jr.
+
 import { type DistrictsDefinition, type GeoUnitHierarchy } from "./entities";
 
 // Parse a simple two-column `BLOCKID,DISTRICT` CSV (header row + data rows).

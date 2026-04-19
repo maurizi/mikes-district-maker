@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# © 2026 Michael Maurizi Jr.
+
 """
 Convert Census Bureau Block Equivalency Files (BEFs) into BLOCKID,DISTRICT
 CSVs ready for DistrictBuilder import.

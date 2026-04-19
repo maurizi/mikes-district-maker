@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Modifications © 2026 Michael Maurizi Jr.
+
 # DNS is only wired up when route53_zone_name is supplied. If you manage DNS
 # outside Route53 set the variable empty and point records at the CloudFront
 # distribution + ALB manually.

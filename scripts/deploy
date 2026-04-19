@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# © 2026 Michael Maurizi Jr.
+
 # Master deploy: build and push server + client to the production stack.
 #
 # - Builds the NestJS server (nest build → esbuild bundle)

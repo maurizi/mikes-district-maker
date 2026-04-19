@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# © 2026 Michael Maurizi Jr.
+
 resource "aws_cloudfront_function" "spa_rewrite" {
   name    = "${var.project}-${var.environment}-spa-rewrite"
   runtime = "cloudfront-js-2.0"

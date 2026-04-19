@@ -1,0 +1,20 @@
+This repository is a fork of DistrictBuilder.
+
+Originally developed by Azavea, Inc. (acquired by Element 84 in 2023) and
+the Public Mapping Project.
+  Copyright 2020 Azavea, Inc.
+  Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Modifications copyright 2026 Michael Maurizi Jr.
+  Licensed under the GNU Affero General Public License, version 3 or
+  (at your option) any later version (see LICENSE-AGPL).
+
+The combined work, as distributed in this repository, is licensed under
+the GNU Affero General Public License, version 3 or later (AGPL-3.0-or-later).
+Apache-2.0 is one-way compatible into AGPL-3.0, so the upstream Azavea code
+may be combined into this AGPL-licensed work; the upstream code remains
+independently available under Apache-2.0 from its original source.
+
+This project is not affiliated with, supported by, or endorsed by
+PublicMapping, Azavea, or Element 84. "DistrictBuilder" is used only to
+describe the origin of the code.

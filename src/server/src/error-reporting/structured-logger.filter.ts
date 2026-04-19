@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// © 2026 Michael Maurizi Jr.
+
 import { ArgumentsHost, Catch, HttpException } from "@nestjs/common";
 import { Request } from "express";
 import { BaseExceptionFilter } from "@nestjs/core";

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Modifications © 2026 Michael Maurizi Jr.
+
 import { Args, Command, Flags } from "@oclif/core";
 import { existsSync, readFileSync, mkdirSync } from "fs";
 import UpdateRegion from "./update-region";

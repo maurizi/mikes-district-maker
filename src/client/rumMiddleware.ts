@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// © 2026 Michael Maurizi Jr.
+
 import { type Middleware } from "redux";
 import { getType } from "typesafe-actions";
 import { updateDistrictsDefinition, projectFetch } from "./actions/projectData";

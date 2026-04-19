@@ -1,4 +1,6 @@
-/** @jsxImportSource theme-ui */
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// © 2026 Michael Maurizi Jr.
+
 import React, { useEffect } from "react";
 import { connect } from "react-redux";
 import { Box, Heading, Text } from "theme-ui";

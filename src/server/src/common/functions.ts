@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Modifications © 2026 Michael Maurizi Jr.
+
 import { GetObjectCommand, type GetObjectCommandInput, type S3Client } from "@aws-sdk/client-s3";
 import { existsSync } from "fs";
 import { mkdir, readFile, writeFile } from "fs/promises";

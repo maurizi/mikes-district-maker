@@ -2,6 +2,7 @@
   "name": "district-builder-client",
   "version": "0.1.0",
   "private": true,
+  "license": "AGPL-3.0-or-later",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
@@ -11,8 +12,8 @@
     "typecheck": "tsc --noEmit",
     "compile": "tsc",
     "watch": "tsc --watch",
-    "fix": "eslint --fix 'src/*.{ts,tsx}' 'src/client/**/*.{ts,tsx}' 'src/shared/**/*.ts'",
-    "lint": "eslint 'src/*.{ts,tsx}' 'src/client/**/*.{ts,tsx}' 'src/shared/**/*.ts'",
+    "fix": "eslint --fix 'src/*.{ts,tsx}' 'src/client/**/*.{ts,tsx}' 'src/shared/**/*.ts' '*.{ts,mjs,cjs}' 'data-import/**/*.{ts,js,mjs,cjs}' 'deployment/**/*.{js,mjs,cjs}'",
+    "lint": "eslint 'src/*.{ts,tsx}' 'src/client/**/*.{ts,tsx}' 'src/shared/**/*.ts' '*.{ts,mjs,cjs}' 'data-import/**/*.{ts,js,mjs,cjs}' 'deployment/**/*.{js,mjs,cjs}'",
     "format": "prettier --write 'src/{client,shared}/**/*.{ts,tsx,json,css}'",
     "check-format": "prettier --check 'src/{client,shared}/**/*.{ts,tsx,json,css}'"
   },
@@ -105,6 +106,7 @@
     "eslint": "9.28.0",
     "eslint-config-prettier": "10.1.8",
     "eslint-plugin-functional": "7.3.1",
+    "eslint-plugin-headers": "^1.3.4",
     "eslint-plugin-import": "2.32.0",
     "eslint-plugin-jsdoc": "50.6.17",
     "eslint-plugin-prefer-arrow": "1.2.3",

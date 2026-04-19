@@ -1,13 +1,18 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Modifications © 2026 Michael Maurizi Jr.
+
 import { Button as MenuButton, Wrapper, Menu, MenuItem } from "react-aria-menubutton";
 import Icon from "../components/Icon";
 import { style, invertStyles } from "./MenuButton.styles";
 import store from "../store";
 import { toggleKeyboardShortcutsModal } from "../actions/projectModals";
+import { SOURCE_CODE_URL } from "../constants/license";
 
 enum UserMenuKeys {
   Contact = "contact",
   Guide = "guide",
-  KeyboardShortcuts = "keyboardShortcuts"
+  KeyboardShortcuts = "keyboardShortcuts",
+  SourceCode = "sourceCode"
 }
 
 const guideLink =
@@ -53,6 +58,14 @@ const SupportMenu = ({ project, ...props }: SupportProps & StateProps) => {
               <a href={contactLink} target="_blank" sx={style.menuListItem} rel="noreferrer">
                 <Icon name="envelope" sx={style.menuListIcon} />
                 Contact us
+              </a>
+            </MenuItem>
+          </li>
+          <li key={UserMenuKeys.SourceCode}>
+            <MenuItem value={UserMenuKeys.SourceCode}>
+              <a href={SOURCE_CODE_URL} target="_blank" sx={style.menuListItem} rel="noreferrer">
+                <Icon name="link" sx={style.menuListIcon} />
+                Source code
               </a>
             </MenuItem>
           </li>

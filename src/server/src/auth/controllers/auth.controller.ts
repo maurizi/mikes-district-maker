@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Modifications © 2026 Michael Maurizi Jr.
+
 import { PG_UNIQUE_VIOLATION } from "@drdgvhbh/postgres-error-codes";
 import {
   BadRequestException,

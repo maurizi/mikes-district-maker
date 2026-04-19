@@ -1,0 +1,23 @@
+#!/bin/bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# © 2026 Michael Maurizi Jr.
+
+# Snapshot the list of files this fork has touched (since tag 1.19.2, plus
+# working-tree changes, plus untracked). Written to each package directory
+# so the corresponding Docker-bind-mounted container can read it without
+# needing git or the repo-root .git directory.
+
+set -e
+
+ROOT=$(git rev-parse --show-toplevel)
+cd "$ROOT"
+
+LIST=$({
+  git diff --name-only --diff-filter=d 1.19.2...HEAD
+  git diff --name-only --diff-filter=d HEAD
+  git ls-files --others --exclude-standard
+} | sort -u)
+
+echo "$LIST" >fork-touched-files.txt
+echo "$LIST" >src/server/fork-touched-files.txt
+echo "$LIST" >src/manage/fork-touched-files.txt

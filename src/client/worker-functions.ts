@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Modifications © 2026 Michael Maurizi Jr.
+
 import * as Comlink from "comlink";
 import stringify from "json-stable-stringify";
 import memoize from "memoizee";

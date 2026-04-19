@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Modifications © 2026 Michael Maurizi Jr.
+
 import { connect } from "react-redux";
 import { Box, Flex, Heading, type ThemeUIStyleObject } from "theme-ui";
 

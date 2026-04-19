@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# © 2026 Michael Maurizi Jr.
+
 output "dsql_cluster_identifier" {
   description = "DSQL cluster identifier — used to construct the endpoint."
   value       = aws_dsql_cluster.main.identifier

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// © 2026 Michael Maurizi Jr.
+
 import { join } from "path";
 import { DataSource, type DataSourceOptions } from "typeorm";
 import { DsqlSigner } from "@aws-sdk/dsql-signer";

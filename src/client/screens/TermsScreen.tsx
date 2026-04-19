@@ -1,4 +1,6 @@
-/** @jsxImportSource theme-ui */
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// © 2026 Michael Maurizi Jr.
+
 import React, { useEffect } from "react";
 import { connect } from "react-redux";
 import { Box, Heading, Text } from "theme-ui";
@@ -43,8 +45,9 @@ const TermsScreen = ({ user }: StateProps) => {
           <a href="https://github.com/PublicMapping/districtbuilder" rel="noreferrer noopener">
             DistrictBuilder
           </a>{" "}
-          project originally developed by Azavea and Public Mapping. By creating an account or using
-          the Service you agree to these terms.
+          project originally developed by Azavea (acquired by Element 84 in 2023) and Public
+          Mapping. The Service is not affiliated with, supported by, or endorsed by any of those
+          organizations. By creating an account or using the Service you agree to these terms.
         </Text>
 
         <Heading as="h2" sx={{ mt: 4, mb: 2 }}>

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// © 2026 Michael Maurizi Jr.
+
 import eslint from "@eslint/js";
 import tseslint from "typescript-eslint";
 import prettier from "eslint-config-prettier";
@@ -7,16 +10,53 @@ import jsdoc from "eslint-plugin-jsdoc";
 import preferArrow from "eslint-plugin-prefer-arrow";
 import react from "eslint-plugin-react";
 import prettierPlugin from "eslint-plugin-prettier";
+import headers from "eslint-plugin-headers";
+import { readFileSync, existsSync } from "node:fs";
+import { execSync } from "node:child_process";
+
+// Fork-touched files: read a precomputed snapshot (scripts/precompute-fork-files
+// writes one into each package dir so Docker containers don't need git), or
+// fall back to running git directly when on a host with the repo checked out.
+const forkTouched = (() => {
+  const raw = existsSync("fork-touched-files.txt")
+    ? readFileSync("fork-touched-files.txt", "utf8")
+    : execSync(
+        "{ git diff --name-only --diff-filter=d 1.19.2...HEAD; git diff --name-only --diff-filter=d HEAD; git ls-files --others --exclude-standard; }",
+        { shell: "/bin/sh", encoding: "utf8" }
+      );
+  return [...new Set(raw.split("\n").filter(Boolean))].filter((f) =>
+    /\.(ts|tsx|js|jsx|mjs|cjs)$/.test(f)
+  );
+})();
+
+const forkFiles = forkTouched.filter(
+  (f) => !f.startsWith("src/server/") && !f.startsWith("src/manage/")
+);
+
+const licenseHeaderConfig = {
+  source: "string",
+  style: "line",
+  content:
+    "SPDX-License-Identifier: AGPL-3.0-or-later\n(prefix)© (year) Michael Maurizi Jr.",
+  patterns: {
+    prefix: { pattern: "(Modifications )?", defaultValue: "" },
+    year: { pattern: "\\d{4}(\\s*[-–]\\s*\\d{4})?", defaultValue: "2026" }
+  },
+  preservePragmas: true,
+  trailingNewlines: 2
+};
 
 export default tseslint.config(
-  eslint.configs.recommended,
-  ...tseslint.configs.recommendedTypeChecked,
-  functional.configs.externalVanillaRecommended,
-  react.configs.flat.recommended,
-  prettier,
   {
     files: ["src/**/*.{ts,tsx}"],
     ignores: ["src/server/**", "src/manage/**"],
+    extends: [
+      eslint.configs.recommended,
+      ...tseslint.configs.recommendedTypeChecked,
+      functional.configs.externalVanillaRecommended,
+      react.configs.flat.recommended,
+      prettier
+    ],
     languageOptions: {
       parserOptions: {
         project: "tsconfig.json"
@@ -74,5 +114,19 @@ export default tseslint.config(
       "@typescript-eslint/no-unsafe-argument": "off",
       "prettier/prettier": "error"
     }
+  },
+  {
+    // Stragglers: TS files outside src/ need the TS parser, but no
+    // type-aware rules (they're not in tsconfig.json).
+    files: ["*.ts", "data-import/**/*.ts"],
+    languageOptions: {
+      parser: tseslint.parser
+    }
+  },
+  {
+    files: forkFiles,
+    ignores: ["src/shared/password-validator/difflib.ts"],
+    plugins: { headers },
+    rules: { "headers/header-format": ["error", licenseHeaderConfig] }
   }
 );

@@ -133,7 +133,7 @@ const ProjectSidebarHeader = ({
         </Flex>
       ) : saving === "saved" ? (
         <Tooltip placement="top-start" content={<span>Your map is saved</span>}>
-          <Flex sx={{ display: "flex", color: "gray.3", alignItems: "center", userSelect: "none" }}>
+          <Flex sx={{ display: "flex", color: "gray.5", alignItems: "center", userSelect: "none" }}>
             <Icon name="check-circle" size={1.1} />
             <Text sx={{ fontSize: 1, ml: 1 }}>Saved</Text>
           </Flex>

@@ -7,7 +7,7 @@ import ProjectDistrictsMap from "./map/ProjectDistrictsMap";
 const style: Record<string, ThemeUIStyleObject> = {
   featuredProject: {
     flexDirection: "column",
-    bg: "#fff",
+    bg: "muted",
     borderRadius: "2px",
     boxShadow: "small",
     textDecoration: "none",

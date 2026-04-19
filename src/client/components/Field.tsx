@@ -197,7 +197,7 @@ export function PasswordField<D, R>({
                 },
                 display: "none",
                 position: "absolute",
-                backgroundColor: "white",
+                backgroundColor: "muted",
                 fontSize: 1,
                 right: "0",
                 left: "0",

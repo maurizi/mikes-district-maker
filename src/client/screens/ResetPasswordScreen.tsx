@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useParams } from "react-router-dom";
 import { Link, Navigate } from "react-router-dom";
 import { Box, Button, Card, Flex, Heading } from "theme-ui";
-import Logo from "../media/logos/logo.svg?react";
+import SiteLogo from "../components/SiteLogo";
 
 import { showPasswordResetNotice } from "../actions/auth";
 import { resetPassword } from "../api";
@@ -33,7 +33,7 @@ const ResetPasswordScreen = () => {
   ) : (
     <CenteredContent>
       <Heading as="h1" sx={{ textAlign: "center" }}>
-        <Logo sx={{ maxWidth: "15rem" }} />
+        <SiteLogo sx={{ maxWidth: "15rem" }} />
       </Heading>
       <Card sx={{ variant: "cards.floating" }}>
         <Flex

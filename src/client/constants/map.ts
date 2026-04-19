@@ -9,17 +9,40 @@ maplibregl.addProtocol("pmtiles", protocol.tile);
 // Self-hosted Protomaps basemap tiles on S3
 const PMTILES_URL = "https://districtbuilder-dev-238046523378.s3.amazonaws.com/basemap/us.pmtiles";
 
-const baseLayers = noLabels("protomaps", "white");
-const labelLayers = labels("protomaps", "white", "en");
+const SPRITE_BASE = "https://protomaps.github.io/basemaps-assets/sprites/v4";
 
-// The first label layer ID — district layers should be inserted before this
-// so basemap labels (place names, roads) render on top of districts
-export const FIRST_LABEL_LAYER_ID = labelLayers[0]?.id;
+// Protomaps' default label paints work on a plain basemap but struggle over
+// translucent district fills — the text color is low-contrast and the halo is
+// a hairline. In dark mode the labels are especially hard to read. Force a
+// brighter text color and a thicker halo per mode so place names stay legible
+// on any district background.
+const withLabelHalos = (
+  layers: maplibregl.LayerSpecification[],
+  flavor: "white" | "dark"
+): maplibregl.LayerSpecification[] => {
+  const haloColor = flavor === "dark" ? "#15181c" : "#ffffff";
+  const textColor = flavor === "dark" ? "#d0d4d8" : "#2c2c2c";
+  return layers.map(layer => {
+    if (layer.type !== "symbol") {
+      return layer;
+    }
+    return {
+      ...layer,
+      paint: {
+        ...layer.paint,
+        "text-color": textColor,
+        "text-halo-color": haloColor,
+        "text-halo-width": 1.5,
+        "text-halo-blur": 0.5
+      }
+    };
+  });
+};
 
-export const MAP_STYLE: maplibregl.StyleSpecification = {
+const buildStyle = (flavor: "white" | "dark"): maplibregl.StyleSpecification => ({
   version: 8 as const,
   glyphs: "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",
-  sprite: "https://protomaps.github.io/basemaps-assets/sprites/v4/white",
+  sprite: `${SPRITE_BASE}/${flavor}`,
   sources: {
     protomaps: {
       type: "vector" as const,
@@ -29,8 +52,43 @@ export const MAP_STYLE: maplibregl.StyleSpecification = {
     }
   },
   layers: [
-    ...baseLayers,
+    ...noLabels("protomaps", flavor),
     // District layers will be inserted here at runtime via beforeId: FIRST_LABEL_LAYER_ID
-    ...labelLayers
+    ...withLabelHalos(labels("protomaps", flavor, "en"), flavor)
   ] as maplibregl.LayerSpecification[]
+});
+
+const LIGHT_STYLE = buildStyle("white");
+const DARK_STYLE = buildStyle("dark");
+
+// The first label layer ID — district layers should be inserted before this
+// so basemap labels (place names, roads) render on top of districts. Both
+// flavors use the same Protomaps layer IDs so either style works here.
+export const FIRST_LABEL_LAYER_ID = labels("protomaps", "white", "en")[0]?.id;
+
+export const getMapStyle = (colorMode: string | undefined): maplibregl.StyleSpecification =>
+  colorMode === "dark" ? DARK_STYLE : LIGHT_STYLE;
+
+// Build a style that swaps ONLY the Protomaps basemap layers to the target
+// flavor while preserving every user-added source and layer (districts,
+// reference layers, icons) in its original position. Feeding this to
+// `map.setStyle(..., { diff: true })` makes MapLibre compute a minimal update:
+// basemap paint/layout/sprite changes, but districts and feature state are
+// left untouched. That prevents the "districts vanish for a beat, revealing
+// the bare landcover underneath" flash that a full setStyle causes.
+export const mergeBasemap = (
+  current: maplibregl.StyleSpecification,
+  colorMode: string | undefined
+): maplibregl.StyleSpecification => {
+  const next = getMapStyle(colorMode);
+  const nextById = new Map(next.layers.map(l => [l.id, l]));
+  const mergedLayers = current.layers.map(layer =>
+    nextById.has(layer.id) ? (nextById.get(layer.id) as maplibregl.LayerSpecification) : layer
+  );
+  return {
+    ...current,
+    sprite: next.sprite,
+    glyphs: next.glyphs,
+    layers: mergedLayers
+  };
 };

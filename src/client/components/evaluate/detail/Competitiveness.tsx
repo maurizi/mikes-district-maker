@@ -1,6 +1,14 @@
 import { useEffect, useState } from "react";
 import { toast } from "react-toastify";
-import { Box, Button, Flex, Heading, Spinner, type ThemeUIStyleObject } from "theme-ui";
+import {
+  Box,
+  Button,
+  Flex,
+  Heading,
+  Spinner,
+  useColorMode,
+  type ThemeUIStyleObject
+} from "theme-ui";
 
 import { type IProject } from "../../../../shared/entities";
 import { projectFetchSuccess } from "../../../actions/projectData";
@@ -9,7 +17,7 @@ import {
   calculatePVI,
   computeRowFill,
   formatPviByDistrict,
-  getPartyColor
+  getPartyTextColor
 } from "../../../functions";
 import store from "../../../store";
 import {
@@ -72,7 +80,7 @@ const style: Record<string, ThemeUIStyleObject> = {
     color: "gray.2"
   },
   menuButton: {
-    color: "muted"
+    color: "white"
   },
   planscoreButton: {
     variant: "buttons.primary",
@@ -80,7 +88,7 @@ const style: Record<string, ThemeUIStyleObject> = {
     maxHeight: "34px",
     borderBottom: "none",
     borderBottomColor: "blue.2",
-    color: "muted"
+    color: "white"
   }
 };
 
@@ -98,6 +106,8 @@ const CompetitivenessMetricDetail = ({
   const [planScoreLoaded, setPlanScoreLoaded] = useState<boolean | "pending">(
     !!project.planscoreUrl && project.planscoreUrl !== "error"
   );
+  const [colorMode] = useColorMode();
+  const mode = colorMode === "dark" ? "dark" : "light";
   const choroplethStops = getPviSteps();
   const projectHasNoEmptyDistricts =
     geojson && geojson.features.slice(1).every(feature => feature.geometry.coordinates.length > 0);
@@ -128,12 +138,14 @@ const CompetitivenessMetricDetail = ({
           (bucket: string, index: number, array: readonly string[]) => {
             const divider = array.length > index + 1 && "/";
             const bucketColor = bucket.includes("R")
-              ? getPartyColor("republican")
+              ? getPartyTextColor("republican", mode)
               : bucket.includes("D")
-                ? getPartyColor("democrat")
-                : "#141414";
+                ? getPartyTextColor("democrat", mode)
+                : mode === "dark"
+                  ? "#eaeaea"
+                  : "#141414";
             return divider ? (
-              <span sx={{ color: "#000", mb: "10px" }} key={index}>
+              <span sx={{ color: "heading", mb: "10px" }} key={index}>
                 <span sx={{ color: bucketColor, ml: "10px", mb: "10px", mr: "10px" }}>
                   {bucket}
                 </span>

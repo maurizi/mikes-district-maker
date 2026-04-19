@@ -100,7 +100,7 @@ const style: Record<string, ThemeUIStyleObject> = {
     borderColor: "gray.2",
     position: "sticky",
     top: 0,
-    bg: "white",
+    bg: "muted",
     zIndex: 1
   },
   option: {
@@ -258,7 +258,7 @@ const LabelAutocomplete = ({
             ref={refs.setFloating}
             style={floatingStyles}
             sx={{
-              bg: "white",
+              bg: "muted",
               border: "1px solid",
               borderColor: "gray.2",
               borderRadius: "4px",

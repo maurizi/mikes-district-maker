@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { ThemeUIProvider } from "theme-ui";
+import { ThemeUIProvider, useColorMode } from "theme-ui";
 import { QueryParamProvider } from "use-query-params";
 import { ReactRouter6Adapter } from "use-query-params/adapters/react-router-6";
 
@@ -19,6 +19,7 @@ import RegistrationScreen from "./screens/RegistrationScreen";
 import ResetPasswordScreen from "./screens/ResetPasswordScreen";
 import UserAccountScreen from "./screens/UserAccountScreen";
 import theme from "./theme";
+import { useColorModePreference } from "./hooks/useColorModePreference";
 import { awsRum } from "./rum";
 
 import "./App.css";
@@ -116,8 +117,34 @@ const AppRoutes = () => (
   </BrowserRouter>
 );
 
+// Applies the user's color-mode preference. When "system", follows the OS
+// prefers-color-scheme (including runtime changes). When "light"/"dark", pins
+// the mode and ignores the OS.
+const ColorModeController = () => {
+  const [, setColorMode] = useColorMode();
+  const preference = useColorModePreference();
+  useEffect(() => {
+    if (preference === "light") {
+      setColorMode("default");
+      return;
+    }
+    if (preference === "dark") {
+      setColorMode("dark");
+      return;
+    }
+    const mql = window.matchMedia("(prefers-color-scheme: dark)");
+    const apply = (matches: boolean) => setColorMode(matches ? "dark" : "default");
+    const onChange = (e: MediaQueryListEvent) => apply(e.matches);
+    apply(mql.matches);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, [preference, setColorMode]);
+  return null;
+};
+
 const App = () => (
   <ThemeUIProvider theme={theme}>
+    <ColorModeController />
     <Toast />
     <AppRoutes />
   </ThemeUIProvider>

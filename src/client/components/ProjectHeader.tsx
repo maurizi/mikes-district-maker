@@ -7,6 +7,7 @@ import { Box, Button, Flex, type ThemeUIStyleObject } from "theme-ui";
 import { type IProject } from "../../shared/entities";
 import { undo, redo, toggleEvaluate } from "../actions/districtDrawing";
 import { heights } from "../theme";
+import ColorModeToggle from "../components/ColorModeToggle";
 import CopyMapButton from "../components/CopyMapButton";
 import ExportMenu from "../components/ExportMenu";
 import Icon from "../components/Icon";
@@ -23,7 +24,7 @@ import SubmitMapButton from "./map/SubmitMapButton";
 const style: Record<string, ThemeUIStyleObject> = {
   undoRedo: {
     variant: "buttons.icon",
-    color: "muted"
+    color: "white"
   },
   projectHeader: {
     variant: "styles.header.app",
@@ -32,7 +33,7 @@ const style: Record<string, ThemeUIStyleObject> = {
     borderColor: "blue.6"
   },
   menuButton: {
-    color: "muted"
+    color: "white"
   }
 };
 
@@ -88,7 +89,7 @@ const MobileActionsMenu = ({ children }: { readonly children: React.ReactNode })
       <Button
         sx={{
           variant: "buttons.icon",
-          color: "muted",
+          color: "white",
           cursor: "pointer"
         }}
         onClick={() => setOpen(!open)}
@@ -210,11 +211,13 @@ const ProjectHeader = ({
               <ExportMenu isArchived={isArchived} invert={true} project={project} />
             ) : null}
             <EvaluateButton evaluateMode={evaluateMode} />
+            <ColorModeToggle invert={true} />
             <SubmitMapButton project={project} />
           </React.Fragment>
         ) : isMobile ? (
           <React.Fragment>
             <EvaluateButton evaluateMode={evaluateMode} />
+            <ColorModeToggle invert={true} />
             <MobileActionsMenu>
               {!isArchived && (
                 <Box sx={{ px: 2, py: 1 }}>
@@ -233,6 +236,7 @@ const ProjectHeader = ({
             {!isArchived && <CopyMapButton invert={true} />}
             {project && <ExportMenu isArchived={isArchived} invert={true} project={project} />}
             <EvaluateButton evaluateMode={evaluateMode} />
+            <ColorModeToggle invert={true} />
             {isOwnProject && <SubmitMapButton project={project} />}
           </React.Fragment>
         )}

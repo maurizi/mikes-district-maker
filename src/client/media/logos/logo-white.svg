@@ -2,7 +2,7 @@
   <defs>
     <clipPath id="mdm-logow-clip"><circle cx="50" cy="50" r="46"/></clipPath>
     <style>
-      .mdm-word{font-family:'frank-new','Helvetica Neue',Arial,sans-serif;font-weight:700;font-size:36px;fill:#ffffff;}
+      .mdm-word-white{font-family:'frank-new','Helvetica Neue',Arial,sans-serif;font-weight:700;font-size:36px;fill:#ffffff;}
     </style>
   </defs>
   <g transform="translate(5,5)">
@@ -16,5 +16,5 @@
     </g>
     <circle cx="50" cy="50" r="48" fill="none" stroke="#1F2933" stroke-width="4"/>
   </g>
-  <text x="120" y="65" class="mdm-word">Mike's District Maker</text>
+  <text x="120" y="65" class="mdm-word-white">Mike's District Maker</text>
 </svg>

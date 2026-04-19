@@ -81,7 +81,7 @@ const TemplateFromProjectModal = ({
               fontWeight: "medium",
               display: "flex",
               alignItems: "center",
-              color: "muted"
+              color: "white"
             }}
             id="template-project-modal-header"
           >

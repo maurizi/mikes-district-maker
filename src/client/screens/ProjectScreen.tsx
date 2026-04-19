@@ -207,7 +207,7 @@ const ProjectScreen = ({
   });
 
   return isFirstLoadPending ? (
-    <CenteredContent>
+    <CenteredContent showToggle={false}>
       <Flex sx={{ justifyContent: "center" }}>
         <Spinner variant="styles.spinner.large" />
       </Flex>

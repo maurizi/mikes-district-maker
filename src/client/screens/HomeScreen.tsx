@@ -79,9 +79,9 @@ const HomeScreen = ({ projects, isSaving, duplicatedProject, user, pagination }:
           projectList.length > 0 ? (
             <Box
               sx={{
-                backgroundColor: "#fff",
+                backgroundColor: "muted",
                 borderRadius: "2px",
-                boxShadow: "0 0 4px rgb(0 0 0 / 13%)",
+                boxShadow: "small",
                 marginTop: "16px"
               }}
             >

@@ -1,7 +1,7 @@
-import { Box } from "theme-ui";
+import { Box, useColorMode } from "theme-ui";
 import { type DistrictProperties } from "../../shared/entities";
 import { type ElectionYear } from "../types";
-import { getPartyColor, calculatePVI } from "../functions";
+import { getPartyTextColor, calculatePVI } from "../functions";
 import Tooltip from "./Tooltip";
 import VotingSidebarTooltip from "./VotingSidebarTooltip";
 
@@ -26,8 +26,12 @@ const PVIDisplay = ({
 
   const voting = Object.keys(properties.voting || {}).length > 0 ? properties.voting : undefined;
   const pvi = getPvi(properties, year);
+  const [colorMode] = useColorMode();
 
-  const color = getPartyColor(pvi && pvi > 0 ? "democrat" : "republican");
+  const color = getPartyTextColor(
+    pvi && pvi > 0 ? "democrat" : "republican",
+    colorMode === "dark" ? "dark" : "light"
+  );
   const partyLabel = pvi && pvi > 0 ? "D" : "R";
   const votingDisplay =
     pvi !== undefined ? (
@@ -35,7 +39,7 @@ const PVIDisplay = ({
         maximumFractionDigits: 0
       })}`}</Box>
     ) : (
-      <span sx={{ color: "gray.2" }}>{BLANK_VALUE}</span>
+      <span sx={{ color: "gray.4" }}>{BLANK_VALUE}</span>
     );
   return voting ? (
     <Tooltip

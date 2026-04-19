@@ -50,7 +50,7 @@ const style: Record<string, ThemeUIStyleObject> = {
     pr: 0
   },
   blankValue: {
-    color: "gray.2"
+    color: "gray.4"
   }
 };
 

@@ -6,7 +6,7 @@ export const heights = {
 };
 
 const appButtonStyles = {
-  color: "muted",
+  color: "white",
   display: "inline-flex",
   alignItems: "center",
   flexShrink: 0,
@@ -21,11 +21,11 @@ const appButtonStyles = {
   },
   "&:hover:not([disabled]):not(:active)": {
     bg: "blue.6",
-    color: "muted",
+    color: "white",
     textDecoration: "none"
   },
   "&:active": {
-    color: "muted",
+    color: "white",
     bg: "blue.7"
   },
   "&:focus": {
@@ -33,12 +33,11 @@ const appButtonStyles = {
     boxShadow: "focus"
   },
   "&[disabled]": {
-    opacity: 0.6,
-    bg: "gray.8",
+    opacity: 0.5,
     cursor: "not-allowed"
   },
   "&:visited": {
-    color: "muted",
+    color: "white",
     fontWeight: "medium"
   }
 };
@@ -66,6 +65,11 @@ const theme: Theme = {
     accent: "#ffc08e",
     warning: "#eec643",
     error: "#f06543",
+    selectedRow: "#f2f6f9",
+    selectedButtonBg: "#e5edf3",
+    selectedButtonFg: "#131f28",
+    link: "#4B7AA0",
+    linkHover: "#395c78",
     success: [
       "#f7fde8",
       "#DCF8A5",
@@ -97,7 +101,49 @@ const theme: Theme = {
       "#595959",
       "#2c2c2c",
       "#141414"
-    ]
+    ],
+    modes: {
+      dark: {
+        heading: "#eaeaea",
+        text: "#b8b8b8",
+        background: "#15181c",
+        primary: "#6d98ba",
+        secondary: "#4a4e53",
+        muted: "#23272d",
+        selectedRow: "#2e3642",
+        selectedButtonBg: "#2c485e",
+        selectedButtonFg: "#e5edf3",
+        link: "#95b4cd",
+        linkHover: "#bdd0e0",
+        accent: "#ffc08e",
+        warning: "#eec643",
+        error: "#f06543",
+        success: [
+          "#102c02",
+          "#306F09",
+          "#438A0F",
+          "#5AA516",
+          "#9ED950",
+          "#BEEC75",
+          "#DCF8A5",
+          "#f7fde8"
+        ],
+        gray: [
+          "#141414",
+          "#1f2125",
+          "#2e3136",
+          "#4a4e53",
+          "#707478",
+          "#909498",
+          "#afb3b7",
+          "#cfd3d7",
+          "#eaeaea"
+        ]
+      }
+    }
+  },
+  config: {
+    useColorSchemeMediaQuery: "system"
   },
   radii: {
     small: "2px",
@@ -259,7 +305,7 @@ const theme: Theme = {
       },
       "&:active": {
         bg: "gray.3",
-        color: "muted"
+        color: "white"
       },
       "&[disabled]": {
         bg: "gray.1",
@@ -292,11 +338,11 @@ const theme: Theme = {
       ...appButtonStyles,
       ...{
         bg: "transparent",
-        color: "blue.5",
+        color: "link",
         padding: 0,
         "&:hover:not([disabled]):not(:active)": {
           textDecoration: "underline",
-          color: "blue.7",
+          color: "linkHover",
           bg: "transparent"
         },
         "&[disabled]": {
@@ -354,7 +400,7 @@ const theme: Theme = {
     quiet: {
       ...appButtonStyles,
       ...{
-        backgroundColor: "#fff",
+        backgroundColor: "muted",
         color: "text",
         "&:hover:not([disabled]):not(:active)": {
           bg: "blue.1"
@@ -367,8 +413,8 @@ const theme: Theme = {
           boxShadow: "focus"
         },
         "&.selected": {
-          backgroundColor: "blue.1",
-          color: "heading"
+          backgroundColor: "selectedButtonBg",
+          color: "selectedButtonFg"
         }
       }
     },
@@ -449,7 +495,7 @@ const theme: Theme = {
     },
     select: {
       borderColor: "gray.2",
-      backgroundColor: "#fff",
+      backgroundColor: "muted",
       fontFamily: "heading",
       width: "auto",
       paddingRight: "30px",
@@ -472,7 +518,7 @@ const theme: Theme = {
     button: {
       ...appButtonStyles,
       backgroundColor: "primary",
-      color: "muted",
+      color: "white",
       textDecoration: "none",
       px: 3,
       py: 2
@@ -480,18 +526,18 @@ const theme: Theme = {
     secondaryButton: {
       ...appButtonStyles,
       backgroundColor: "secondary",
-      color: "muted",
+      color: "white",
       textDecoration: "none",
       px: 3,
       py: 2,
       "&:visited,&:active": {
         bg: "secondary",
-        color: "muted"
+        color: "white"
       },
       "&:hover:not([disabled]):not(:active)": {
         bg: darken("secondary", 0.1),
         textDecoration: "none",
-        color: "muted"
+        color: "white"
       }
     },
     alert: {
@@ -512,7 +558,7 @@ const theme: Theme = {
     linkButton: {
       ...appButtonStyles,
       backgroundColor: "primary",
-      color: "muted",
+      color: "white",
       textDecoration: "none",
       px: 3,
       py: 2
@@ -523,16 +569,16 @@ const theme: Theme = {
       color: "gray.2"
     },
     a: {
-      color: "blue.5",
+      color: "link",
       textDecoration: "none",
       "&:visited": {
-        color: "blue.5"
+        color: "link"
       },
       "&:hover:not([disabled]):not(:active)": {
         textDecoration: "underline"
       },
       "&:active": {
-        color: "blue.8"
+        color: "linkHover"
       },
       "&:focus": {
         borderRadius: "small",

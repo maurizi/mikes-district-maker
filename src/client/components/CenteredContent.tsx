@@ -1,7 +1,17 @@
 import React from "react";
-import { Flex } from "theme-ui";
+import { Box, Flex } from "theme-ui";
 
-const CenteredContent = ({ children }: { readonly children?: React.ReactNode }) => {
+import ColorModeToggle from "./ColorModeToggle";
+
+interface Props {
+  readonly children?: React.ReactNode;
+  // Auth screens want a color-mode toggle in the corner since they don't have
+  // a SiteHeader. Transient uses like the project loading spinner pass
+  // showToggle={false} so the toggle doesn't appear alongside a lone spinner.
+  readonly showToggle?: boolean;
+}
+
+const CenteredContent = ({ children, showToggle = true }: Props) => {
   return (
     <Flex
       sx={{
@@ -13,6 +23,11 @@ const CenteredContent = ({ children }: { readonly children?: React.ReactNode }) 
         }
       }}
     >
+      {showToggle && (
+        <Box sx={{ position: "absolute", top: 2, right: 2, zIndex: 1 }}>
+          <ColorModeToggle />
+        </Box>
+      )}
       <Flex as="main" sx={{ width: "100%", height: "100%" }}>
         <Flex
           sx={{

@@ -71,7 +71,7 @@ const style: Record<string, ThemeUIStyleObject> = {
   },
   link: {
     cursor: "pointer",
-    color: "blue.5"
+    color: "link"
   },
   featuresList: {
     listStyleType: "none",

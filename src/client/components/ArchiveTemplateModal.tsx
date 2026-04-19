@@ -31,7 +31,7 @@ const ArchiveTemplateModal = ({ org }: Props) => {
               fontWeight: "medium",
               display: "flex",
               alignItems: "center",
-              color: "muted"
+              color: "white"
             }}
             id="delete-project-modal-header"
           >

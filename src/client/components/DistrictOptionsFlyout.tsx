@@ -28,7 +28,7 @@ const DistrictOptionsFlyout = ({
           }}
           variant="icon"
         >
-          <Icon name="ellipsis" color="#131f28" size={0.75} />
+          <Icon name="ellipsis" size={0.75} />
         </Button>
       }
     >

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Box, Button, Card, Flex, Heading } from "theme-ui";
-import Logo from "../media/logos/logo.svg?react";
+import SiteLogo from "../components/SiteLogo";
 
 import { initiateForgotPassword } from "../api";
 import CenteredContent from "../components/CenteredContent";
@@ -37,7 +37,7 @@ const ForgotPasswordScreen = () => {
   return (
     <CenteredContent>
       <Heading as="h1" sx={{ textAlign: "center" }}>
-        <Logo sx={{ maxWidth: "15rem" }} />
+        <SiteLogo sx={{ maxWidth: "15rem" }} />
       </Heading>
       <Card sx={{ variant: "cards.floating" }}>
         <Flex

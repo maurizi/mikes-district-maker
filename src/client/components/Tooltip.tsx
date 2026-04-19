@@ -1,4 +1,5 @@
 import React, { useState, cloneElement, isValidElement } from "react";
+import { useColorMode } from "theme-ui";
 import {
   useFloating,
   useHover,
@@ -23,7 +24,10 @@ interface TooltipProps {
 
 const Tooltip = ({ content, children, placement = "top", visible }: TooltipProps) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [colorMode] = useColorMode();
   const open = visible !== undefined ? visible : isOpen;
+  const bg = colorMode === "dark" ? "#eaeaea" : "#141414";
+  const fg = colorMode === "dark" ? "#141414" : "white";
 
   const { refs, floatingStyles, context } = useFloating({
     open,
@@ -56,8 +60,8 @@ const Tooltip = ({ content, children, placement = "top", visible }: TooltipProps
             ref={refs.setFloating}
             style={{
               ...floatingStyles,
-              backgroundColor: "#141414",
-              color: "white",
+              backgroundColor: bg,
+              color: fg,
               borderRadius: "2px",
               padding: "5px 9px",
               fontSize: "14px",

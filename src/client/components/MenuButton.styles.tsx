@@ -74,7 +74,7 @@ export const style = {
 export const invertStyles = ({ invert }: ButtonStyleProps): ThemeUIStyleObject => ({
   ...(invert
     ? {
-        color: "muted"
+        color: "white"
       }
     : {
         color: "gray.7",

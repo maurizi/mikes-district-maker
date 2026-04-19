@@ -75,6 +75,15 @@ export const capitalizeFirstLetter = (s: string) =>
 export const getPartyColor = (party: string) =>
   party === "republican" ? "#BF4E6A" : party === "democrat" ? "#4E56BF" : "#F7AD00";
 
+// Text-safe variants — the saturated party colors above work for map fills on
+// light land, but read poorly as TEXT on a dark sidebar surface. Use these
+// when rendering party-colored labels/numbers; the caller picks based on the
+// current color mode.
+export const getPartyTextColor = (party: string, mode: "dark" | "light") => {
+  if (mode !== "dark") return getPartyColor(party);
+  return party === "republican" ? "#E19AA9" : party === "democrat" ? "#9EA3E0" : "#FFD166";
+};
+
 export const getMajorityRaceDisplay = (feature: DistrictGeoJSON) =>
   feature.properties.majorityRace && capitalizeFirstLetter(feature.properties.majorityRace);
 

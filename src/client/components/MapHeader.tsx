@@ -56,7 +56,7 @@ const style: Record<string, ThemeUIStyleObject> = {
     variant: "styles.header.app",
     height: "auto",
     minHeight: "48px",
-    backgroundColor: "white",
+    backgroundColor: "muted",
     alignItems: "center",
     justifyContent: "space-between",
     flexWrap: "wrap",
@@ -73,17 +73,17 @@ const style: Record<string, ThemeUIStyleObject> = {
     py: 1,
     height: "32px",
     "&.selected": {
-      bg: "blue.0",
-      borderColor: "blue.2",
+      bg: "selectedButtonBg",
+      borderColor: "primary",
       borderBottom: "2px solid",
-      borderBottomColor: "blue.5",
-      color: "blue.8"
+      borderBottomColor: "primary",
+      color: "selectedButtonFg"
     }
   },
   sliderContainer: {
     position: "absolute",
     display: "flex",
-    backgroundColor: "#fff",
+    backgroundColor: "muted",
     borderRadius: "3px",
     border: "1px solid",
     borderColor: "gray.2",
@@ -344,10 +344,10 @@ const MapHeader = ({
                 color: "gray.7",
                 border: "1px solid transparent",
                 "&:hover:not([disabled]):not(:active).selected, &.selected": {
-                  bg: "blue.1",
-                  color: "gray.7",
+                  bg: "selectedButtonBg",
+                  color: "selectedButtonFg",
                   opacity: 1,
-                  borderColor: "gray.2"
+                  borderColor: "primary"
                 }
               }}
               onClick={() => {

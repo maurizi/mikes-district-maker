@@ -1,4 +1,4 @@
-import { Flex } from "theme-ui";
+import { Flex, useColorMode } from "theme-ui";
 import { type PviBucket } from "../../../types";
 import { Bar } from "@visx/shape";
 import { Group } from "@visx/group";
@@ -13,6 +13,8 @@ const CompetitivenessChart = ({
 }: {
   readonly pviBuckets?: readonly (PviBucket | undefined)[] | undefined;
 }) => {
+  const [colorMode] = useColorMode();
+  const axisColor = colorMode === "dark" ? "#cfd3d7" : "#222";
   const bucketCounts = countBy(pviBuckets, "name");
 
   const chartData: readonly PviBucket[] = getPviBuckets().map(bucket => {
@@ -82,6 +84,10 @@ const CompetitivenessChart = ({
                 label="Political Lean"
                 orientation="bottom"
                 top={yMax}
+                stroke={axisColor}
+                tickStroke={axisColor}
+                labelProps={{ fill: axisColor }}
+                tickLabelProps={() => ({ fill: axisColor })}
               />
               <Axis
                 scale={yScale}
@@ -90,6 +96,9 @@ const CompetitivenessChart = ({
                 orientation="left"
                 numTicks={Math.min(yValueMax, 5)}
                 labelOffset={leftTickLabelsOffset + 5}
+                stroke={axisColor}
+                tickStroke={axisColor}
+                labelProps={{ fill: axisColor }}
                 tickFormat={value => {
                   const n = value.valueOf();
                   return Number.isInteger(n) ? n.toString() : "";
@@ -97,7 +106,8 @@ const CompetitivenessChart = ({
                 tickLabelProps={() => ({
                   verticalAnchor: "middle",
                   dx: -leftTickLabelsOffset,
-                  fontSize: 9
+                  fontSize: 9,
+                  fill: axisColor
                 })}
               />
             </svg>

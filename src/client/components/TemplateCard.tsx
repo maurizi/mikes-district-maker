@@ -20,7 +20,7 @@ const style: Record<string, ThemeUIStyleObject> = {
     flexDirection: "column",
     position: "relative",
     padding: "15px",
-    bg: "#fff",
+    bg: "muted",
     borderRadius: "2px",
     boxShadow: "small"
   },

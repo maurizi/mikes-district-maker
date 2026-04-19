@@ -16,3 +16,34 @@ body {
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
 }
+
+/* Theme-UI's `styles.a` only applies inside MDX / BaseStyles wrappers, not to
+ * every <a> in the app. Anchor tags that don't have an explicit sx color end
+ * up with the browser default blue (and purple when visited). Pin every link
+ * to the theme's `link` token via the CSS variable that ThemeUIProvider
+ * publishes, so the color follows the mode and visited state doesn't flip
+ * to purple. */
+a,
+a:visited {
+  color: var(--theme-ui-colors-link, #4b7aa0);
+}
+a:hover {
+  color: var(--theme-ui-colors-linkHover, #395c78);
+}
+
+/* Chrome's autofill (e.g. saved-password fill on the login form) paints the
+ * input with its own bright-yellow background and dark text color, which
+ * collides with our dark mode styles and produces unreadable black-on-black
+ * text. -webkit-text-fill-color overrides the autofill text color, and the
+ * massive inset box-shadow replaces Chrome's autofill background with our
+ * input surface. The long transition delays the autofill style from
+ * re-applying as the user edits. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-text-fill-color: var(--theme-ui-colors-heading, #141414);
+  -webkit-box-shadow: 0 0 0 1000px var(--theme-ui-colors-muted, #ffffff) inset;
+  caret-color: var(--theme-ui-colors-heading, #141414);
+  transition: background-color 5000s ease-in-out 0s;
+}

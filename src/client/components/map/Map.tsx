@@ -1,6 +1,6 @@
 import { maxBy } from "lodash";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Box, Flex, Text, type ThemeUIStyleObject } from "theme-ui";
+import { Box, Flex, Text, useColorMode, type ThemeUIStyleObject } from "theme-ui";
 import bbox from "@turf/bbox";
 type BBox2d = [number, number, number, number];
 
@@ -50,6 +50,7 @@ import {
 import {
   GEOLEVELS_SOURCE_ID,
   DISTRICTS_SOURCE_ID,
+  applyLabelRegionFilter,
   featureStateDistricts,
   generateMapLayers,
   getGeoLevelVisibility,
@@ -94,7 +95,7 @@ import RectangleSelectionTool from "./RectangleSelectionTool";
 import store from "../../store";
 import { type State } from "../../reducers";
 import { connect } from "react-redux";
-import { MAP_STYLE } from "../../constants/map";
+import { getMapStyle, mergeBasemap } from "../../constants/map";
 import { KEYBOARD_SHORTCUTS } from "./keyboardShortcuts";
 import Icon from "../Icon";
 import { ReferenceLayerTypes } from "../../../shared/constants";
@@ -376,6 +377,12 @@ const DistrictsMap = ({
   const minZoom = Math.min(...staticMetadata.geoLevelHierarchy.map(geoLevel => geoLevel.minZoom));
   const maxZoom = Math.max(...staticMetadata.geoLevelHierarchy.map(geoLevel => geoLevel.maxZoom));
 
+  const [colorMode] = useColorMode();
+  const mapModeRef = useRef<"dark" | "light" | null>(null);
+  // Bumped after a basemap swap (setStyle + reapply) to force downstream effects
+  // that modify map layers to re-run against the fresh style.
+  const [styleVersion, setStyleVersion] = useState(0);
+
   // While a geolevel has tiles up to the maxZoom level, we want the enable the user to zoom in
   // beyond that zoom level. Using lower zoom tiles at higher zoom levels is called overzoom.
   // The ability to zoom this far in isn't needed in the typical use-case (+4 is fine for that),
@@ -401,9 +408,11 @@ const DistrictsMap = ({
     const latPad = 10;
     const centerLat = (b1 + b3) / 2;
     const lngPad = latPad / Math.cos((centerLat * Math.PI) / 180);
+    const initialMode: "dark" | "light" = colorMode === "dark" ? "dark" : "light";
+    mapModeRef.current = initialMode;
     const map = new maplibregl.Map({
       container: mapRef.current,
-      style: MAP_STYLE,
+      style: getMapStyle(initialMode),
       bounds: [b0, b1, b2, b3],
       fitBoundsOptions: { padding: 75 },
       maxBounds: [b0 - lngPad, b1 - latPad, b2 + lngPad, b3 + latPad],
@@ -461,6 +470,51 @@ const DistrictsMap = ({
 
     // Everything in this effect should only happen on component load
   }, [mapRef]);
+
+  // Re-skin the basemap when the color mode changes. setStyle wipes sources and
+  // layers we've added manually (districts, reference layers, icons), so we
+  // re-run the layer generation once the new style has loaded.
+  useEffect(() => {
+    if (!map) {
+      return;
+    }
+    const target: "dark" | "light" = colorMode === "dark" ? "dark" : "light";
+    if (mapModeRef.current === target) {
+      return;
+    }
+
+    const swap = () => {
+      mapModeRef.current = target;
+      // Build a merged style that swaps only the Protomaps basemap layers for
+      // the target flavor, keeping every user-added source/layer in place.
+      // setStyle with diff then diffs this against the current style so
+      // MapLibre only applies paint/layout/sprite changes — districts never
+      // vanish, so the landcover underneath never flashes through.
+      const merged = mergeBasemap(map.getStyle(), target);
+      map.once("style.load", () => {
+        // The basemap label layers were replaced with fresh copies from the
+        // new flavor, so they've lost the iso_3166_2 region-filter wrapper
+        // applied on initial load. Re-apply it.
+        applyLabelRegionFilter(map, project.regionConfig.regionCode);
+        // Bump the styleVersion so downstream effects that pin paint/layout
+        // on map layers re-assert themselves against the new basemap layers.
+        setStyleVersion(v => v + 1);
+      });
+      map.setStyle(merged, { diff: true });
+    };
+
+    // Don't swap the style mid-initial-load — that cancels the original load and
+    // prevents onMapLoad (and thus generateMapLayers) from ever running. Wait
+    // for the first "load" event if needed.
+    if (map.loaded()) {
+      swap();
+    } else {
+      map.once("load", swap);
+      return () => {
+        map.off("load", swap);
+      };
+    }
+  }, [colorMode, map, project, staticMetadata, minZoom, maxZoom, geojson]);
 
   const downHandler = useCallback(
     (key: KeyboardEvent) => {
@@ -654,7 +708,7 @@ const DistrictsMap = ({
         "transparent"
       ]);
     }
-  }, [map, selectedDistrictId]);
+  }, [map, selectedDistrictId, styleVersion]);
   // Update layer styles when district is hovered
   useEffect(() => {
     if (map && hoveredDistrictId) {
@@ -666,7 +720,7 @@ const DistrictsMap = ({
         "transparent"
       ]);
     }
-  }, [map, hoveredDistrictId]);
+  }, [map, hoveredDistrictId, styleVersion]);
 
   // Add / remove reference layers when there are selected in the sidebar
   useEffect(() => {
@@ -791,7 +845,7 @@ const DistrictsMap = ({
         map.setFeatureState({ source: GEOLEVELS_SOURCE_ID, id, sourceLayer }, { split: true });
       }
     });
-  }, [map, staticMetadata, project?.districtsDefinition]);
+  }, [map, staticMetadata, project?.districtsDefinition, styleVersion]);
 
   // @ts-ignore
   const generateLabelsGeojson = (geojson: DistrictsGeoJSON): Labels => {
@@ -839,7 +893,7 @@ const DistrictsMap = ({
     districtsLabelsSource &&
       districtsLabelsSource.type === "geojson" &&
       (districtsLabelsSource as maplibregl.GeoJSONSource).setData(generateLabelsGeojson(geojson));
-  }, [map, geojson]);
+  }, [map, geojson, styleVersion]);
 
   // Handle evaluate mode map views
   useEffect(() => {
@@ -907,7 +961,15 @@ const DistrictsMap = ({
         enableEditmode(map, staticMetadata, geoLevelIndex, activeReferenceLayers);
       }
     }
-  }, [evaluateMetric, evaluateMode, map, staticMetadata, geoLevelIndex, activeReferenceLayers]);
+  }, [
+    evaluateMetric,
+    evaluateMode,
+    map,
+    staticMetadata,
+    geoLevelIndex,
+    activeReferenceLayers,
+    styleVersion
+  ]);
 
   // Remove selected features from map when selected geounit ids has been emptied
   useEffect(() => {
@@ -937,7 +999,7 @@ const DistrictsMap = ({
         label ? `{${label}-abbrev}` : ""
       );
     }
-  }, [map, label, staticMetadata, selectedGeolevel]);
+  }, [map, label, staticMetadata, selectedGeolevel, styleVersion]);
 
   useEffect(() => {
     map &&
@@ -946,7 +1008,7 @@ const DistrictsMap = ({
           locked: lockedDistricts[districtId - 1]
         })
       );
-  }, [map, project, lockedDistricts]);
+  }, [map, project, lockedDistricts, styleVersion]);
 
   useEffect(() => {
     if (map && zoomToDistrictId) {
@@ -972,7 +1034,7 @@ const DistrictsMap = ({
         )
       );
     }
-  }, [map, staticMetadata, geoLevelIndex]);
+  }, [map, staticMetadata, geoLevelIndex, styleVersion]);
 
   // Keep track of when selected geounits change
   const prevSelectedGeoUnitsRef = useRef<typeof selectedGeounits | undefined>();
@@ -990,7 +1052,7 @@ const DistrictsMap = ({
       prevSelectedGeoUnits && setFeaturesSelectedFromGeoUnits(map, prevSelectedGeoUnits, false);
       selectedGeounits && setFeaturesSelectedFromGeoUnits(map, selectedGeounits, true);
     }
-  }, [map, selectedGeounits, prevSelectedGeoUnits]);
+  }, [map, selectedGeounits, prevSelectedGeoUnits, styleVersion]);
 
   // Keep track of when selected geolevel changes
   const prevGeoLevelIndexRef = useRef<typeof geoLevelIndex | undefined>();

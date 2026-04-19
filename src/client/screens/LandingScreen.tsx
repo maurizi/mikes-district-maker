@@ -23,15 +23,20 @@ interface StateProps {
 }
 
 const style: Record<string, ThemeUIStyleObject> = {
+  // Hero uses a fixed cream background in both modes, so it needs explicit dark
+  // text colors — theme tokens like "heading" flip with the mode and would
+  // disappear on cream in dark mode.
   hero: {
     bg: "#FBF5E4",
+    color: "#2c2c2c",
     py: 6,
     px: 4,
     textAlign: "center",
     borderTop: "1px solid",
     borderBottom: "1px solid",
     borderColor: "gray.2",
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.6)"
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.6)",
+    "h1, h2, h3": { color: "#2c2c2c" }
   },
   heroInner: {
     maxWidth: "900px",
@@ -39,7 +44,7 @@ const style: Record<string, ThemeUIStyleObject> = {
   },
   tagline: {
     fontSize: 3,
-    color: "gray.7",
+    color: "#595959",
     mt: 3,
     mb: 4,
     lineHeight: "1.5"
@@ -101,9 +106,9 @@ const style: Record<string, ThemeUIStyleObject> = {
     borderColor: "gray.2"
   },
   lineageBox: {
-    bg: "gray.0",
+    bg: "muted",
     borderLeft: "4px solid",
-    borderColor: "blue.5",
+    borderColor: "primary",
     p: 4,
     my: 4,
     borderRadius: "small"
@@ -354,13 +359,15 @@ const LandingScreen = ({ user }: StateProps) => {
           sx={{
             ...style.lineageBox,
             borderColor: "#c05621",
-            bg: "#fff7ed"
+            bg: "#fff7ed",
+            color: "#2c2c2c",
+            h3: { color: "#2c2c2c" }
           }}
         >
           <Heading as="h3" sx={{ fontSize: 3, mb: 2 }}>
             How you can use this site
           </Heading>
-          <Text as="p" sx={{ color: "gray.8", mb: 2 }}>
+          <Text as="p" sx={{ color: "#2c2c2c", mb: 2 }}>
             Some of the data that powers Mike&rsquo;s District Maker is provided under terms that
             restrict how it can be used. In particular, data sourced from the Redistricting Data Hub
             may only be used for <strong>noncommercial, nonpartisan</strong> purposes and{" "}
@@ -368,10 +375,10 @@ const LandingScreen = ({ user }: StateProps) => {
             disfavor an incumbent, candidate, donor, or political party, and not to dilute the
             voting power of racial or language minorities.
           </Text>
-          <Text as="p" sx={{ color: "gray.8" }}>
+          <Text as="p" sx={{ color: "#2c2c2c" }}>
             By creating an account and using this site, you agree to follow those terms. Full
             details are in the{" "}
-            <Link to="/terms" sx={{ color: "blue.5" }}>
+            <Link to="/terms" sx={{ color: "#4B7AA0" }}>
               Terms of Service
             </Link>
             .

@@ -2,12 +2,14 @@ import { Button as MenuButton, Wrapper, Menu, MenuItem } from "react-aria-menubu
 import Avatar from "react-avatar";
 import React, { useState } from "react";
 import { Link, NavLink, useNavigate, type NavigateFunction } from "react-router-dom";
+import ColorModeToggle from "../components/ColorModeToggle";
 import Icon from "../components/Icon";
 import SupportMenu from "../components/SupportMenu";
 import OrganizationDropdown from "../components/OrganizationDropdown";
-import { Alert, Box, Button, Flex, Heading, type ThemeUIStyleObject } from "theme-ui";
+import { Alert, Box, Button, Flex, Heading, useColorMode, type ThemeUIStyleObject } from "theme-ui";
 
 import Logo from "../media/logos/logo.svg?react";
+import LogoWhite from "../media/logos/logo-white.svg?react";
 
 import { resetState } from "../actions/root";
 import { clearJWT, isUserLoggedIn } from "../jwt";
@@ -136,6 +138,8 @@ const SiteHeader = ({ user }: Props) => {
   const navigate = useNavigate();
   const isLoggedIn = isUserLoggedIn();
   const isMobile = useIsMobile();
+  const [colorMode] = useColorMode();
+  const LogoComponent = colorMode === "dark" ? LogoWhite : Logo;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [resendEmail, setResendEmail] = useState<WriteResource<void, void>>({ data: void 0 });
 
@@ -252,7 +256,7 @@ const SiteHeader = ({ user }: Props) => {
             {"errors" in resendEmail && (
               <Box sx={{ fontWeight: "body" }}>
                 Error resending email. If this error persists, please contact us at{" "}
-                <a sx={{ color: "muted" }} href="mailto:michael@maurizi.org">
+                <a sx={{ color: "white" }} href="mailto:michael@maurizi.org">
                   michael@maurizi.org
                 </a>
                 .
@@ -264,7 +268,7 @@ const SiteHeader = ({ user }: Props) => {
       <Flex as="header" sx={style.header}>
         <Heading as="h1" sx={{ mb: "0px", mr: "auto", pt: 2 }}>
           <Link to="/" sx={style.logoLink}>
-            <Logo sx={{ width: isMobile ? "12rem" : "18rem" }} />
+            <LogoComponent sx={{ width: isMobile ? "12rem" : "18rem" }} />
           </Link>
         </Heading>
         {isMobile && isLoggedIn ? (
@@ -286,16 +290,18 @@ const SiteHeader = ({ user }: Props) => {
           </Button>
         ) : !isLoggedIn && (!("isPending" in user) || !user.isPending) ? (
           <React.Fragment>
-            <Link to="/login" sx={{ p: 2 }}>
+            <Link to="/login" sx={{ p: 2, color: "link", "&:visited": { color: "link" } }}>
               Login
             </Link>{" "}
-            <Link to="/register" sx={{ p: 2 }}>
+            <Link to="/register" sx={{ p: 2, color: "link", "&:visited": { color: "link" } }}>
               Register
             </Link>
+            <ColorModeToggle />
           </React.Fragment>
         ) : (
           <React.Fragment>
             {navLinks}
+            <ColorModeToggle />
             {userMenu}
           </React.Fragment>
         )}

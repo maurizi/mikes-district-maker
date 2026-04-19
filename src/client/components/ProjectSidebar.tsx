@@ -24,12 +24,7 @@ import {
   toggleDistrictLocked
 } from "../actions/districtDrawing";
 import { updatePinnedMetrics } from "../actions/projectData";
-import {
-  getDistrictColor,
-  negativeChangeColor,
-  positiveChangeColor,
-  selectedDistrictColor
-} from "../constants/colors";
+import { getDistrictColor, negativeChangeColor, positiveChangeColor } from "../constants/colors";
 import {
   areAnyGeoUnitsSelected,
   assertNever,
@@ -163,7 +158,7 @@ const style: Record<string, ThemeUIStyleObject> = {
     borderColor: "gray.3"
   },
   blankValue: {
-    color: "gray.2"
+    color: "gray.4"
   },
   lockButton: {
     p: "6px",
@@ -475,7 +470,7 @@ export function getCompactnessDisplay(properties: DistrictProperties) {
         </em>
       }
     >
-      <span sx={{ color: "gray.2" }}>{BLANK_VALUE}</span>
+      <span sx={{ color: "gray.4" }}>{BLANK_VALUE}</span>
     </Tooltip>
   ) : properties.contiguity === "non-contiguous" ? (
     <Tooltip
@@ -635,7 +630,7 @@ const SidebarRow = memo(
 
     return (
       <tr
-        sx={{ bg: selected ? selectedDistrictColor : "inherit", cursor: "pointer" }}
+        sx={{ bg: selected ? "selectedRow" : "inherit", cursor: "pointer" }}
         onClick={() => {
           store.dispatch(setSelectedDistrictId(district.id as number));
         }}

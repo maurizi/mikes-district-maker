@@ -124,7 +124,7 @@ const style: Record<string, ThemeUIStyleObject> = {
   template: {
     flexDirection: "column",
     padding: "15px",
-    bg: "#fff",
+    bg: "muted",
     borderRadius: "2px",
     boxShadow: "small"
   },

@@ -27,7 +27,7 @@ const style: Record<string, ThemeUIStyleObject> = {
   },
   button: {
     variant: "buttons.icon",
-    color: "muted",
+    color: "white",
     ml: 2
   },
   input: {
@@ -35,7 +35,7 @@ const style: Record<string, ThemeUIStyleObject> = {
     my: -1
   },
   wrapper: {
-    color: "muted",
+    color: "white",
     alignItems: "center"
   }
 };
@@ -89,7 +89,7 @@ const ProjectName = ({
           ...{
             variant: "buttons.icon",
             height: "20px",
-            color: "muted",
+            color: "white",
 
             ml: 2
           }

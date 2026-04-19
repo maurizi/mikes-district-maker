@@ -2,7 +2,7 @@ import { useState } from "react";
 import { connect } from "react-redux";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import { Alert, Box, Card, Close, Flex, Heading } from "theme-ui";
-import Logo from "../media/logos/logo.svg?react";
+import SiteLogo from "../components/SiteLogo";
 
 import { type IUser } from "../../shared/entities";
 import { isUserLoggedIn } from "../jwt";
@@ -35,7 +35,7 @@ const LoginScreen = ({ passwordResetNoticeShown, user }: StateProps) => {
     <CenteredContent>
       <Link to="/">
         <Heading as="h1" sx={{ textAlign: "center" }}>
-          <Logo sx={{ maxWidth: "15rem" }} />
+          <SiteLogo sx={{ maxWidth: "15rem" }} />
         </Heading>
       </Link>
       <Card sx={{ variant: "cards.floating" }}>

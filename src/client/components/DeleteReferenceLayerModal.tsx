@@ -36,7 +36,7 @@ const DeleteReferenceLayerModal = ({
               fontWeight: "medium",
               display: "flex",
               alignItems: "center",
-              color: "muted"
+              color: "white"
             }}
             id="delete-reference-layer-modal-header"
           >

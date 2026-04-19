@@ -513,7 +513,7 @@ export function generateMapLayers(
       "text-padding": 3,
       "text-field": ["concat", regionCode, "-", ["get", "id"]],
       "text-max-width": 10,
-      "text-font": ["Noto Sans Bold"],
+      "text-font": ["Noto Sans Medium"],
       visibility: "visible"
     },
     paint: {
@@ -567,7 +567,7 @@ export function generateMapLayers(
         "text-padding": 2,
         "text-field": "",
         "text-max-width": 10,
-        "text-font": ["Noto Sans Bold"],
+        "text-font": ["Noto Sans Medium"],
         visibility: "none"
       },
       paint: {
@@ -580,20 +580,63 @@ export function generateMapLayers(
     });
   });
 
-  // These are layers that already exist and have their own filters. First, we get the
-  // existing filter, then merge that with a custom filter that only shows labels from
-  // the selected region. Finally, we set the layer to visible. In Mapbox Studio, the
-  // layer was set to invisible to avoid a flash where the labels appear before the filter
-  // is applied.
-  // Filter label layers to only show labels for the selected region.
-  // Skip layers that don't exist in the current basemap style.
+  applyLabelRegionFilter(map, regionCode);
+}
+
+// Recursively check whether a filter is expression-style (uses lookups like
+// ["get", "prop"] anywhere in the tree) vs legacy-style (flat property names).
+// Protomaps' `pois` layer nests `["get", ...]` inside `["in", ...]` inside
+// `["all", ...]`, so we need to walk the whole tree.
+const EXPR_OPS = new Set([
+  "get",
+  "has",
+  "match",
+  "case",
+  "coalesce",
+  "let",
+  "interpolate",
+  "step",
+  "zoom",
+  "geometry-type",
+  "feature-state",
+  "literal",
+  "concat",
+  "+",
+  "-",
+  "*",
+  "/"
+]);
+
+const isExpressionFilter = (f: unknown): boolean => {
+  if (!Array.isArray(f) || f.length === 0) return false;
+  const op = f[0];
+  if (typeof op !== "string") return false;
+  if (EXPR_OPS.has(op)) return true;
+  return f.slice(1).some(arg => isExpressionFilter(arg));
+};
+
+// Wrap each basemap label layer's existing filter with an iso_3166_2 check so
+// only the active state's labels render. Called both on initial layer setup
+// and after a basemap swap (which wipes the wrapper by restoring Protomaps'
+// original filter). Silently skips layers where merging produces an invalid
+// filter spec — the worst case is neighboring-state labels leaking through.
+export function applyLabelRegionFilter(map: maplibregl.Map, regionCode: string) {
+  const regionKey = `US-${regionCode}`;
   filteredLabelLayers.forEach(layer => {
     if (!map.getLayer(layer)) return;
-    map.setFilter(layer, [
-      "all",
-      map.getFilter(layer),
-      ["==", "iso_3166_2", `US-${regionCode}`]
-    ] as maplibregl.FilterSpecification);
+    const existing = map.getFilter(layer);
+    const merged: maplibregl.FilterSpecification = isExpressionFilter(existing)
+      ? ([
+          "all",
+          ["==", ["get", "iso_3166_2"], regionKey],
+          existing
+        ] as unknown as maplibregl.FilterSpecification)
+      : (["all", existing, ["==", "iso_3166_2", regionKey]] as maplibregl.FilterSpecification);
+    try {
+      map.setFilter(layer, merged);
+    } catch {
+      // Leave the original filter in place if merging produced an invalid spec.
+    }
     map.setLayoutProperty(layer, "visibility", "visible");
   });
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Box, Flex, Spinner, Card, Text } from "theme-ui";
-import Logo from "../media/logos/logo.svg?react";
+import SiteLogo from "../components/SiteLogo";
 import SuccessIllustration from "../media/successfully-registered-illustration.svg?react";
 
 import { activateAccount } from "../api";
@@ -33,7 +33,7 @@ const ActivateAccountScreen = () => {
     <CenteredContent>
       {"resource" in activationResource ? (
         <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-          <Logo sx={{ width: "15rem", mx: "auto", mb: 4 }} />
+          <SiteLogo sx={{ width: "15rem", mx: "auto", mb: 4 }} />
           <Card
             sx={{
               variant: "cards.floating",

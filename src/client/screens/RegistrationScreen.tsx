@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import { connect } from "react-redux";
 import { Alert, Box, Card, Close, Flex, Heading } from "theme-ui";
-import Logo from "../media/logos/logo.svg?react";
+import SiteLogo from "../components/SiteLogo";
 
 import { isUserLoggedIn } from "../jwt";
 import RegisterContent from "../components/RegisterContent";
@@ -34,7 +34,7 @@ const RegistrationScreen = ({ user }: StateProps) => {
       ) : (
         <React.Fragment>
           <Heading as="h1" sx={{ textAlign: "center" }}>
-            <Logo sx={{ maxWidth: "15rem" }} />
+            <SiteLogo sx={{ maxWidth: "15rem" }} />
           </Heading>
           <Card sx={{ variant: "cards.floating" }}>
             <RegisterContent>

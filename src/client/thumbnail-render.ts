@@ -6,11 +6,11 @@ import maplibregl from "maplibre-gl";
 import { type ThumbnailGeoJSON } from "../shared/entities";
 import { getDistrictColor } from "./constants/colors";
 
-// OpenGraph / Twitter-card spec asks for 1200x630 (1.91:1). The same PNG is
-// reused as the home-page mini-map, which scales it down.
+// Square so the PNG fits our square UI thumbnails without letterboxing and
+// still unfurls cleanly on OG/Twitter `summary`, WhatsApp, iMessage, Slack, etc.
 const THUMBNAIL_WIDTH = 1200;
-const THUMBNAIL_HEIGHT = 630;
-const THUMBNAIL_PADDING = 40;
+const THUMBNAIL_HEIGHT = 1200;
+const THUMBNAIL_PADDING = 15;
 
 export async function renderThumbnailPng(
   districts: ThumbnailGeoJSON,

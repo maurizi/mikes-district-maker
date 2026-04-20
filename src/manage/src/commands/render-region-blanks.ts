@@ -34,7 +34,7 @@ const s3 = new S3Client({});
 const UNASSIGNED_COLOR = "#EDEDED";
 
 // Matches the harness in backfill-thumbnails: a minimal MapLibre page that
-// renders a FeatureCollection into a 1200x630 PNG. Kept local rather than
+// renders a FeatureCollection into a 1200x1200 PNG. Kept local rather than
 // shared so this command can be reasoned about on its own.
 const HARNESS_HTML = `<!DOCTYPE html>
 <html lang="en">
@@ -45,7 +45,7 @@ const HARNESS_HTML = `<!DOCTYPE html>
 <script src="https://unpkg.com/maplibre-gl@5.21.1/dist/maplibre-gl.js"></script>
 <style>
   html, body { margin: 0; padding: 0; background: #fff; }
-  #map { width: 1200px; height: 630px; background: #fff; }
+  #map { width: 1200px; height: 1200px; background: #fff; }
 </style>
 </head>
 <body>
@@ -57,7 +57,7 @@ window.renderDistricts = function (coloredDistricts, bounds) {
       container: "map",
       style: { version: 8, sources: {}, layers: [] },
       bounds: bounds,
-      fitBoundsOptions: { padding: 40, animate: false },
+      fitBoundsOptions: { padding: 15, animate: false },
       interactive: false,
       attributionControl: false,
       canvasContextAttributes: { preserveDrawingBuffer: true }
@@ -207,7 +207,7 @@ async function renderPngInFreshPage(
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
-    await page.setViewport({ width: 1200, height: 630, deviceScaleFactor: 1 });
+    await page.setViewport({ width: 1200, height: 1200, deviceScaleFactor: 1 });
     await page.setContent(HARNESS_HTML, { waitUntil: "networkidle0" });
     return await renderPng(page, thumbnail, bbox);
   } finally {

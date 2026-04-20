@@ -101,17 +101,24 @@ export function importCsvToDefinition(
     }
   }
 
-  // Walk hierarchy and build definition, simplifying where possible
+  // Walk hierarchy and build definition, simplifying where possible. Inner
+  // branches collapse to a bare number when every leaf below them shares one
+  // district — buildBlockAssignment treats `n` as "every block under this
+  // branch is in district n", so the compact form is semantically equivalent
+  // to a fully expanded subtree but avoids serializing thousands of repeats.
   function walk(hierarchy: GeoUnitHierarchy | number): DistrictsDefinition | number {
     if (typeof hierarchy === "number") {
       return assignment[hierarchy];
     }
     const results: (DistrictsDefinition | number)[] = hierarchy.map(h => walk(h));
-    // Simplify: if all children are the same value, collapse
-    if (results.length !== 1 && results.every(item => item === results[0])) {
+    if (results.every(item => item === results[0])) {
       return results[0];
     }
     return results;
   }
-  return walk(geoUnitHierarchy) as DistrictsDefinition;
+  // Map each top-level branch independently. The root MUST stay an array —
+  // DistrictsDefinition is `MutableGeoUnitCollection[]` and downstream code
+  // (e.g. number-of-districts inference, JSON storage) expects to index into
+  // the top level even when every branch carries the same district.
+  return geoUnitHierarchy.map(walk) as DistrictsDefinition;
 }

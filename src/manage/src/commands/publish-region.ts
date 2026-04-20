@@ -19,6 +19,11 @@ export default class PublishRegion extends Command {
       char: "b",
       description: "Bucket to upload the files to",
       default: "global-districtbuilder-dev-us-east-1"
+    }),
+    replaces: Flags.boolean({
+      description:
+        "If an active (non-archived) RegionConfig already exists for this country+region, archive it. Without this flag, publishing into an already-active region errors out.",
+      default: false
     })
   };
 
@@ -46,10 +51,30 @@ export default class PublishRegion extends Command {
     const versionDt = new Date();
     const keyPrefix = `regions/${args.countryCode}/${args.regionCode}/${versionDt.toISOString()}`;
 
+    // Open the DB first so we can fail fast on a duplicate-active-region check
+    // before doing the (slow, expensive) S3 upload.
+    const dataSource = await createDataSource();
+    const repo = dataSource.getRepository(RegionConfig);
+
+    const existingActive = await repo.findOne({
+      where: {
+        countryCode: args.countryCode,
+        regionCode: args.regionCode,
+        archived: false
+      }
+    });
+    if (existingActive && !flags.replaces) {
+      await dataSource.destroy();
+      this.error(
+        `An active RegionConfig already exists for ${args.countryCode}/${args.regionCode} (id=${existingActive.id}, version=${existingActive.version.toISOString()}). Re-run with --replaces to archive it.`
+      );
+    }
+
     // Filter out intermediate data files that are no longer needed
     const filePaths = (await readDir(args.staticDataDir)).filter(shouldPublishFile);
 
     if (filePaths.length === 0) {
+      await dataSource.destroy();
       this.log("no files found for publishing, exiting");
       return;
     }
@@ -81,10 +106,20 @@ export default class PublishRegion extends Command {
     regionConfig.s3URI = `s3://${flags.bucketName}/${keyPrefix}/`;
     regionConfig.version = versionDt;
 
-    const dataSource = await createDataSource();
-    const repo = dataSource.getRepository(RegionConfig);
+    // Archive the prior active row first, then insert the new one. Order
+    // matters: the new row stays unarchived even if the archive update fails
+    // (we abort before the insert), and a downstream retire-region run can
+    // tell source from target by the archived flag.
+    if (existingActive) {
+      existingActive.archived = true;
+      // @ts-ignore
+      await repo.save(existingActive);
+      this.log(`Archived prior RegionConfig ${existingActive.id} (${existingActive.s3URI})`);
+    }
     // @ts-ignore
     await repo.save(regionConfig);
     this.log("Region config saved to database");
+
+    await dataSource.destroy();
   }
 }

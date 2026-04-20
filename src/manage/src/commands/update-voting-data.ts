@@ -133,11 +133,7 @@ export default class UpdateVotingData extends Command {
     const blocks: VotingBlock[] = blockFeatures.map((feature, idx) => {
       const p = feature.properties;
       const weight =
-        typeof p.VAP_MOD === "number"
-          ? p.VAP_MOD
-          : typeof p.VAP === "number"
-            ? p.VAP
-            : 0;
+        typeof p.VAP_MOD === "number" ? p.VAP_MOD : typeof p.VAP === "number" ? p.VAP : 0;
       return {
         featureIdx: idx,
         geometry: feature.geometry,
@@ -475,9 +471,7 @@ export default class UpdateVotingData extends Command {
       fileName: "VAP_MOD.buf",
       bytesPerElement: typed.BYTES_PER_ELEMENT,
       unsigned:
-        typed instanceof Uint8Array ||
-        typed instanceof Uint16Array ||
-        typed instanceof Uint32Array
+        typed instanceof Uint8Array || typed instanceof Uint16Array || typed instanceof Uint32Array
     };
     (metadata as unknown as { demographics: IStaticFile[] }).demographics = [
       ...metadata.demographics,

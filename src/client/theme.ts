@@ -712,7 +712,8 @@ const theme: Theme = {
       },
       warningHeader: {
         ...defaultConfirmationModalHeader,
-        bg: "warning"
+        bg: "warning",
+        color: "#141414"
       },
       footer: {
         flex: "auto",

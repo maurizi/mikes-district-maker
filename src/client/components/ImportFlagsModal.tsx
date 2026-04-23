@@ -25,7 +25,8 @@ const style: Record<string, ThemeUIStyleObject> = {
     fontFamily: "heading",
     fontWeight: "light",
     fontSize: 4,
-    bg: "warning"
+    bg: "warning",
+    color: "#141414"
   },
   modal: {
     bg: "muted",
@@ -35,7 +36,7 @@ const style: Record<string, ThemeUIStyleObject> = {
     overflow: "hidden"
   },
   fieldValue: {
-    color: "black",
+    color: "heading",
     fontWeight: 500
   },
   buttonRow: {

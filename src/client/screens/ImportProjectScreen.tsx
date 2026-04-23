@@ -258,6 +258,7 @@ const style: Record<string, ThemeUIStyleObject> = {
   },
   uploadSuccessWithFlags: {
     bg: "warning",
+    color: "#141414",
     opacity: "0.9",
     border: "2px solid",
     borderColor: "warning",

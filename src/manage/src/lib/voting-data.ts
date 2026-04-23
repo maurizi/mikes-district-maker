@@ -9,6 +9,14 @@ import * as unzipper from "unzipper";
 import * as proj4Module from "proj4";
 const proj4 = (proj4Module as any).default || proj4Module;
 
+// Re-export proj4 so callers don't have to repeat the default-vs-namespace
+// import dance that Node's CJS/ESM interop makes necessary.
+export { proj4 };
+export type Proj4Converter = {
+  forward: (c: [number, number]) => [number, number];
+  inverse: (c: [number, number]) => [number, number];
+};
+
 export async function extractZipToDir(zipBuffer: Buffer, dir: string): Promise<void> {
   mkdirSync(dir, { recursive: true });
   const zip = await unzipper.Open.buffer(zipBuffer);
@@ -243,10 +251,7 @@ export function reconcilePrecinctVotes<K>(
       for (const party of ["democrat", "republican", "other"] as const) {
         const fieldName = voteFieldName(office, party, electionYear);
         const expected = v[party];
-        const actual = assignments.reduce(
-          (sum, a) => sum + getVote(a.featureIdx, fieldName),
-          0
-        );
+        const actual = assignments.reduce((sum, a) => sum + getVote(a.featureIdx, fieldName), 0);
         const diff = expected - actual;
         if (diff === 0) continue;
         reconciled++;
@@ -256,7 +261,11 @@ export function reconcilePrecinctVotes<K>(
         const sign = diff > 0 ? 1 : -1;
         for (let i = 0; i < assignments.length; i++) {
           const a = assignments[i];
-          setVote(a.featureIdx, fieldName, getVote(a.featureIdx, fieldName) + sign * adjustments[i]);
+          setVote(
+            a.featureIdx,
+            fieldName,
+            getVote(a.featureIdx, fieldName) + sign * adjustments[i]
+          );
         }
       }
     }
@@ -284,31 +293,52 @@ export function apportion(total: number, ratios: number[]): number[] {
   return floored;
 }
 
-// Reproject a GeoJSON feature's coordinates from source CRS to WGS84
-export function reprojectFeature(feature: GeoJSON.Feature, projDef: string): GeoJSON.Feature {
-  // Check if already geographic (NAD83 or WGS84)
-  if (projDef.startsWith("GEOGCS") && !projDef.includes("PROJCS")) {
-    return feature; // Already in geographic coordinates
+// Reproject a GeoJSON feature's coordinates from source CRS to the target
+// CRS (default WGS84). If the source is already geographic (NAD83/WGS84)
+// AND the target is WGS84 we pass the feature through untouched — this
+// preserves existing callers that always target WGS84 from a .prj string.
+export function reprojectFeature(
+  feature: GeoJSON.Feature,
+  fromDef: string,
+  toDef: string = "EPSG:4326"
+): GeoJSON.Feature {
+  if (toDef === "EPSG:4326" && fromDef.startsWith("GEOGCS") && !fromDef.includes("PROJCS")) {
+    return feature;
   }
 
-  const converter = proj4(projDef, "EPSG:4326");
-
-  function reprojectCoords(coords: any): any {
-    if (typeof coords[0] === "number") {
-      // It's a point [x, y]
-      const [lng, lat] = converter.forward(coords as [number, number]);
-      return [lng, lat];
-    }
-    return coords.map(reprojectCoords);
-  }
-
+  const converter = proj4(fromDef, toDef);
   return {
     ...feature,
     geometry: {
       ...feature.geometry,
-      coordinates: reprojectCoords((feature.geometry as any).coordinates)
+      coordinates: reprojectCoordsWith(converter, (feature.geometry as any).coordinates)
     } as any
   };
+}
+
+function reprojectCoordsWith(
+  converter: { forward: (c: [number, number]) => [number, number] },
+  coords: any
+): any {
+  if (typeof coords[0] === "number") {
+    const [x, y] = converter.forward(coords as [number, number]);
+    return [x, y];
+  }
+  return coords.map((c: any) => reprojectCoordsWith(converter, c));
+}
+
+// Reproject a bare GeoJSON Polygon/MultiPolygon using a pre-built proj4
+// converter. The caller owns the converter, which lets the hot loop in
+// prepare-dev-data reuse one converter per call site instead of rebuilding
+// it per feature.
+export function reprojectGeoJSONGeom<G extends GeoJSON.Polygon | GeoJSON.MultiPolygon>(
+  geom: G,
+  converter: { forward: (c: [number, number]) => [number, number] }
+): G {
+  return {
+    ...geom,
+    coordinates: reprojectCoordsWith(converter, geom.coordinates)
+  } as G;
 }
 
 export function abbrev(id: string): string {

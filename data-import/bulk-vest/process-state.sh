@@ -19,6 +19,7 @@ CSV_FILE="$SCRIPT_DIR/states.csv"
 DATA_DIR="/run/user/1000/gvfs/smb-share:server=as6704t-fe65.local,share=mike/Data"
 DEV_DATA="$PROJECT_DIR/dev-data"
 UPDATE_ONLY=${UPDATE_ONLY:-false}
+NO_PUBLISH=${NO_PUBLISH:-false}
 
 # Parse JSON row into shell variables
 eval $(echo "$1" | python3 -c "
@@ -222,6 +223,11 @@ cd "$PROJECT_DIR"
   $BIG_ARG \
   $INPUT_S3_DIR_FLAG \
   -o "dev-data/output/${state_abbr}"
+
+if [[ "$NO_PUBLISH" == "true" ]]; then
+  echo "  [$state_abbr] NO_PUBLISH set, skipping publish/update and CSV status update. Done!"
+  exit 0
+fi
 
 # Step 3: Publish or update region depending on whether it already exists locally
 REGION_EXISTS=$(docker compose exec -T database psql -U districtbuilder -tAc \

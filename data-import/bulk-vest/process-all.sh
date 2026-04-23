@@ -7,7 +7,7 @@
 
 # Process all pending states from states.csv (one tileset per state, multi-year voting)
 # Runs up to MAX_PARALLEL states concurrently.
-# Usage: ./scripts/bulk-vest/process-all.sh [--state XX] [--dry-run] [--parallel N]
+# Usage: ./scripts/bulk-vest/process-all.sh [--state XX] [--dry-run] [--parallel N] [--update-only] [--no-publish]
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -19,9 +19,10 @@ FILTER_STATE=""
 DRY_RUN=false
 MAX_PARALLEL=3
 UPDATE_ONLY=false
+NO_PUBLISH=false
 
 # Largest states (by staging geojson size) — run one-at-a-time in phase 2
-BIG_STATES=(TX CA NC PA FL MO IL)
+BIG_STATES=(TX CA)
 
 is_big_state() {
   local s="$1"
@@ -37,6 +38,7 @@ while [[ $# -gt 0 ]]; do
     --dry-run) DRY_RUN=true; shift ;;
     --parallel) MAX_PARALLEL="$2"; shift 2 ;;
     --update-only) UPDATE_ONLY=true; shift ;;
+    --no-publish) NO_PUBLISH=true; shift ;;
     *) echo "Unknown arg: $1"; exit 1 ;;
   esac
 done
@@ -50,6 +52,12 @@ else
   TARGET_STATUS="pending"
 fi
 export UPDATE_ONLY
+export NO_PUBLISH
+
+if $UPDATE_ONLY && $NO_PUBLISH; then
+  echo "ERROR: --update-only and --no-publish are mutually exclusive"
+  exit 1
+fi
 
 mkdir -p "$DEV_DATA/census-cache" "$DEV_DATA/staging" "$DEV_DATA/output"
 

@@ -18,7 +18,7 @@ export default class PublishRegion extends Command {
     bucketName: Flags.string({
       char: "b",
       description: "Bucket to upload the files to",
-      default: "global-districtbuilder-dev-us-east-1"
+      default: "districtbuilder-dev-238046523378"
     }),
     replaces: Flags.boolean({
       description:

@@ -15,7 +15,7 @@ import {
   voteFieldName,
   type PartyVotes
 } from "./voting-data";
-import { GeosHelper } from "./geos-helper";
+import { type GeosHelper } from "./geos-helper";
 
 // Simple bbox from GeoJSON coordinates (no library needed)
 function featureBbox(geom: Polygon | MultiPolygon): [number, number, number, number] {
@@ -83,7 +83,10 @@ export async function applyVestYearVotes(
   // ---- Load + extract VEST ----
   log(`\nLoading VEST: ${vestZipPath}`);
   const vestBuffer = readFileSync(vestZipPath);
-  const vestDir = join(tmpdir(), `vest-spatial-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const vestDir = join(
+    tmpdir(),
+    `vest-spatial-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  );
   await extractZipToDir(vestBuffer, vestDir);
   const { shpPath: vestShp, dbfPath: vestDbf, prjPath: vestPrj } = findShapefile(vestDir);
   let vestFeatures = await readShapefile(vestShp, vestDbf);
@@ -194,11 +197,7 @@ export async function applyVestYearVotes(
   // precinctAssigned: pi → office → contributions[]
   // One Contribution entry per (block, precinct, office).
   const precinctAssigned = new Map<number, Map<string, Contribution[]>>();
-  const pushContrib = (
-    pi: number,
-    office: string,
-    contrib: Contribution
-  ): void => {
+  const pushContrib = (pi: number, office: string, contrib: Contribution): void => {
     let byOffice = precinctAssigned.get(pi);
     if (!byOffice) {
       byOffice = new Map();
@@ -361,7 +360,9 @@ export async function applyVestYearVotes(
       }
     }
     if (emptyPrecincts > 0) {
-      log(`  WARNING: ${emptyPrecincts} precincts with no block match; ~${lostVotes.toLocaleString()} votes lost`);
+      log(
+        `  WARNING: ${emptyPrecincts} precincts with no block match; ~${lostVotes.toLocaleString()} votes lost`
+      );
     }
   }
 
@@ -410,7 +411,7 @@ export async function applyVestYearVotes(
         // Start from floors; distribute the integer residual to contributions
         // with the largest fractional parts.
         const floored = contribs.map(c => Math.floor(Math.max(0, c[party])));
-        let residual = expected - floored.reduce((a, b) => a + b, 0);
+        const residual = expected - floored.reduce((a, b) => a + b, 0);
         if (residual === 0) {
           for (let i = 0; i < contribs.length; i++) contribs[i][party] = floored[i];
           continue;

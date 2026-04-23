@@ -44,6 +44,41 @@ import { geojsonPolygonLabels, tileJoin, tippecanoe } from "../lib/cmd";
 import { abbrev, mkTypedArray } from "../lib/voting-data";
 import _ from "lodash";
 
+// Shoelace area of a linear ring in its own coordinate units (deg² here).
+// Used to identify degenerate interior rings that topojson's mergeArcs leaves
+// behind when two adjacent blocks' shared-edge arcs weren't deduped — the
+// "hole" is actually a collinear spike with near-zero signed area.
+function ringArea(ring: readonly (readonly number[])[]): number {
+  let a = 0;
+  for (let i = 0, n = ring.length - 1; i < n; i++) {
+    a += ring[i][0] * ring[i + 1][1] - ring[i + 1][0] * ring[i][1];
+  }
+  return Math.abs(a) / 2;
+}
+
+// Drop interior rings below `minAreaDeg2`. At Alabama's latitude (~33°N),
+// 1e-12 deg² ≈ 10 m² — well below real precinct enclaves, well above the
+// degenerate spikes (~0 m²) we see on dissolved county boundaries.
+function stripDegenerateHoles<G extends Polygon | MultiPolygon>(
+  geom: G,
+  minAreaDeg2: number
+): { geom: G; dropped: number } {
+  let dropped = 0;
+  const filterPoly = (poly: readonly (readonly number[])[][]): number[][][] => {
+    const out: number[][][] = [poly[0] as number[][]];
+    for (let i = 1; i < poly.length; i++) {
+      if (ringArea(poly[i]) >= minAreaDeg2) out.push(poly[i] as number[][]);
+      else dropped++;
+    }
+    return out;
+  };
+  if (geom.type === "Polygon") {
+    return { geom: { ...geom, coordinates: filterPoly(geom.coordinates) } as G, dropped };
+  }
+  const polys = (geom as MultiPolygon).coordinates.map(filterPoly);
+  return { geom: { ...geom, coordinates: polys } as G, dropped };
+}
+
 // Takes a comma-separated list of items, optionally as a pair separated by a ':'
 // and returns an array
 function splitPairs(input: string): readonly [string, string][] {
@@ -405,6 +440,74 @@ max string length of ~512MB).
       this.log(`Quantizing ${baseGeoLevel} geounits with transform: ${quantization}`);
     }
     const topo = quantization === 0 ? simplified : quantize(simplified, quantization);
+
+    // Strip references to degenerate (zero-length) arcs from every geometry's
+    // arc sequence. Topojson's simplify() can reduce multi-point arcs at
+    // dense multi-precinct junctions to arcs with all points collapsed to
+    // one — these are no-op edges that confuse mergeArcs when the merge
+    // set references both forward and reverse of the same degenerate arc
+    // (e.g., CO Broomfield where two disconnected precincts share a
+    // zero-length junction arc → mergeArcs "cancels" it and flips the
+    // topology, turning a legit disconnected outer polygon into a hole).
+    // Removing the arc references is safe because the arc adds no movement
+    // to the polygon's traversal; start and end point are identical.
+    const degenerateArcs = new Set<number>();
+    for (let i = 0; i < topo.arcs.length; i++) {
+      const arc = topo.arcs[i];
+      // Arc is a sequence of [dx, dy] deltas (quantized) or [x, y] coords
+      // (unquantized). In both representations a zero-length arc is
+      // identified by all entries having dx=dy=0 (quantized) or all coords
+      // equal (unquantized).
+      let degenerate = true;
+      if (quantization === 0) {
+        // Unquantized: compare coords
+        for (let j = 1; j < arc.length; j++) {
+          if (arc[j][0] !== arc[0][0] || arc[j][1] !== arc[0][1]) {
+            degenerate = false;
+            break;
+          }
+        }
+      } else {
+        // Quantized: the first entry is absolute, rest are deltas.
+        // Degenerate if all deltas are [0,0].
+        for (let j = 1; j < arc.length; j++) {
+          if (arc[j][0] !== 0 || arc[j][1] !== 0) {
+            degenerate = false;
+            break;
+          }
+        }
+      }
+      if (degenerate) degenerateArcs.add(i);
+    }
+    if (degenerateArcs.size > 0) {
+      this.log(
+        `  Stripping ${degenerateArcs.size} degenerate (zero-length) arc reference(s)`
+      );
+      const stripRefs = (arcs: any): any => {
+        if (!Array.isArray(arcs)) return arcs;
+        if (arcs.length > 0 && Array.isArray(arcs[0])) {
+          // Recurse, then drop any rings/polys that became empty.
+          return arcs.map(stripRefs).filter((sub: any) => {
+            if (!Array.isArray(sub) || sub.length === 0) return false;
+            // For nested arrays (polygons), require at least an outer ring.
+            if (Array.isArray(sub[0])) return sub.some((r: any) => r.length > 0);
+            return true;
+          });
+        }
+        // Leaf level: array of arc indices
+        return arcs.filter((k: number) => {
+          const idx = k < 0 ? ~k : k;
+          return !degenerateArcs.has(idx);
+        });
+      };
+      for (const name of Object.keys(topo.objects)) {
+        const obj: any = topo.objects[name];
+        if (!obj.geometries) continue;
+        for (const g of obj.geometries) {
+          if (g.arcs) g.arcs = stripRefs(g.arcs);
+        }
+      }
+    }
 
     for (const [prevIndex, geoLevel] of geoLevelIds.slice(1).entries()) {
       const currIndex = prevIndex + 1;
@@ -804,7 +907,50 @@ max string length of ~512MB).
       const filePath2 = join(dir, `${geoLevel}.geojson`);
       const fd1 = require("fs").openSync(filePath1, "w"); // eslint-disable-line
       const fd2 = require("fs").openSync(filePath2, "w"); // eslint-disable-line
+      let totalDropped = 0;
+      let totalNullRings = 0;
       for (const feature of (geojson as any).features) {
+        if (feature.geometry && (feature.geometry.type === "Polygon" || feature.geometry.type === "MultiPolygon")) {
+          // Sanitize any null rings that topo2feature emits when an arc
+          // sequence resolves to nothing (can happen after our degenerate-arc
+          // strip removes all arcs from a ring). A ring that's null or has
+          // <4 coords (can't form a closed polygon) is invalid — drop it.
+          // If a polygon's outer ring is invalid, drop the polygon. If a
+          // MultiPolygon has no valid polygons, the feature's geometry
+          // becomes empty and we leave it (downstream tippecanoe skips).
+          const validRing = (r: any): boolean =>
+            Array.isArray(r) && r.length >= 4 && r.every((v: any) => Array.isArray(v) && v.length >= 2);
+          const sanitizePoly = (poly: any): any[] | null => {
+            if (!Array.isArray(poly) || poly.length === 0) return null;
+            if (!validRing(poly[0])) return null;
+            const out: any[] = [poly[0]];
+            for (let i = 1; i < poly.length; i++) {
+              if (validRing(poly[i])) out.push(poly[i]);
+              else totalNullRings++;
+            }
+            return out;
+          };
+          if (feature.geometry.type === "Polygon") {
+            const clean = sanitizePoly(feature.geometry.coordinates);
+            if (!clean) {
+              totalNullRings++;
+              feature.geometry = { type: "Polygon", coordinates: [] };
+            } else {
+              feature.geometry = { type: "Polygon", coordinates: clean };
+            }
+          } else {
+            const cleanPolys = feature.geometry.coordinates
+              .map(sanitizePoly)
+              .filter((p: any) => p !== null);
+            if (cleanPolys.length !== feature.geometry.coordinates.length) {
+              totalNullRings += feature.geometry.coordinates.length - cleanPolys.length;
+            }
+            feature.geometry = { type: "MultiPolygon", coordinates: cleanPolys };
+          }
+          const { geom, dropped } = stripDegenerateHoles(feature.geometry, 1e-12);
+          feature.geometry = geom;
+          totalDropped += dropped;
+        }
         require("fs").writeSync(fd1, JSON.stringify(feature) + "\n"); // eslint-disable-line
         // The only properties we want are geounit hierarchy indices and optionally the name
         const stripped = {
@@ -821,6 +967,12 @@ max string length of ~512MB).
       }
       require("fs").closeSync(fd1); // eslint-disable-line
       require("fs").closeSync(fd2); // eslint-disable-line
+      if (totalDropped > 0) {
+        this.log(`  Dropped ${totalDropped} degenerate hole(s) from ${geoLevel}`);
+      }
+      if (totalNullRings > 0) {
+        this.log(`  Dropped ${totalNullRings} null/invalid ring(s) from ${geoLevel}`);
+      }
     }
     this.log("GeoJSON Sequence files written to disk");
   }

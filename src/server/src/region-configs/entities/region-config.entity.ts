@@ -34,8 +34,8 @@ export class RegionConfig implements IRegionConfig {
   @JoinColumn({ name: "chamber_id" })
   chambers: readonly Chamber[];
 
-  @Column({ type: "character varying", name: "s3_uri", unique: true })
-  s3URI: string;
+  @Column({ type: "character varying", name: "key_prefix", unique: true })
+  keyPrefix: string;
 
   @Column({ type: "timestamp with time zone", default: () => "NOW()" })
   version: Date;

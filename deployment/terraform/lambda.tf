@@ -41,17 +41,15 @@ data "aws_iam_policy_document" "api_inline" {
     resources = [aws_dsql_cluster.main.arn]
   }
 
-  # Read-only access to the region artifacts bucket. The legacy dev bucket
-  # (districtbuilder-dev-238046523378) that the current region_config rows
-  # point at has a bucket-wide public-read policy, so no IAM grant is needed
-  # for the Lambda to fetch from it. When that bucket is locked down we'll
-  # need to re-add a scoped IAM grant here.
+  # Read-only access to the region artifacts bucket. The bucket itself has a
+  # public-read policy today, so the IAM grant is belt-and-suspenders for when
+  # we eventually lock it down behind CloudFront OAC.
   statement {
     sid     = "S3ReadArtifacts"
     actions = ["s3:GetObject", "s3:ListBucket"]
     resources = [
-      aws_s3_bucket.region_artifacts.arn,
-      "${aws_s3_bucket.region_artifacts.arn}/*"
+      "arn:aws:s3:::${var.region_artifacts_bucket}",
+      "arn:aws:s3:::${var.region_artifacts_bucket}/*"
     ]
   }
 
@@ -109,9 +107,10 @@ resource "aws_lambda_function" "api" {
       DSQL_ENDPOINT = local.dsql_endpoint
       DSQL_USER     = "admin"
 
-      # Region artifacts bucket (consumed via S3_CACHE_DIRECTORY logic in
-      # src/server/src/common/functions.ts).
-      REGION_ARTIFACTS_BUCKET = aws_s3_bucket.region_artifacts.bucket
+      # Region artifacts bucket consumed by s3Options() in
+      # src/server/src/common/functions.ts. The keyPrefix from each
+      # RegionConfig row is appended to this bucket to form the full S3 key.
+      REGION_ARTIFACTS_BUCKET = var.region_artifacts_bucket
 
       # Destination bucket for client-uploaded project thumbnails. Presigned
       # PUT URLs are minted against this bucket in ProjectsController.

@@ -161,7 +161,7 @@ const MapTooltip = ({
           selectedGeounits &&
           (await getTotalSelectedDemographics(
             staticMetadata,
-            project.regionConfig.s3URI,
+            project.regionConfig.keyPrefix,
             selectedGeounits
           ));
         const demographics = staticCounts?.demographics;

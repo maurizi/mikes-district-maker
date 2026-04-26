@@ -17,7 +17,6 @@ import {
   type DistrictProperties,
   type GeoUnitHierarchy,
   type IStaticMetadata,
-  type S3URI,
   type ThumbnailGeoJSON
 } from "../../../shared/entities";
 import {
@@ -99,32 +98,38 @@ interface RegionData {
   readonly bbox: readonly [number, number, number, number];
 }
 
-function s3KeyParts(s3URI: S3URI, fileName: string): { Bucket: string; Key: string } {
-  const url = new URL(s3URI);
-  const prefix = url.pathname.replace(/^\//, "");
-  return { Bucket: url.hostname, Key: `${prefix}${fileName}` };
+function regionArtifactsBucket(): string {
+  const bucket = process.env.REGION_ARTIFACTS_BUCKET;
+  if (!bucket) {
+    throw new Error("REGION_ARTIFACTS_BUCKET env var must be set");
+  }
+  return bucket;
 }
 
-async function s3GetJson<T>(s3URI: S3URI, fileName: string): Promise<T> {
-  const res = await s3.send(new GetObjectCommand(s3KeyParts(s3URI, fileName)));
+async function s3GetJson<T>(keyPrefix: string, fileName: string): Promise<T> {
+  const res = await s3.send(
+    new GetObjectCommand({ Bucket: regionArtifactsBucket(), Key: `${keyPrefix}${fileName}` })
+  );
   const body = (await res.Body?.transformToString("utf-8")) ?? "";
   return JSON.parse(body) as T;
 }
 
-async function s3GetBytes(s3URI: S3URI, fileName: string): Promise<ArrayBuffer> {
-  const res = await s3.send(new GetObjectCommand(s3KeyParts(s3URI, fileName)));
+async function s3GetBytes(keyPrefix: string, fileName: string): Promise<ArrayBuffer> {
+  const res = await s3.send(
+    new GetObjectCommand({ Bucket: regionArtifactsBucket(), Key: `${keyPrefix}${fileName}` })
+  );
   const bytes = (await res.Body?.transformToByteArray()) ?? new Uint8Array();
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
 }
 
-async function loadRegionData(s3URI: S3URI): Promise<RegionData> {
+async function loadRegionData(keyPrefix: string): Promise<RegionData> {
   const [geoUnitHierarchy, adjBuf, offsetsBuf, coordsBuf, transform, metadata] = await Promise.all([
-    s3GetJson<GeoUnitHierarchy>(s3URI, "geounit-hierarchy.json"),
-    s3GetBytes(s3URI, "adjacency.bin"),
-    s3GetBytes(s3URI, "arc-offsets.bin"),
-    s3GetBytes(s3URI, "arc-coords.bin"),
-    s3GetJson<AdjacencyData["transform"]>(s3URI, "transform.json"),
-    s3GetJson<IStaticMetadata>(s3URI, "static-metadata.json")
+    s3GetJson<GeoUnitHierarchy>(keyPrefix, "geounit-hierarchy.json"),
+    s3GetBytes(keyPrefix, "adjacency.bin"),
+    s3GetBytes(keyPrefix, "arc-offsets.bin"),
+    s3GetBytes(keyPrefix, "arc-coords.bin"),
+    s3GetJson<AdjacencyData["transform"]>(keyPrefix, "transform.json"),
+    s3GetJson<IStaticMetadata>(keyPrefix, "static-metadata.json")
   ]);
   const adjacencyData: AdjacencyData = {
     adjacency: new Int32Array(adjBuf),
@@ -319,7 +324,7 @@ export default class RenderRegionBlanks extends Command {
           }
         }
         try {
-          const regionData = await loadRegionData(region.s3URI);
+          const regionData = await loadRegionData(region.keyPrefix);
           const thumbnail = buildBlankThumbnail(regionData);
           const pngBuffer = await renderPngInFreshPage(getBrowser, thumbnail, regionData.bbox);
           if (dryRun) {

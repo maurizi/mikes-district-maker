@@ -67,8 +67,7 @@ import {
   type DistrictsDefinition,
   type IProject,
   type IReferenceLayer,
-  type IStaticMetadata,
-  type S3URI
+  type IStaticMetadata
 } from "../../shared/entities";
 import { type ProjectState, initialProjectState } from "./project";
 import { resetProjectState } from "../actions/root";
@@ -109,21 +108,21 @@ import { showSubmitMapModal } from "../actions/projectModals";
 
 async function exportCsvViaWorker(
   staticMetadata: IStaticMetadata,
-  regionURI: S3URI,
+  keyPrefix: string,
   districtsDefinition: DistrictsDefinition,
   projectName: string
 ) {
-  const csvContent = await workerExportCsv(staticMetadata, regionURI, districtsDefinition);
+  const csvContent = await workerExportCsv(staticMetadata, keyPrefix, districtsDefinition);
   saveAs(new Blob([csvContent], { type: "text/csv;charset=utf-8" }), `${projectName}.csv`);
 }
 
 function runLocalMerge(
   staticMetadata: IStaticMetadata,
-  regionURI: S3URI,
+  keyPrefix: string,
   districtsDefinition: DistrictsDefinition,
   numberOfDistricts: number
 ) {
-  return () => mergeDistricts(staticMetadata, regionURI, districtsDefinition, numberOfDistricts);
+  return () => mergeDistricts(staticMetadata, keyPrefix, districtsDefinition, numberOfDistricts);
 }
 
 export function getFindCoords(findTool: FindTool, geojson?: DistrictsGeoJSON) {
@@ -255,7 +254,7 @@ const projectDataReducer = (
         Cmd.run(fetchAllStaticData, {
           successActionCreator: staticDataFetchSuccess,
           failActionCreator: staticDataFetchFailure,
-          args: [action.payload.project.regionConfig.s3URI] as Parameters<typeof fetchAllStaticData>
+          args: [action.payload.project.regionConfig.keyPrefix] as Parameters<typeof fetchAllStaticData>
         })
       );
     case getType(projectDataFetchFailure):
@@ -391,7 +390,7 @@ const projectDataReducer = (
           Cmd.run(
             runLocalMerge(
               action.payload.staticMetadata,
-              project.regionConfig.s3URI,
+              project.regionConfig.keyPrefix,
               project.districtsDefinition,
               project.numberOfDistricts
             ),
@@ -561,7 +560,7 @@ const projectDataReducer = (
           Cmd.run(
             runLocalMerge(
               state.staticData.resource.staticMetadata,
-              updatedProject.regionConfig.s3URI,
+              updatedProject.regionConfig.keyPrefix,
               updatedProject.districtsDefinition,
               updatedProject.numberOfDistricts
             ),
@@ -591,7 +590,7 @@ const projectDataReducer = (
               name: project.regionConfig.name,
               countryCode: project.regionConfig.countryCode,
               regionCode: project.regionConfig.regionCode,
-              s3URI: project.regionConfig.s3URI
+              keyPrefix: project.regionConfig.keyPrefix
             },
             chamber: project.chamber
           }
@@ -804,7 +803,7 @@ const projectDataReducer = (
             () =>
               exportCsvViaWorker(
                 csvStaticData.staticMetadata,
-                project.regionConfig.s3URI,
+                project.regionConfig.keyPrefix,
                 project.districtsDefinition,
                 project.name
               ),

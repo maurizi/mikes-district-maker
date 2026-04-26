@@ -65,9 +65,9 @@ resource "aws_s3_bucket" "thumbnails" {
 }
 
 resource "aws_s3_bucket_public_access_block" "thumbnails" {
-  bucket                  = aws_s3_bucket.thumbnails.id
-  block_public_acls       = true
-  ignore_public_acls      = true
+  bucket             = aws_s3_bucket.thumbnails.id
+  block_public_acls  = true
+  ignore_public_acls = true
   # Allow the public-read bucket policy below.
   block_public_policy     = false
   restrict_public_buckets = false
@@ -108,23 +108,9 @@ data "aws_iam_policy_document" "thumbnails_bucket" {
 }
 
 resource "aws_s3_bucket_policy" "thumbnails" {
-  bucket = aws_s3_bucket.thumbnails.id
-  policy = data.aws_iam_policy_document.thumbnails_bucket.json
+  bucket     = aws_s3_bucket.thumbnails.id
+  policy     = data.aws_iam_policy_document.thumbnails_bucket.json
   depends_on = [aws_s3_bucket_public_access_block.thumbnails]
 }
 
-# S3 bucket holding per-region TopoJSON and lookup artifacts. The server reads
-# these on demand and caches to /tmp. Populated locally via `manage` commands.
-resource "aws_s3_bucket" "region_artifacts" {
-  bucket        = "${var.project}-${var.environment}-region-artifacts"
-  force_destroy = !var.enable_production_safeguards
-}
-
-resource "aws_s3_bucket_public_access_block" "region_artifacts" {
-  bucket                  = aws_s3_bucket.region_artifacts.id
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
 

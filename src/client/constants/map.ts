@@ -9,8 +9,10 @@ import { noLabels, labels } from "protomaps-themes-base";
 const protocol = new Protocol();
 maplibregl.addProtocol("pmtiles", protocol.tile);
 
-// Self-hosted Protomaps basemap tiles on S3
-const PMTILES_URL = "https://districtbuilder-dev-238046523378.s3.amazonaws.com/basemap/us.pmtiles";
+// Self-hosted Protomaps basemap tiles served same-origin: CloudFront in prod
+// fronts the S3 object at /basemap/us.pmtiles; the Vite dev server proxies
+// the same path at localhost:3003.
+const PMTILES_URL = `${window.location.origin}/basemap/us.pmtiles`;
 
 const SPRITE_BASE = "https://protomaps.github.io/basemaps-assets/sprites/v4";
 

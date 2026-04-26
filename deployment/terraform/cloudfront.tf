@@ -81,6 +81,19 @@ resource "aws_cloudfront_distribution" "main" {
     }
   }
 
+  # Region artifacts bucket — per-region static data + basemap PMTiles. The
+  # bucket is public-read today, so CloudFront fetches anonymously over HTTPS.
+  origin {
+    origin_id   = "s3-region-artifacts"
+    domain_name = "${var.region_artifacts_bucket}.s3.${var.aws_region}.amazonaws.com"
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
   # Default: S3 static assets. Long-cache the fingerprinted Vite output.
   default_cache_behavior {
     target_origin_id       = "s3-static"
@@ -160,6 +173,38 @@ resource "aws_cloudfront_distribution" "main" {
       event_type   = "viewer-request"
       function_arn = aws_cloudfront_function.thumbnails_rewrite.arn
     }
+  }
+
+  # *.pmtiles → range-request archives (the /basemap/us.pmtiles basemap and
+  # the per-region /regions/.../tiles.pmtiles vector tiles). compress=false:
+  # PMTiles is internally compressed and accessed by byte offset, so gzipping
+  # the whole archive at the edge would corrupt range-offset math. Listed
+  # first so it wins over /regions/* for tiles.pmtiles fetches.
+  ordered_cache_behavior {
+    path_pattern           = "*.pmtiles"
+    target_origin_id       = "s3-region-artifacts"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+    cached_methods         = ["GET", "HEAD", "OPTIONS"]
+    compress               = false
+    cache_policy_id        = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+  }
+
+  # /regions/* → per-region static artifacts (TopoJSON, hierarchy, demographic
+  # typed arrays, etc.). Long-TTL cache; published prefixes are immutable and
+  # versioned by ISO timestamp, so identical URLs always return identical
+  # bytes. compress=true gzips JSON + .bin payloads at the edge — the browser
+  # decompresses arraybuffer responses transparently. PMTiles paths under
+  # /regions/.../tiles.pmtiles are picked off by the *.pmtiles behavior above
+  # before reaching this one.
+  ordered_cache_behavior {
+    path_pattern           = "/regions/*"
+    target_origin_id       = "s3-region-artifacts"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+    cached_methods         = ["GET", "HEAD", "OPTIONS"]
+    compress               = true
+    cache_policy_id        = "658327ea-f89d-4fab-a63d-7e88639e58f6"
   }
 
   viewer_certificate {

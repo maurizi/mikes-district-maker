@@ -325,8 +325,8 @@ export class ProjectsController implements CrudController<Project> {
     regionConfig: RegionConfig
   ): Promise<{ staticMetadata: IStaticMetadata; hierarchy: GeoUnitHierarchy }> {
     const [staticMetadata, hierarchy] = await Promise.all([
-      fetchCachedJson<IStaticMetadata>(this.s3, regionConfig.s3URI, "static-metadata.json"),
-      fetchCachedJson<GeoUnitHierarchy>(this.s3, regionConfig.s3URI, "geounit-hierarchy.json")
+      fetchCachedJson<IStaticMetadata>(this.s3, regionConfig.keyPrefix, "static-metadata.json"),
+      fetchCachedJson<GeoUnitHierarchy>(this.s3, regionConfig.keyPrefix, "geounit-hierarchy.json")
     ]);
     return { staticMetadata, hierarchy };
   }
@@ -377,9 +377,9 @@ export class ProjectsController implements CrudController<Project> {
     const regionConfig = project.regionConfig;
 
     const [blockIds, hierarchy, metadata] = await Promise.all([
-      fetchCachedJson<string[]>(this.s3, regionConfig.s3URI, "block-ids.json"),
-      fetchCachedJson<GeoUnitHierarchy>(this.s3, regionConfig.s3URI, "geounit-hierarchy.json"),
-      fetchCachedJson<IStaticMetadata>(this.s3, regionConfig.s3URI, "static-metadata.json")
+      fetchCachedJson<string[]>(this.s3, regionConfig.keyPrefix, "block-ids.json"),
+      fetchCachedJson<GeoUnitHierarchy>(this.s3, regionConfig.keyPrefix, "geounit-hierarchy.json"),
+      fetchCachedJson<IStaticMetadata>(this.s3, regionConfig.keyPrefix, "static-metadata.json")
     ]);
     const baseGeoLevel = metadata.geoLevelHierarchy[0].id;
 

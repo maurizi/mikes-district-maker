@@ -9,23 +9,23 @@ import { Project } from "../../../server/src/projects/entities/project.entity";
 import { Chamber } from "../../../server/src/chambers/entities/chamber.entity";
 import { ProjectTemplate } from "../../../server/src/project-templates/entities/project-template.entity";
 import { RegionConfig } from "../../../server/src/region-configs/entities/region-config.entity";
-import {
-  type DistrictsDefinition,
-  type GeoUnitHierarchy,
-  type S3URI
-} from "../../../shared/entities";
+import { type DistrictsDefinition, type GeoUnitHierarchy } from "../../../shared/entities";
 import { buildSplitBlockMap } from "../../../shared/csv-import";
 
 const s3 = new S3Client({});
 
-function s3KeyParts(s3URI: S3URI, fileName: string): { Bucket: string; Key: string } {
-  const url = new URL(s3URI);
-  const prefix = url.pathname.replace(/^\//, "");
-  return { Bucket: url.hostname, Key: `${prefix}${fileName}` };
+function regionArtifactsBucket(): string {
+  const bucket = process.env.REGION_ARTIFACTS_BUCKET;
+  if (!bucket) {
+    throw new Error("REGION_ARTIFACTS_BUCKET env var must be set");
+  }
+  return bucket;
 }
 
-async function s3GetJson<T>(s3URI: S3URI, fileName: string): Promise<T> {
-  const res = await s3.send(new GetObjectCommand(s3KeyParts(s3URI, fileName)));
+async function s3GetJson<T>(keyPrefix: string, fileName: string): Promise<T> {
+  const res = await s3.send(
+    new GetObjectCommand({ Bucket: regionArtifactsBucket(), Key: `${keyPrefix}${fileName}` })
+  );
   const body = (await res.Body?.transformToString("utf-8")) ?? "";
   return JSON.parse(body) as T;
 }
@@ -50,15 +50,15 @@ export interface RegionArtifacts {
   readonly numBlocks: number;
 }
 
-async function loadArtifacts(s3URI: S3URI): Promise<RegionArtifacts> {
+async function loadArtifacts(keyPrefix: string): Promise<RegionArtifacts> {
   const [hierarchy, blockIds] = await Promise.all([
-    s3GetJson<GeoUnitHierarchy>(s3URI, "geounit-hierarchy.json"),
-    s3GetJson<string[]>(s3URI, "block-ids.json")
+    s3GetJson<GeoUnitHierarchy>(keyPrefix, "geounit-hierarchy.json"),
+    s3GetJson<string[]>(keyPrefix, "block-ids.json")
   ]);
   const numBlocks = countLeaves(hierarchy);
   if (numBlocks !== blockIds.length) {
     throw new Error(
-      `Hierarchy leaf count (${numBlocks}) does not match block-ids length (${blockIds.length}) for ${s3URI}`
+      `Hierarchy leaf count (${numBlocks}) does not match block-ids length (${blockIds.length}) for ${keyPrefix}`
     );
   }
   return { hierarchy, blockIds, numBlocks };
@@ -298,20 +298,24 @@ export default class RetireRegion extends Command {
             matches
               .map(
                 r =>
-                  `  - id=${r.id} archived=${r.archived} version=${r.version.toISOString()} s3URI=${r.s3URI}`
+                  `  - id=${r.id} archived=${r.archived} version=${r.version.toISOString()} keyPrefix=${r.keyPrefix}`
               )
               .join("\n")
         );
       }
       const source = archived[0];
       const target = active[0];
-      this.log(`source: ${source.id} (${source.s3URI}, version=${source.version.toISOString()})`);
-      this.log(`target: ${target.id} (${target.s3URI}, version=${target.version.toISOString()})`);
+      this.log(
+        `source: ${source.id} (${source.keyPrefix}, version=${source.version.toISOString()})`
+      );
+      this.log(
+        `target: ${target.id} (${target.keyPrefix}, version=${target.version.toISOString()})`
+      );
 
       this.log("Loading region artifacts from S3");
       const [oldRegion, newRegion] = await Promise.all([
-        loadArtifacts(source.s3URI),
-        loadArtifacts(target.s3URI)
+        loadArtifacts(source.keyPrefix),
+        loadArtifacts(target.keyPrefix)
       ]);
       this.log(`  source: ${oldRegion.numBlocks} blocks`);
       this.log(`  target: ${newRegion.numBlocks} blocks`);

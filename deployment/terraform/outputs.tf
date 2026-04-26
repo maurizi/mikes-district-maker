@@ -22,8 +22,8 @@ output "static_bucket" {
 }
 
 output "region_artifacts_bucket" {
-  description = "S3 bucket for per-region topojson artifacts."
-  value       = aws_s3_bucket.region_artifacts.bucket
+  description = "S3 bucket for per-region topojson artifacts and basemap PMTiles."
+  value       = var.region_artifacts_bucket
 }
 
 output "thumbnails_bucket" {

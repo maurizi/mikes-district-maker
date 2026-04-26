@@ -15,7 +15,6 @@ import {
   type GeoUnitHierarchy,
   type IStaticFile,
   type IStaticMetadata,
-  type S3URI,
   type ThumbnailGeoJSON,
   type TypedArrays
 } from "../../../shared/entities";
@@ -536,12 +535,12 @@ interface RegionData {
 // Mirror of src/client/s3.ts fetchStaticFiles — pick the right TypedArray
 // based on bytesPerElement + unsigned.
 async function fetchStaticTypedArrays(
-  s3URI: S3URI,
+  keyPrefix: string,
   files: readonly IStaticFile[]
 ): Promise<TypedArrays> {
   return Promise.all(
     files.map(async file => {
-      const buf = await s3GetBytes(s3URI, file.fileName);
+      const buf = await s3GetBytes(keyPrefix, file.fileName);
       const unsigned = file.unsigned ?? true;
       const bpe = file.bytesPerElement;
       if (unsigned) {
@@ -556,34 +555,40 @@ async function fetchStaticTypedArrays(
   );
 }
 
-function s3KeyParts(s3URI: S3URI, fileName: string): { Bucket: string; Key: string } {
-  const url = new URL(s3URI);
-  const prefix = url.pathname.replace(/^\//, "");
-  return { Bucket: url.hostname, Key: `${prefix}${fileName}` };
+function regionArtifactsBucket(): string {
+  const bucket = process.env.REGION_ARTIFACTS_BUCKET;
+  if (!bucket) {
+    throw new Error("REGION_ARTIFACTS_BUCKET env var must be set");
+  }
+  return bucket;
 }
 
-async function s3GetJson<T>(s3URI: S3URI, fileName: string): Promise<T> {
-  const res = await s3.send(new GetObjectCommand(s3KeyParts(s3URI, fileName)));
+async function s3GetJson<T>(keyPrefix: string, fileName: string): Promise<T> {
+  const res = await s3.send(
+    new GetObjectCommand({ Bucket: regionArtifactsBucket(), Key: `${keyPrefix}${fileName}` })
+  );
   const body = (await res.Body?.transformToString("utf-8")) ?? "";
   return JSON.parse(body) as T;
 }
 
-async function s3GetBytes(s3URI: S3URI, fileName: string): Promise<ArrayBuffer> {
-  const res = await s3.send(new GetObjectCommand(s3KeyParts(s3URI, fileName)));
+async function s3GetBytes(keyPrefix: string, fileName: string): Promise<ArrayBuffer> {
+  const res = await s3.send(
+    new GetObjectCommand({ Bucket: regionArtifactsBucket(), Key: `${keyPrefix}${fileName}` })
+  );
   const bytes = (await res.Body?.transformToByteArray()) ?? new Uint8Array();
   // Slice to the exact bounds — Node Buffers may share an oversized backing
   // ArrayBuffer, which would corrupt typed-array views built from .buffer.
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
 }
 
-async function loadRegionData(s3URI: S3URI): Promise<RegionData> {
+async function loadRegionData(keyPrefix: string): Promise<RegionData> {
   const [geoUnitHierarchy, adjBuf, offsetsBuf, coordsBuf, transform, metadata] = await Promise.all([
-    s3GetJson<GeoUnitHierarchy>(s3URI, "geounit-hierarchy.json"),
-    s3GetBytes(s3URI, "adjacency.bin"),
-    s3GetBytes(s3URI, "arc-offsets.bin"),
-    s3GetBytes(s3URI, "arc-coords.bin"),
-    s3GetJson<AdjacencyData["transform"]>(s3URI, "transform.json"),
-    s3GetJson<IStaticMetadata>(s3URI, "static-metadata.json")
+    s3GetJson<GeoUnitHierarchy>(keyPrefix, "geounit-hierarchy.json"),
+    s3GetBytes(keyPrefix, "adjacency.bin"),
+    s3GetBytes(keyPrefix, "arc-offsets.bin"),
+    s3GetBytes(keyPrefix, "arc-coords.bin"),
+    s3GetJson<AdjacencyData["transform"]>(keyPrefix, "transform.json"),
+    s3GetJson<IStaticMetadata>(keyPrefix, "static-metadata.json")
   ]);
   const adjacencyData: AdjacencyData = {
     adjacency: new Int32Array(adjBuf),
@@ -606,7 +611,9 @@ async function loadRegionData(s3URI: S3URI): Promise<RegionData> {
   // partisan breakdown in districtProperties that the OG card description
   // reads — skipping this would mean backfilled projects fall back to the
   // generic "N districts" copy until the user re-saves through the editor.
-  const staticVoting = metadata.voting ? await fetchStaticTypedArrays(s3URI, metadata.voting) : [];
+  const staticVoting = metadata.voting
+    ? await fetchStaticTypedArrays(keyPrefix, metadata.voting)
+    : [];
   return {
     geoUnitHierarchy,
     numBlocks,
@@ -827,7 +834,7 @@ export default class BackfillThumbnails extends Command {
 
         let region: RegionData;
         try {
-          region = await loadRegionData(regionConfig.s3URI);
+          region = await loadRegionData(regionConfig.keyPrefix);
         } catch (e) {
           this.log(`  failed to load region data: ${e}`);
           failed += regionProjects.length;

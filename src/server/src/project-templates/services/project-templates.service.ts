@@ -29,7 +29,7 @@ export type ProjectExportRow = {
   readonly updatedDt: Date;
   readonly templateName: string;
   readonly regionName: string;
-  readonly regionS3URI: string;
+  readonly regionKeyPrefix: string;
   readonly chamberName?: string;
   readonly districtProperties: readonly DistrictProperties[];
   readonly submittedDt: Date | null;
@@ -75,7 +75,7 @@ export class ProjectTemplatesService extends TypeOrmCrudService<ProjectTemplate>
       .addSelect("projects.planscoreUrl", "planscoreUrl")
       .addSelect("projectTemplate.name", "templateName")
       .addSelect("regionConfig.name", "regionName")
-      .addSelect("regionConfig.s3URI", "regionS3URI")
+      .addSelect("regionConfig.keyPrefix", "regionKeyPrefix")
       .addSelect("chamber.name", "chamberName")
       .addSelect("projects.district_properties", "districtProperties")
       .orderBy("projects.name");

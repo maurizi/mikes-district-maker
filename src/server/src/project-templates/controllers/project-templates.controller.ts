@@ -158,16 +158,16 @@ export class ProjectTemplatesController {
       );
     }
     const projectRows = await this.service.findAdminOrgProjectsWithDistrictProperties(slug);
-    const regionURIs = new Set(projectRows.map(row => row.regionS3URI));
+    const regionKeyPrefixes = new Set(projectRows.map(row => row.regionKeyPrefix));
 
     // Fetch static metadata per region from S3 (no topology needed)
-    const mutableMetadataMap: { [s3uri: string]: IStaticMetadata } = {};
+    const mutableMetadataMap: { [keyPrefix: string]: IStaticMetadata } = {};
     await Promise.all(
-      Array.from(regionURIs).map(async uri => {
+      Array.from(regionKeyPrefixes).map(async keyPrefix => {
         try {
-          mutableMetadataMap[uri] = await fetchCachedJson<IStaticMetadata>(
+          mutableMetadataMap[keyPrefix] = await fetchCachedJson<IStaticMetadata>(
             s3,
-            uri,
+            keyPrefix,
             "static-metadata.json"
           );
         } catch {
@@ -198,7 +198,7 @@ export class ProjectTemplatesController {
 
     const rows = projectRows.flatMap(row =>
       row.districtProperties.map((districtProps, idx) => {
-        if (!mutableMetadataMap[row.regionS3URI]) {
+        if (!mutableMetadataMap[row.regionKeyPrefix]) {
           throw new InternalServerErrorException();
         }
 

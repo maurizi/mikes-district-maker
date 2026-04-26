@@ -24,7 +24,7 @@ describe("ProjectsController", () => {
     name: "Delaware",
     regionCode: "DE",
     countryCode: "US",
-    s3URI: "s3://global-districtbuilder-dev-us-east-1/regions/US/DE/2020-09-09T19:50:10.921Z/",
+    keyPrefix: "regions/US/DE/2020-09-09T19:50:10.921Z/",
     archived: true,
     hidden: false,
     version: new Date("2020-09-09T19:50:10.921Z")

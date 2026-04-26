@@ -19,6 +19,10 @@ jest.mock("../lib/dbUtils", () => {
   };
 });
 
+// s3Options() reads the bucket from this env var; the actual S3 fetch is
+// mocked below so the value just needs to be set, not real.
+process.env.REGION_ARTIFACTS_BUCKET = "test-region-artifacts";
+
 // Mock S3 to return a simple hierarchy
 const mockHierarchy = JSON.stringify([0, 1, 2]);
 jest.mock("../../../server/src/common/functions", () => {
@@ -85,12 +89,13 @@ describe("Create random projects", () => {
     dbBackup = testDb.backup();
   });
 
-  function addRegion(s3URI: string) {
+  function addRegion(keyPrefix: string) {
+    const regionCode = keyPrefix.split("/")[2];
     return regionConfigRepo.save({
       id: v4(),
-      s3URI,
-      name: s3URI.substring(53, 55),
-      regionCode: s3URI.substring(53, 55),
+      keyPrefix,
+      name: regionCode,
+      regionCode,
       countryCode: "US",
       archived: false,
       version: new Date("2020-09-09T19:50:10.921Z")
@@ -116,9 +121,7 @@ describe("Create random projects", () => {
 
   it("should create a project", async () => {
     expect.assertions(2);
-    await addRegion(
-      "s3://global-districtbuilder-dev-us-east-1/regions/US/DE/2020-09-09T19:50:10.921Z/"
-    );
+    await addRegion("regions/US/DE/2020-09-09T19:50:10.921Z/");
     try {
       await CreateRandomProjects.run(["1"]);
     } catch (err: any) {

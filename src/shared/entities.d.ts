@@ -113,7 +113,7 @@ export interface ProjectProperties {
   readonly creator: Pick<IUser, "id" | "name">;
   readonly regionConfig: Pick<
     IRegionConfig,
-    "id" | "name" | "countryCode" | "regionCode" | "s3URI"
+    "id" | "name" | "countryCode" | "regionCode" | "keyPrefix"
   >;
   readonly chamber?: IChamber;
 }
@@ -186,7 +186,6 @@ export type JWTPayload = IUser & {
 
 export type RegionConfigId = string;
 
-export type S3URI = string;
 export type HttpsURI = string;
 export type RegionCode = string;
 
@@ -196,7 +195,7 @@ export interface IRegionConfig {
   readonly countryCode: string;
   readonly regionCode: RegionCode;
   readonly chambers: readonly IChamber[];
-  readonly s3URI: S3URI;
+  readonly keyPrefix: string;
   readonly version: Date;
   readonly hidden: boolean;
   readonly archived: boolean;

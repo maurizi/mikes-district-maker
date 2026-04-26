@@ -160,8 +160,8 @@ export default class ImportBefs extends Command {
       if (!blockIdsCache.has(regionConfig.id)) {
         try {
           const [blockIds, hierarchy] = await Promise.all([
-            fetchCachedJson<string[]>(s3, regionConfig.s3URI, "block-ids.json"),
-            fetchCachedJson<GeoUnitHierarchy>(s3, regionConfig.s3URI, "geounit-hierarchy.json")
+            fetchCachedJson<string[]>(s3, regionConfig.keyPrefix, "block-ids.json"),
+            fetchCachedJson<GeoUnitHierarchy>(s3, regionConfig.keyPrefix, "geounit-hierarchy.json")
           ]);
           blockIdsCache.set(regionConfig.id, blockIds);
           hierarchyCache.set(regionConfig.id, hierarchy);

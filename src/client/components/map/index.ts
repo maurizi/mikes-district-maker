@@ -5,7 +5,6 @@ import { type MapGeoJSONFeature } from "maplibre-gl";
 import type maplibregl from "maplibre-gl";
 import { convertFilter } from "@maplibre/maplibre-gl-style-spec";
 import { cloneDeep } from "lodash";
-import { s3ToHttps } from "../../s3";
 import {
   type GeoUnitCollection,
   type DistrictId,
@@ -235,7 +234,7 @@ export function generateMapLayers(
   // so overzoom works naturally and boundaries stay perfectly aligned.
   map.addSource(GEOLEVELS_SOURCE_ID, {
     type: "vector",
-    url: `pmtiles://${s3ToHttps(path)}tiles.pmtiles`,
+    url: `pmtiles://${window.location.origin}/${path}tiles.pmtiles`,
     minzoom: minZoom,
     maxzoom: maxZoom
   });

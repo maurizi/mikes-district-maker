@@ -75,7 +75,7 @@ export class ProjectsService extends TypeOrmCrudService<Project> {
         "regionConfig.name",
         "regionConfig.id",
         "regionConfig.archived",
-        "regionConfig.s3URI",
+        "regionConfig.keyPrefix",
         "user.id",
         "user.name"
       ])

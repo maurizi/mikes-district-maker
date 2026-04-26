@@ -36,6 +36,21 @@ export default defineConfig({
           "https://districtbuilder-production-thumbnails.s3.us-east-1.amazonaws.com",
         changeOrigin: true,
         rewrite: path => path.replace(/^\/thumbnails/, "")
+      },
+      // Per-region static artifacts (TopoJSON, hierarchy, demographic typed
+      // arrays, etc.) and the basemap PMTiles. In prod CloudFront fronts
+      // these at the same origin; in dev we proxy directly to S3.
+      "/regions": {
+        target:
+          process.env.REGION_ARTIFACTS_ORIGIN ||
+          "https://districtbuilder-dev-238046523378.s3.amazonaws.com",
+        changeOrigin: true
+      },
+      "/basemap": {
+        target:
+          process.env.REGION_ARTIFACTS_ORIGIN ||
+          "https://districtbuilder-dev-238046523378.s3.amazonaws.com",
+        changeOrigin: true
       }
     }
   },

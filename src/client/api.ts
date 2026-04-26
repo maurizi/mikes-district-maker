@@ -22,7 +22,6 @@ import {
   type UserId,
   type ProjectNest,
   type DistrictsImportApiResponse,
-  type S3URI,
   type IReferenceLayer,
   type ReferenceLayerId,
   type CreateReferenceLayerData,
@@ -325,7 +324,10 @@ export async function convertGeoJsonToShapefile(
   saveAs(blob, `${projectName}.zip`);
 }
 
-export async function importCsv(file: Blob, regionURI: S3URI): Promise<DistrictsImportApiResponse> {
+export async function importCsv(
+  file: Blob,
+  keyPrefix: string
+): Promise<DistrictsImportApiResponse> {
   // CSV parsing + validation runs entirely in the client worker. Previously
   // POSTed to /api/districts/import/csv on the server, but block-level CSVs
   // for large states (TX ~13MB) exceeded Lambda's 6 MB sync-invoke ceiling.
@@ -334,7 +336,7 @@ export async function importCsv(file: Blob, regionURI: S3URI): Promise<Districts
   // endpoint. See ADR-06 "Shapefile export runs in the browser now" for the
   // same pattern applied in the opposite direction.
   const csvText = await file.text();
-  return workerImportCsv(regionURI, csvText);
+  return workerImportCsv(keyPrefix, csvText);
 }
 
 export async function createReferenceLayer(
@@ -440,7 +442,7 @@ export async function fetchOrganizationFeaturedProjects(
 
 export const fetchMemoizedStateBbox = memoize(
   async (region: IRegionConfig): Promise<IStaticMetadata["bbox"]> => {
-    const staticMetadata = await fetchStaticMetadata(region.s3URI);
+    const staticMetadata = await fetchStaticMetadata(region.keyPrefix);
     return staticMetadata.bbox;
   },
   {
@@ -608,6 +610,6 @@ export async function removeUserFromOrganization(
 
 // Retrieves total population for the region from static metadata
 export async function fetchTotalPopulation(region: IRegionConfig) {
-  const staticMetadata = await fetchStaticMetadata(region.s3URI);
+  const staticMetadata = await fetchStaticMetadata(region.keyPrefix);
   return staticMetadata.totalPopulation;
 }

@@ -423,7 +423,7 @@ const ImportProjectScreen = ({ organization, regionConfigs, user }: StateProps) 
         const importNumber = importNumberRef.current;
         setImportResource({ data: regionConfig, isPending: true });
         // templateData.regionConfig is only a {id} reference — resolve it
-        // against the full regionConfigs list so we can read the s3URI.
+        // against the full regionConfigs list so we can read the keyPrefix.
         const chosenRegionId = templateData?.regionConfig.id || regionConfig?.id;
         const chosenRegion = chosenRegionId
           ? regionConfigs.resource.find(r => r.id === chosenRegionId) || null
@@ -432,7 +432,7 @@ const ImportProjectScreen = ({ organization, regionConfigs, user }: StateProps) 
           setImportResource({ data: null });
           return;
         }
-        const importResponse = await importCsv(file, chosenRegion.s3URI);
+        const importResponse = await importCsv(file, chosenRegion.keyPrefix);
 
         // Don't set the districtsDefinition if upload was cancelled while we were fetching it
         if (importNumberRef.current === importNumber) {
@@ -569,11 +569,11 @@ const ImportProjectScreen = ({ organization, regionConfigs, user }: StateProps) 
                   readonly data: Pick<CreateProjectData, "districtProperties">;
                 }> =
                   regionForThumbnail && definitionForThumbnail && numberOfDistricts
-                    ? fetchStaticMetadata(regionForThumbnail.s3URI)
+                    ? fetchStaticMetadata(regionForThumbnail.keyPrefix)
                         .then(async staticMetadata => {
                           const { thumbnail } = await mergeDistricts(
                             staticMetadata,
-                            regionForThumbnail.s3URI,
+                            regionForThumbnail.keyPrefix,
                             definitionForThumbnail,
                             numberOfDistricts
                           );

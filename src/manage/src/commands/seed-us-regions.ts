@@ -106,7 +106,7 @@ export default class SeedUsRegions extends Command {
     interface Discovered {
       regionCode: string;
       name: string;
-      s3URI: string;
+      keyPrefix: string;
       version: Date;
     }
     const discovered: Discovered[] = [];
@@ -147,7 +147,7 @@ export default class SeedUsRegions extends Command {
       discovered.push({
         regionCode,
         name,
-        s3URI: `s3://${flags.bucket}/${latest.prefix}`,
+        keyPrefix: latest.prefix,
         version: latest.date
       });
     }
@@ -177,10 +177,10 @@ export default class SeedUsRegions extends Command {
       rc.name = d.name;
       rc.countryCode = flags.countryCode;
       rc.regionCode = d.regionCode;
-      rc.s3URI = d.s3URI;
+      rc.keyPrefix = d.keyPrefix;
       rc.version = d.version;
       await repo.save(rc);
-      this.log(`  inserted ${d.regionCode} → ${d.s3URI}`);
+      this.log(`  inserted ${d.regionCode} → ${d.keyPrefix}`);
       inserted++;
     }
 

@@ -6,15 +6,14 @@ import { existsSync } from "fs";
 import { mkdir, readFile, writeFile } from "fs/promises";
 import { join } from "path";
 
-import { type S3URI } from "../../../shared/entities";
-
 const CACHE_DIR = process.env.S3_CACHE_DIRECTORY || "/tmp/s3-cache";
 
-export function s3Options(path: S3URI, fileName: string): GetObjectCommandInput {
-  const url = new URL(path);
-  const pathWithoutLeadingSlash = url.pathname.substring(1);
-  const options = { Bucket: url.hostname, Key: `${pathWithoutLeadingSlash}${fileName}` };
-  return options;
+export function s3Options(keyPrefix: string, fileName: string): GetObjectCommandInput {
+  const Bucket = process.env.REGION_ARTIFACTS_BUCKET;
+  if (!Bucket) {
+    throw new Error("REGION_ARTIFACTS_BUCKET env var must be set");
+  }
+  return { Bucket, Key: `${keyPrefix}${fileName}` };
 }
 
 export async function getObject(s3: S3Client, params: GetObjectCommandInput) {
@@ -26,10 +25,12 @@ export async function getObject(s3: S3Client, params: GetObjectCommandInput) {
  * Fetch a file from S3, caching to disk on first access.
  * Returns the file contents as a string.
  */
-export async function fetchCached(s3: S3Client, s3URI: S3URI, fileName: string): Promise<string> {
-  // Derive a cache path from the S3 URI
-  const url = new URL(s3URI);
-  const cacheKey = url.pathname.substring(1).replace(/\//g, "_");
+export async function fetchCached(
+  s3: S3Client,
+  keyPrefix: string,
+  fileName: string
+): Promise<string> {
+  const cacheKey = keyPrefix.replace(/\//g, "_");
   const cacheDir = join(CACHE_DIR, cacheKey);
   const cachePath = join(cacheDir, fileName);
 
@@ -37,7 +38,7 @@ export async function fetchCached(s3: S3Client, s3URI: S3URI, fileName: string):
     return readFile(cachePath, { encoding: "utf-8" });
   }
 
-  const params = s3Options(s3URI, fileName);
+  const params = s3Options(keyPrefix, fileName);
   const response = await s3.send(new GetObjectCommand(params));
   const body = (await response.Body?.transformToString("utf-8")) ?? "";
 
@@ -52,8 +53,12 @@ export async function fetchCached(s3: S3Client, s3URI: S3URI, fileName: string):
 /**
  * Fetch and parse a JSON file from S3 with disk caching.
  */
-export async function fetchCachedJson<T>(s3: S3Client, s3URI: S3URI, fileName: string): Promise<T> {
-  const body = await fetchCached(s3, s3URI, fileName);
+export async function fetchCachedJson<T>(
+  s3: S3Client,
+  keyPrefix: string,
+  fileName: string
+): Promise<T> {
+  const body = await fetchCached(s3, keyPrefix, fileName);
   return JSON.parse(body) as T;
 }
 

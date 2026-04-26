@@ -65,7 +65,7 @@ export class RegionConfigsController implements CrudController<RegionConfig> {
     } catch (error) {
       if (error instanceof QueryFailedError) {
         throw new BadRequestException(
-          "The following fields are required: name, countryCode, regionCode, s3URI. s3URI must be unique"
+          "The following fields are required: name, countryCode, regionCode, keyPrefix. keyPrefix must be unique"
         );
       } else {
         this.logger.error(`Error creating region config: ${error}`);

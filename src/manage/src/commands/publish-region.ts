@@ -112,7 +112,7 @@ export default class PublishRegion extends Command {
     regionConfig.name = regionName;
     regionConfig.countryCode = args.countryCode;
     regionConfig.regionCode = args.regionCode;
-    regionConfig.s3URI = `s3://${flags.bucketName}/${keyPrefix}/`;
+    regionConfig.keyPrefix = `${keyPrefix}/`;
     regionConfig.version = versionDt;
 
     // Archive the prior active row first, then insert the new one. Order
@@ -123,7 +123,7 @@ export default class PublishRegion extends Command {
       existingActive.archived = true;
       // @ts-ignore
       await repo.save(existingActive);
-      this.log(`Archived prior RegionConfig ${existingActive.id} (${existingActive.s3URI})`);
+      this.log(`Archived prior RegionConfig ${existingActive.id} (${existingActive.keyPrefix})`);
     }
     // @ts-ignore
     await repo.save(regionConfig);

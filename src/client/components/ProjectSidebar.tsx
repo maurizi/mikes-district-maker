@@ -893,7 +893,7 @@ const SidebarRows = ({
       // Aggregated demographics for the geounit selection
       const selectedTotals = await getTotalSelectedDemographics(
         staticMetadata,
-        project.regionConfig.s3URI,
+        project.regionConfig.keyPrefix,
         combinedSelection
       );
       // The demographic composition of the selection for each saved district

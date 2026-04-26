@@ -16,7 +16,6 @@ import {
   type IProject,
   type IStaticMetadata,
   type NestedArray,
-  type S3URI,
   type ThumbnailGeoJSON
 } from "../shared/entities";
 import { FIPS, MAX_IMPORT_ERRORS } from "../shared/constants";
@@ -49,12 +48,12 @@ import {
 } from "../shared/boundary";
 
 interface RegionData {
-  readonly uri: S3URI;
+  readonly uri: string;
   readonly data: Promise<WorkerProjectData>;
 }
 
 interface CachedAdjacency {
-  readonly uri: S3URI;
+  readonly uri: string;
   readonly data: Promise<AdjacencyData>;
   reverseIndex?: ReverseIndex;
   numBlocks?: number;
@@ -64,31 +63,31 @@ let regionData: RegionData | undefined;
 
 let cachedAdjacency: CachedAdjacency | undefined;
 
-function fetchRegionData(regionURI: S3URI, staticMetadata: IStaticMetadata): RegionData {
-  if (!regionData || regionData.uri !== regionURI) {
+function fetchRegionData(keyPrefix: string, staticMetadata: IStaticMetadata): RegionData {
+  if (!regionData || regionData.uri !== keyPrefix) {
     regionData = {
-      uri: regionURI,
-      data: fetchWorkerStaticData(regionURI, staticMetadata)
+      uri: keyPrefix,
+      data: fetchWorkerStaticData(keyPrefix, staticMetadata)
     };
   }
   return regionData;
 }
 
-function getAdjacencyData(regionURI: S3URI): CachedAdjacency {
-  if (!cachedAdjacency || cachedAdjacency.uri !== regionURI) {
+function getAdjacencyData(keyPrefix: string): CachedAdjacency {
+  if (!cachedAdjacency || cachedAdjacency.uri !== keyPrefix) {
     cachedAdjacency = {
-      uri: regionURI,
-      data: fetchAdjacencyData(regionURI)
+      uri: keyPrefix,
+      data: fetchAdjacencyData(keyPrefix)
     };
   }
   return cachedAdjacency;
 }
 
 async function getAdjacencyWithIndex(
-  regionURI: S3URI,
+  keyPrefix: string,
   numBlocks: number
 ): Promise<{ adjacencyData: AdjacencyData; reverseIndex: ReverseIndex }> {
-  const cached = getAdjacencyData(regionURI);
+  const cached = getAdjacencyData(keyPrefix);
   const adjacencyData = await cached.data;
   if (!cached.reverseIndex || cached.numBlocks !== numBlocks) {
     cached.reverseIndex = buildReverseIndex(adjacencyData.adjacency, numBlocks);
@@ -97,11 +96,11 @@ async function getAdjacencyWithIndex(
   return { adjacencyData, reverseIndex: cached.reverseIndex };
 }
 
-let cachedBlockIds: { uri: S3URI; data: Promise<readonly string[]> } | undefined;
+let cachedBlockIds: { uri: string; data: Promise<readonly string[]> } | undefined;
 
-function getBlockIds(regionURI: S3URI): Promise<readonly string[]> {
-  if (!cachedBlockIds || cachedBlockIds.uri !== regionURI) {
-    cachedBlockIds = { uri: regionURI, data: fetchBlockIds(regionURI) };
+function getBlockIds(keyPrefix: string): Promise<readonly string[]> {
+  if (!cachedBlockIds || cachedBlockIds.uri !== keyPrefix) {
+    cachedBlockIds = { uri: keyPrefix, data: fetchBlockIds(keyPrefix) };
   }
   return cachedBlockIds.data;
 }
@@ -109,9 +108,9 @@ function getBlockIds(regionURI: S3URI): Promise<readonly string[]> {
 async function getDemographics(
   baseIndices: readonly number[] | ReadonlySet<number>,
   staticMetadata: IStaticMetadata,
-  regionURI: S3URI
+  keyPrefix: string
 ): Promise<StaticCounts> {
-  const data = await fetchRegionData(regionURI, staticMetadata).data;
+  const data = await fetchRegionData(keyPrefix, staticMetadata).data;
   return data.staticVotingData
     ? {
         demographics: getDemographicsBase(baseIndices, staticMetadata, data.staticDemographics),
@@ -281,7 +280,7 @@ function runCsvImport(
 const functions = {
   mergeDistricts: async (
     staticMetadata: IStaticMetadata,
-    regionURI: S3URI,
+    keyPrefix: string,
     districtsDefinition: DistrictsDefinition,
     numberOfDistricts: number
   ): Promise<{
@@ -289,9 +288,9 @@ const functions = {
     readonly thumbnail: ThumbnailGeoJSON;
     readonly isComplete: boolean;
   }> => {
-    const data = await fetchRegionData(regionURI, staticMetadata).data;
+    const data = await fetchRegionData(keyPrefix, staticMetadata).data;
     const numBlocks = accumulateBaseIndices(data.geoUnitHierarchy).length;
-    const { adjacencyData, reverseIndex } = await getAdjacencyWithIndex(regionURI, numBlocks);
+    const { adjacencyData, reverseIndex } = await getAdjacencyWithIndex(keyPrefix, numBlocks);
     const assignment = buildBlockAssignment(districtsDefinition, data.geoUnitHierarchy, numBlocks);
     const boundaries = computeDistrictBoundaries(
       adjacencyData,
@@ -339,39 +338,39 @@ const functions = {
   // accurate state outline polygon for the basemap label `within` filter.
   computeRegionOutline: async (
     staticMetadata: IStaticMetadata,
-    regionURI: S3URI
+    keyPrefix: string
   ): Promise<MultiPolygon> => {
-    const data = await fetchRegionData(regionURI, staticMetadata).data;
+    const data = await fetchRegionData(keyPrefix, staticMetadata).data;
     const numBlocks = accumulateBaseIndices(data.geoUnitHierarchy).length;
-    const { adjacencyData, reverseIndex } = await getAdjacencyWithIndex(regionURI, numBlocks);
+    const { adjacencyData, reverseIndex } = await getAdjacencyWithIndex(keyPrefix, numBlocks);
     const assignment = new Uint8Array(numBlocks).fill(1);
     const boundaries = computeDistrictBoundaries(adjacencyData, reverseIndex, assignment, 1);
     return boundaries[1].geometry;
   },
   exportCsv: async (
     staticMetadata: IStaticMetadata,
-    regionURI: S3URI,
+    keyPrefix: string,
     districtsDefinition: DistrictsDefinition
   ): Promise<string> => {
     const [data, blockIds] = await Promise.all([
-      fetchRegionData(regionURI, staticMetadata).data,
-      getBlockIds(regionURI)
+      fetchRegionData(keyPrefix, staticMetadata).data,
+      getBlockIds(keyPrefix)
     ]);
     return exportDistrictsToCsv(blockIds, districtsDefinition, data.geoUnitHierarchy);
   },
-  importCsv: async (regionURI: S3URI, csvText: string): Promise<DistrictsImportApiResponse> => {
+  importCsv: async (keyPrefix: string, csvText: string): Promise<DistrictsImportApiResponse> => {
     const [geoUnitHierarchy, blockIds] = await Promise.all([
-      fetchGeoUnitHierarchy(regionURI),
-      getBlockIds(regionURI)
+      fetchGeoUnitHierarchy(keyPrefix),
+      getBlockIds(keyPrefix)
     ]);
     return runCsvImport(csvText, blockIds, geoUnitHierarchy);
   },
   getTotalSelectedDemographics: async (
     staticMetadata: IStaticMetadata,
-    regionURI: S3URI,
+    keyPrefix: string,
     selectedGeounits: GeoUnits
   ): Promise<StaticCounts> => {
-    const data = await fetchRegionData(regionURI, staticMetadata).data;
+    const data = await fetchRegionData(keyPrefix, staticMetadata).data;
     // Build up set of blocks ids corresponding to selected geounits
 
     const selectedBaseIndices: Set<number> = new Set();
@@ -381,17 +380,17 @@ const functions = {
       )
     );
     // Aggregate all counts for selected blocks
-    return await getDemographics(selectedBaseIndices, staticMetadata, regionURI);
+    return await getDemographics(selectedBaseIndices, staticMetadata, keyPrefix);
   },
   // Drill into the district definition and collect the base geounits for
   // every district that's part of the selection
   getSavedDistrictSelectedDemographics: async (
     project: IProject,
     staticMetadata: IStaticMetadata,
-    regionURI: S3URI,
+    keyPrefix: string,
     selectedGeounits: GeoUnits
   ): Promise<readonly DemographicCounts[]> => {
-    const data = await fetchRegionData(regionURI, staticMetadata).data;
+    const data = await fetchRegionData(keyPrefix, staticMetadata).data;
 
     // Note: not using Array.fill to populate these, because the empty array in memory gets shared
     const mutableDistrictGeounitAccum: number[][] = [];
@@ -437,7 +436,7 @@ const functions = {
 
     return Promise.all(
       mutableDistrictGeounitAccum.map(baseGeounitIdsForDistrict =>
-        getDemographics(baseGeounitIdsForDistrict, staticMetadata, project.regionConfig.s3URI).then(
+        getDemographics(baseGeounitIdsForDistrict, staticMetadata, project.regionConfig.keyPrefix).then(
           staticCounts => staticCounts.demographics
         )
       )

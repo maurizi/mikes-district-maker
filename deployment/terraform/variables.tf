@@ -62,6 +62,12 @@ variable "lwa_layer_arn" {
   type        = string
 }
 
+variable "region_artifacts_bucket" {
+  description = "Existing S3 bucket holding per-region static artifacts (TopoJSON, hierarchy, demographic typed arrays) and the basemap PMTiles. Fronted by CloudFront and read by the API Lambda."
+  type        = string
+  default     = "districtbuilder-dev-238046523378"
+}
+
 variable "cloudfront_price_class" {
   description = "CloudFront price class. PriceClass_100 covers NA + EU and is cheapest."
   type        = string

@@ -62,7 +62,7 @@ export default class CreateRandomProjects extends Command {
       }
 
       if (!hierarchyCache.has(region.id)) {
-        const resp = await getObject(s3, s3Options(region.s3URI, "geounit-hierarchy.json"));
+        const resp = await getObject(s3, s3Options(region.keyPrefix, "geounit-hierarchy.json"));
         const hierarchy: GeoUnitHierarchy = JSON.parse(
           (await resp.Body?.transformToString("utf-8")) ?? "[]"
         );

@@ -432,7 +432,7 @@ const ImportProjectScreen = ({ organization, regionConfigs, user }: StateProps) 
           setImportResource({ data: null });
           return;
         }
-        const importResponse = await importCsv(file, chosenRegion.keyPrefix);
+        const importResponse = await importCsv(file, chosenRegion);
 
         // Don't set the districtsDefinition if upload was cancelled while we were fetching it
         if (importNumberRef.current === importNumber) {
@@ -569,11 +569,12 @@ const ImportProjectScreen = ({ organization, regionConfigs, user }: StateProps) 
                   readonly data: Pick<CreateProjectData, "districtProperties">;
                 }> =
                   regionForThumbnail && definitionForThumbnail && numberOfDistricts
-                    ? fetchStaticMetadata(regionForThumbnail.keyPrefix)
+                    ? fetchStaticMetadata(regionForThumbnail.keyPrefix, regionForThumbnail.version)
                         .then(async staticMetadata => {
                           const { thumbnail } = await mergeDistricts(
                             staticMetadata,
                             regionForThumbnail.keyPrefix,
+                            regionForThumbnail.version,
                             definitionForThumbnail,
                             numberOfDistricts
                           );

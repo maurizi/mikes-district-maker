@@ -110,20 +110,23 @@ import { showSubmitMapModal } from "../actions/projectModals";
 async function exportCsvViaWorker(
   staticMetadata: IStaticMetadata,
   keyPrefix: string,
+  version: Date | string | number,
   districtsDefinition: DistrictsDefinition,
   projectName: string
 ) {
-  const csvContent = await workerExportCsv(staticMetadata, keyPrefix, districtsDefinition);
+  const csvContent = await workerExportCsv(staticMetadata, keyPrefix, version, districtsDefinition);
   saveAs(new Blob([csvContent], { type: "text/csv;charset=utf-8" }), `${projectName}.csv`);
 }
 
 function runLocalMerge(
   staticMetadata: IStaticMetadata,
   keyPrefix: string,
+  version: Date | string | number,
   districtsDefinition: DistrictsDefinition,
   numberOfDistricts: number
 ) {
-  return () => mergeDistricts(staticMetadata, keyPrefix, districtsDefinition, numberOfDistricts);
+  return () =>
+    mergeDistricts(staticMetadata, keyPrefix, version, districtsDefinition, numberOfDistricts);
 }
 
 export function getFindCoords(findTool: FindTool, geojson?: DistrictsGeoJSON) {
@@ -255,9 +258,10 @@ const projectDataReducer = (
         Cmd.run(fetchAllStaticData, {
           successActionCreator: staticDataFetchSuccess,
           failActionCreator: staticDataFetchFailure,
-          args: [action.payload.project.regionConfig.keyPrefix] as Parameters<
-            typeof fetchAllStaticData
-          >
+          args: [
+            action.payload.project.regionConfig.keyPrefix,
+            action.payload.project.regionConfig.version
+          ] as Parameters<typeof fetchAllStaticData>
         })
       );
     case getType(projectDataFetchFailure):
@@ -394,6 +398,7 @@ const projectDataReducer = (
             runLocalMerge(
               action.payload.staticMetadata,
               project.regionConfig.keyPrefix,
+              project.regionConfig.version,
               project.districtsDefinition,
               project.numberOfDistricts
             ),
@@ -564,6 +569,7 @@ const projectDataReducer = (
             runLocalMerge(
               state.staticData.resource.staticMetadata,
               updatedProject.regionConfig.keyPrefix,
+              updatedProject.regionConfig.version,
               updatedProject.districtsDefinition,
               updatedProject.numberOfDistricts
             ),
@@ -811,6 +817,7 @@ const projectDataReducer = (
               exportCsvViaWorker(
                 csvStaticData.staticMetadata,
                 project.regionConfig.keyPrefix,
+                project.regionConfig.version,
                 project.districtsDefinition,
                 project.name
               ),

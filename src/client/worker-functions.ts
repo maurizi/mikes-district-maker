@@ -36,6 +36,7 @@ export const mergeDistricts = memoize(
   async (
     staticMetadata: IStaticMetadata,
     keyPrefix: string,
+    version: Date | string | number,
     districtsDefinition: DistrictsDefinition,
     numberOfDistricts: number
   ): Promise<{
@@ -43,46 +44,66 @@ export const mergeDistricts = memoize(
     readonly thumbnail: ThumbnailGeoJSON;
     readonly isComplete: boolean;
   }> => {
-    return worker.mergeDistricts(staticMetadata, keyPrefix, districtsDefinition, numberOfDistricts);
+    return worker.mergeDistricts(
+      staticMetadata,
+      keyPrefix,
+      version,
+      districtsDefinition,
+      numberOfDistricts
+    );
   },
   {
-    normalizer: args => stringify([args[1], args[2]], { replacer }) || "",
+    normalizer: args =>
+      stringify([args[1], new Date(args[2]).getTime(), args[3]], { replacer }) || "",
     primitive: true
   }
 );
 
 export const computeRegionOutline = memoize(
-  async (staticMetadata: IStaticMetadata, keyPrefix: string): Promise<MultiPolygon> => {
-    return worker.computeRegionOutline(staticMetadata, keyPrefix);
+  async (
+    staticMetadata: IStaticMetadata,
+    keyPrefix: string,
+    version: Date | string | number
+  ): Promise<MultiPolygon> => {
+    return worker.computeRegionOutline(staticMetadata, keyPrefix, version);
   },
-  { normalizer: args => args[1], primitive: true }
+  { normalizer: args => `${args[1]}#${new Date(args[2]).getTime()}`, primitive: true }
 );
 
 export async function exportCsv(
   staticMetadata: IStaticMetadata,
   keyPrefix: string,
+  version: Date | string | number,
   districtsDefinition: DistrictsDefinition
 ): Promise<string> {
-  return worker.exportCsv(staticMetadata, keyPrefix, districtsDefinition);
+  return worker.exportCsv(staticMetadata, keyPrefix, version, districtsDefinition);
 }
 
 export async function importCsv(
   keyPrefix: string,
+  version: Date | string | number,
   csvText: string
 ): Promise<DistrictsImportApiResponse> {
-  return worker.importCsv(keyPrefix, csvText);
+  return worker.importCsv(keyPrefix, version, csvText);
 }
 
 export const getTotalSelectedDemographics = memoize(
   async (
     staticMetadata: IStaticMetadata,
     keyPrefix: string,
+    version: Date | string | number,
     selectedGeounits: GeoUnits
   ): Promise<StaticCounts> => {
-    return worker.getTotalSelectedDemographics(staticMetadata, keyPrefix, selectedGeounits);
+    return worker.getTotalSelectedDemographics(
+      staticMetadata,
+      keyPrefix,
+      version,
+      selectedGeounits
+    );
   },
   {
-    normalizer: args => stringify([args[1], args[2]], { replacer }) || "",
+    normalizer: args =>
+      stringify([args[1], new Date(args[2]).getTime(), args[3]], { replacer }) || "",
     primitive: true
   }
 );
@@ -97,6 +118,7 @@ export const getSavedDistrictSelectedDemographics = memoize(
       project,
       staticMetadata,
       project.regionConfig.keyPrefix,
+      project.regionConfig.version,
       selectedGeounits
     );
   },

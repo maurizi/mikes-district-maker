@@ -21,6 +21,7 @@ import {
 import { getAllIndices } from "../../../shared/functions";
 import { isBaseGeoLevelAlwaysVisible } from "../../functions";
 import { mapValues } from "lodash";
+import { versionParam } from "../../s3";
 import { type ChoroplethSteps, type PviBucket, type DistrictsGeoJSON } from "../../types";
 
 // Vector tiles with geolevel data for this geography
@@ -213,6 +214,7 @@ export function getGeolevelLinePaintStyle(geoLevel: string) {
 
 export function generateMapLayers(
   path: string,
+  version: Date | string | number,
   regionCode: string,
   bbox: readonly [number, number, number, number],
   geoLevels: readonly GeoLevelInfo[],
@@ -232,9 +234,12 @@ export function generateMapLayers(
   // Single source for all geolevels — keeps shared arcs aligned across layers.
   // All layers exist at all zoom levels (from their minZoom up to the global max)
   // so overzoom works naturally and boundaries stay perfectly aligned.
+  // ?v=<timestamp> cache-buster so a republished region invalidates CloudFront
+  // entries even when path is reused — pmtiles range requests preserve the
+  // query string.
   map.addSource(GEOLEVELS_SOURCE_ID, {
     type: "vector",
-    url: `pmtiles://${window.location.origin}/${path}tiles.pmtiles`,
+    url: `pmtiles://${window.location.origin}/${path}tiles.pmtiles?v=${versionParam(version)}`,
     minzoom: minZoom,
     maxzoom: maxZoom
   });

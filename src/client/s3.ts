@@ -20,23 +20,42 @@ const s3Axios = axios.create();
 // "regions/US/PA/2026-04-26T.../") and bucket resolution is infra concern.
 // Use `self.location` rather than `window.location` so this also works when
 // imported from a Web Worker (workers have `self`/`location` but no `window`).
-function staticDataUri(keyPrefix: string, fileName: string): HttpsURI {
-  return new URL(`${keyPrefix}${fileName}`, self.location.origin).href;
+// regionConfig.version is appended as a `?v=<timestamp>` cache-buster so a
+// republished region invalidates CloudFront entries even when keyPrefix is
+// reused.
+export function versionParam(version: Date | string | number): string {
+  return new Date(version).getTime().toString();
 }
 
-export async function fetchStaticMetadata(keyPrefix: string): Promise<IStaticMetadata> {
+function staticDataUri(
+  keyPrefix: string,
+  fileName: string,
+  version: Date | string | number
+): HttpsURI {
+  const url = new URL(`${keyPrefix}${fileName}`, self.location.origin);
+  url.searchParams.set("v", versionParam(version));
+  return url.href;
+}
+
+export async function fetchStaticMetadata(
+  keyPrefix: string,
+  version: Date | string | number
+): Promise<IStaticMetadata> {
   return new Promise((resolve, reject) => {
     s3Axios
-      .get(staticDataUri(keyPrefix, "static-metadata.json"))
+      .get(staticDataUri(keyPrefix, "static-metadata.json", version))
       .then(response => resolve(response.data))
       .catch(error => reject(error.message));
   });
 }
 
-export async function fetchGeoUnitHierarchy(keyPrefix: string): Promise<GeoUnitHierarchy> {
+export async function fetchGeoUnitHierarchy(
+  keyPrefix: string,
+  version: Date | string | number
+): Promise<GeoUnitHierarchy> {
   return new Promise((resolve, reject) => {
     s3Axios
-      .get(staticDataUri(keyPrefix, "geounit-hierarchy.json"))
+      .get(staticDataUri(keyPrefix, "geounit-hierarchy.json", version))
       .then(response => resolve(response.data))
       .catch(error => reject(error.message));
   });
@@ -44,10 +63,11 @@ export async function fetchGeoUnitHierarchy(keyPrefix: string): Promise<GeoUnitH
 
 async function fetchStaticFiles(
   keyPrefix: string,
+  version: Date | string | number,
   files: readonly IStaticFile[]
 ): Promise<TypedArrays> {
   const requests = files.map(fileMeta =>
-    s3Axios.get(staticDataUri(keyPrefix, fileMeta.fileName), {
+    s3Axios.get(staticDataUri(keyPrefix, fileMeta.fileName, version), {
       responseType: "arraybuffer"
     })
   );
@@ -82,13 +102,16 @@ async function fetchStaticFiles(
   });
 }
 
-export async function fetchAllStaticData(keyPrefix: string): Promise<StaticProjectData> {
-  return fetchStaticMetadata(keyPrefix)
+export async function fetchAllStaticData(
+  keyPrefix: string,
+  version: Date | string | number
+): Promise<StaticProjectData> {
+  return fetchStaticMetadata(keyPrefix, version)
     .then(staticMetadata =>
       Promise.all([
         Promise.resolve(staticMetadata),
-        fetchGeoUnitHierarchy(keyPrefix),
-        fetchStaticFiles(keyPrefix, staticMetadata.geoLevels)
+        fetchGeoUnitHierarchy(keyPrefix, version),
+        fetchStaticFiles(keyPrefix, version, staticMetadata.geoLevels)
       ])
     )
     .then(([staticMetadata, geoUnitHierarchy, staticGeoLevels]) => ({
@@ -98,17 +121,27 @@ export async function fetchAllStaticData(keyPrefix: string): Promise<StaticProje
     }));
 }
 
-export async function fetchBlockIds(keyPrefix: string): Promise<readonly string[]> {
-  const response = await s3Axios.get<string[]>(staticDataUri(keyPrefix, "block-ids.json"));
+export async function fetchBlockIds(
+  keyPrefix: string,
+  version: Date | string | number
+): Promise<readonly string[]> {
+  const response = await s3Axios.get<string[]>(staticDataUri(keyPrefix, "block-ids.json", version));
   return response.data;
 }
 
-export async function fetchAdjacencyData(keyPrefix: string): Promise<AdjacencyData> {
+export async function fetchAdjacencyData(
+  keyPrefix: string,
+  version: Date | string | number
+): Promise<AdjacencyData> {
   const [adjResp, offsetsResp, coordsResp, transformResp] = await Promise.all([
-    s3Axios.get(staticDataUri(keyPrefix, "adjacency.bin"), { responseType: "arraybuffer" }),
-    s3Axios.get(staticDataUri(keyPrefix, "arc-offsets.bin"), { responseType: "arraybuffer" }),
-    s3Axios.get(staticDataUri(keyPrefix, "arc-coords.bin"), { responseType: "arraybuffer" }),
-    s3Axios.get(staticDataUri(keyPrefix, "transform.json"))
+    s3Axios.get(staticDataUri(keyPrefix, "adjacency.bin", version), { responseType: "arraybuffer" }),
+    s3Axios.get(staticDataUri(keyPrefix, "arc-offsets.bin", version), {
+      responseType: "arraybuffer"
+    }),
+    s3Axios.get(staticDataUri(keyPrefix, "arc-coords.bin", version), {
+      responseType: "arraybuffer"
+    }),
+    s3Axios.get(staticDataUri(keyPrefix, "transform.json", version))
   ]);
   return {
     adjacency: new Int32Array(adjResp.data),
@@ -120,12 +153,13 @@ export async function fetchAdjacencyData(keyPrefix: string): Promise<AdjacencyDa
 
 export async function fetchWorkerStaticData(
   keyPrefix: string,
+  version: Date | string | number,
   staticMetadata: IStaticMetadata
 ): Promise<WorkerProjectData> {
   return Promise.all([
-    fetchGeoUnitHierarchy(keyPrefix),
-    fetchStaticFiles(keyPrefix, staticMetadata.demographics),
-    staticMetadata.voting && fetchStaticFiles(keyPrefix, staticMetadata.voting)
+    fetchGeoUnitHierarchy(keyPrefix, version),
+    fetchStaticFiles(keyPrefix, version, staticMetadata.demographics),
+    staticMetadata.voting && fetchStaticFiles(keyPrefix, version, staticMetadata.voting)
   ]).then(([geoUnitHierarchy, staticDemographics, staticVotingData]) => ({
     geoUnitHierarchy,
     staticDemographics,

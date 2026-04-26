@@ -894,6 +894,7 @@ const SidebarRows = ({
       const selectedTotals = await getTotalSelectedDemographics(
         staticMetadata,
         project.regionConfig.keyPrefix,
+        project.regionConfig.version,
         combinedSelection
       );
       // The demographic composition of the selection for each saved district

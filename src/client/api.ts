@@ -326,7 +326,7 @@ export async function convertGeoJsonToShapefile(
 
 export async function importCsv(
   file: Blob,
-  keyPrefix: string
+  region: Pick<IRegionConfig, "keyPrefix" | "version">
 ): Promise<DistrictsImportApiResponse> {
   // CSV parsing + validation runs entirely in the client worker. Previously
   // POSTed to /api/districts/import/csv on the server, but block-level CSVs
@@ -336,7 +336,7 @@ export async function importCsv(
   // endpoint. See ADR-06 "Shapefile export runs in the browser now" for the
   // same pattern applied in the opposite direction.
   const csvText = await file.text();
-  return workerImportCsv(keyPrefix, csvText);
+  return workerImportCsv(region.keyPrefix, region.version, csvText);
 }
 
 export async function createReferenceLayer(
@@ -442,7 +442,7 @@ export async function fetchOrganizationFeaturedProjects(
 
 export const fetchMemoizedStateBbox = memoize(
   async (region: IRegionConfig): Promise<IStaticMetadata["bbox"]> => {
-    const staticMetadata = await fetchStaticMetadata(region.keyPrefix);
+    const staticMetadata = await fetchStaticMetadata(region.keyPrefix, region.version);
     return staticMetadata.bbox;
   },
   {
@@ -610,6 +610,6 @@ export async function removeUserFromOrganization(
 
 // Retrieves total population for the region from static metadata
 export async function fetchTotalPopulation(region: IRegionConfig) {
-  const staticMetadata = await fetchStaticMetadata(region.keyPrefix);
+  const staticMetadata = await fetchStaticMetadata(region.keyPrefix, region.version);
   return staticMetadata.totalPopulation;
 }

@@ -449,6 +449,7 @@ const DistrictsMap = ({
     const onMapLoad = () => {
       generateMapLayers(
         project.regionConfig.keyPrefix,
+        project.regionConfig.version,
         project.regionConfig.regionCode,
         staticMetadata.bbox,
         staticMetadata.geoLevelHierarchy,
@@ -535,7 +536,7 @@ const DistrictsMap = ({
   useEffect(() => {
     if (!map) return;
     let cancelled = false;
-    computeRegionOutline(staticMetadata, project.regionConfig.keyPrefix)
+    computeRegionOutline(staticMetadata, project.regionConfig.keyPrefix, project.regionConfig.version)
       .then(outline => {
         if (cancelled) return;
         regionOutlineRef.current = outline;
@@ -548,7 +549,7 @@ const DistrictsMap = ({
     return () => {
       cancelled = true;
     };
-  }, [map, staticMetadata, project.regionConfig.keyPrefix]);
+  }, [map, staticMetadata, project.regionConfig.keyPrefix, project.regionConfig.version]);
 
   const downHandler = useCallback(
     (key: KeyboardEvent) => {

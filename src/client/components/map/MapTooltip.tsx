@@ -162,6 +162,7 @@ const MapTooltip = ({
           (await getTotalSelectedDemographics(
             staticMetadata,
             project.regionConfig.keyPrefix,
+            project.regionConfig.version,
             selectedGeounits
           ));
         const demographics = staticCounts?.demographics;

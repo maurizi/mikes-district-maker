@@ -63,21 +63,37 @@ let regionData: RegionData | undefined;
 
 let cachedAdjacency: CachedAdjacency | undefined;
 
-function fetchRegionData(keyPrefix: string, staticMetadata: IStaticMetadata): RegionData {
-  if (!regionData || regionData.uri !== keyPrefix) {
+// keyPrefix + version together identify a region build — the cache must
+// invalidate if either changes (republish bumps version even when prefix is
+// reused).
+function cacheKey(keyPrefix: string, version: Date | string | number): string {
+  return `${keyPrefix}#${new Date(version).getTime()}`;
+}
+
+function fetchRegionData(
+  keyPrefix: string,
+  version: Date | string | number,
+  staticMetadata: IStaticMetadata
+): RegionData {
+  const key = cacheKey(keyPrefix, version);
+  if (!regionData || regionData.uri !== key) {
     regionData = {
-      uri: keyPrefix,
-      data: fetchWorkerStaticData(keyPrefix, staticMetadata)
+      uri: key,
+      data: fetchWorkerStaticData(keyPrefix, version, staticMetadata)
     };
   }
   return regionData;
 }
 
-function getAdjacencyData(keyPrefix: string): CachedAdjacency {
-  if (!cachedAdjacency || cachedAdjacency.uri !== keyPrefix) {
+function getAdjacencyData(
+  keyPrefix: string,
+  version: Date | string | number
+): CachedAdjacency {
+  const key = cacheKey(keyPrefix, version);
+  if (!cachedAdjacency || cachedAdjacency.uri !== key) {
     cachedAdjacency = {
-      uri: keyPrefix,
-      data: fetchAdjacencyData(keyPrefix)
+      uri: key,
+      data: fetchAdjacencyData(keyPrefix, version)
     };
   }
   return cachedAdjacency;
@@ -85,9 +101,10 @@ function getAdjacencyData(keyPrefix: string): CachedAdjacency {
 
 async function getAdjacencyWithIndex(
   keyPrefix: string,
+  version: Date | string | number,
   numBlocks: number
 ): Promise<{ adjacencyData: AdjacencyData; reverseIndex: ReverseIndex }> {
-  const cached = getAdjacencyData(keyPrefix);
+  const cached = getAdjacencyData(keyPrefix, version);
   const adjacencyData = await cached.data;
   if (!cached.reverseIndex || cached.numBlocks !== numBlocks) {
     cached.reverseIndex = buildReverseIndex(adjacencyData.adjacency, numBlocks);
@@ -98,9 +115,13 @@ async function getAdjacencyWithIndex(
 
 let cachedBlockIds: { uri: string; data: Promise<readonly string[]> } | undefined;
 
-function getBlockIds(keyPrefix: string): Promise<readonly string[]> {
-  if (!cachedBlockIds || cachedBlockIds.uri !== keyPrefix) {
-    cachedBlockIds = { uri: keyPrefix, data: fetchBlockIds(keyPrefix) };
+function getBlockIds(
+  keyPrefix: string,
+  version: Date | string | number
+): Promise<readonly string[]> {
+  const key = cacheKey(keyPrefix, version);
+  if (!cachedBlockIds || cachedBlockIds.uri !== key) {
+    cachedBlockIds = { uri: key, data: fetchBlockIds(keyPrefix, version) };
   }
   return cachedBlockIds.data;
 }
@@ -108,9 +129,10 @@ function getBlockIds(keyPrefix: string): Promise<readonly string[]> {
 async function getDemographics(
   baseIndices: readonly number[] | ReadonlySet<number>,
   staticMetadata: IStaticMetadata,
-  keyPrefix: string
+  keyPrefix: string,
+  version: Date | string | number
 ): Promise<StaticCounts> {
-  const data = await fetchRegionData(keyPrefix, staticMetadata).data;
+  const data = await fetchRegionData(keyPrefix, version, staticMetadata).data;
   return data.staticVotingData
     ? {
         demographics: getDemographicsBase(baseIndices, staticMetadata, data.staticDemographics),
@@ -281,6 +303,7 @@ const functions = {
   mergeDistricts: async (
     staticMetadata: IStaticMetadata,
     keyPrefix: string,
+    version: Date | string | number,
     districtsDefinition: DistrictsDefinition,
     numberOfDistricts: number
   ): Promise<{
@@ -288,9 +311,13 @@ const functions = {
     readonly thumbnail: ThumbnailGeoJSON;
     readonly isComplete: boolean;
   }> => {
-    const data = await fetchRegionData(keyPrefix, staticMetadata).data;
+    const data = await fetchRegionData(keyPrefix, version, staticMetadata).data;
     const numBlocks = accumulateBaseIndices(data.geoUnitHierarchy).length;
-    const { adjacencyData, reverseIndex } = await getAdjacencyWithIndex(keyPrefix, numBlocks);
+    const { adjacencyData, reverseIndex } = await getAdjacencyWithIndex(
+      keyPrefix,
+      version,
+      numBlocks
+    );
     const assignment = buildBlockAssignment(districtsDefinition, data.geoUnitHierarchy, numBlocks);
     const boundaries = computeDistrictBoundaries(
       adjacencyData,
@@ -338,11 +365,16 @@ const functions = {
   // accurate state outline polygon for the basemap label `within` filter.
   computeRegionOutline: async (
     staticMetadata: IStaticMetadata,
-    keyPrefix: string
+    keyPrefix: string,
+    version: Date | string | number
   ): Promise<MultiPolygon> => {
-    const data = await fetchRegionData(keyPrefix, staticMetadata).data;
+    const data = await fetchRegionData(keyPrefix, version, staticMetadata).data;
     const numBlocks = accumulateBaseIndices(data.geoUnitHierarchy).length;
-    const { adjacencyData, reverseIndex } = await getAdjacencyWithIndex(keyPrefix, numBlocks);
+    const { adjacencyData, reverseIndex } = await getAdjacencyWithIndex(
+      keyPrefix,
+      version,
+      numBlocks
+    );
     const assignment = new Uint8Array(numBlocks).fill(1);
     const boundaries = computeDistrictBoundaries(adjacencyData, reverseIndex, assignment, 1);
     return boundaries[1].geometry;
@@ -350,27 +382,33 @@ const functions = {
   exportCsv: async (
     staticMetadata: IStaticMetadata,
     keyPrefix: string,
+    version: Date | string | number,
     districtsDefinition: DistrictsDefinition
   ): Promise<string> => {
     const [data, blockIds] = await Promise.all([
-      fetchRegionData(keyPrefix, staticMetadata).data,
-      getBlockIds(keyPrefix)
+      fetchRegionData(keyPrefix, version, staticMetadata).data,
+      getBlockIds(keyPrefix, version)
     ]);
     return exportDistrictsToCsv(blockIds, districtsDefinition, data.geoUnitHierarchy);
   },
-  importCsv: async (keyPrefix: string, csvText: string): Promise<DistrictsImportApiResponse> => {
+  importCsv: async (
+    keyPrefix: string,
+    version: Date | string | number,
+    csvText: string
+  ): Promise<DistrictsImportApiResponse> => {
     const [geoUnitHierarchy, blockIds] = await Promise.all([
-      fetchGeoUnitHierarchy(keyPrefix),
-      getBlockIds(keyPrefix)
+      fetchGeoUnitHierarchy(keyPrefix, version),
+      getBlockIds(keyPrefix, version)
     ]);
     return runCsvImport(csvText, blockIds, geoUnitHierarchy);
   },
   getTotalSelectedDemographics: async (
     staticMetadata: IStaticMetadata,
     keyPrefix: string,
+    version: Date | string | number,
     selectedGeounits: GeoUnits
   ): Promise<StaticCounts> => {
-    const data = await fetchRegionData(keyPrefix, staticMetadata).data;
+    const data = await fetchRegionData(keyPrefix, version, staticMetadata).data;
     // Build up set of blocks ids corresponding to selected geounits
 
     const selectedBaseIndices: Set<number> = new Set();
@@ -380,7 +418,7 @@ const functions = {
       )
     );
     // Aggregate all counts for selected blocks
-    return await getDemographics(selectedBaseIndices, staticMetadata, keyPrefix);
+    return await getDemographics(selectedBaseIndices, staticMetadata, keyPrefix, version);
   },
   // Drill into the district definition and collect the base geounits for
   // every district that's part of the selection
@@ -388,9 +426,10 @@ const functions = {
     project: IProject,
     staticMetadata: IStaticMetadata,
     keyPrefix: string,
+    version: Date | string | number,
     selectedGeounits: GeoUnits
   ): Promise<readonly DemographicCounts[]> => {
-    const data = await fetchRegionData(keyPrefix, staticMetadata).data;
+    const data = await fetchRegionData(keyPrefix, version, staticMetadata).data;
 
     // Note: not using Array.fill to populate these, because the empty array in memory gets shared
     const mutableDistrictGeounitAccum: number[][] = [];
@@ -439,7 +478,8 @@ const functions = {
         getDemographics(
           baseGeounitIdsForDistrict,
           staticMetadata,
-          project.regionConfig.keyPrefix
+          project.regionConfig.keyPrefix,
+          project.regionConfig.version
         ).then(staticCounts => staticCounts.demographics)
       )
     );

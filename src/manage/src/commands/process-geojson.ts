@@ -480,9 +480,7 @@ max string length of ~512MB).
       if (degenerate) degenerateArcs.add(i);
     }
     if (degenerateArcs.size > 0) {
-      this.log(
-        `  Stripping ${degenerateArcs.size} degenerate (zero-length) arc reference(s)`
-      );
+      this.log(`  Stripping ${degenerateArcs.size} degenerate (zero-length) arc reference(s)`);
       const stripRefs = (arcs: any): any => {
         if (!Array.isArray(arcs)) return arcs;
         if (arcs.length > 0 && Array.isArray(arcs[0])) {
@@ -910,7 +908,10 @@ max string length of ~512MB).
       let totalDropped = 0;
       let totalNullRings = 0;
       for (const feature of (geojson as any).features) {
-        if (feature.geometry && (feature.geometry.type === "Polygon" || feature.geometry.type === "MultiPolygon")) {
+        if (
+          feature.geometry &&
+          (feature.geometry.type === "Polygon" || feature.geometry.type === "MultiPolygon")
+        ) {
           // Sanitize any null rings that topo2feature emits when an arc
           // sequence resolves to nothing (can happen after our degenerate-arc
           // strip removes all arcs from a ring). A ring that's null or has
@@ -919,7 +920,9 @@ max string length of ~512MB).
           // MultiPolygon has no valid polygons, the feature's geometry
           // becomes empty and we leave it (downstream tippecanoe skips).
           const validRing = (r: any): boolean =>
-            Array.isArray(r) && r.length >= 4 && r.every((v: any) => Array.isArray(v) && v.length >= 2);
+            Array.isArray(r) &&
+            r.length >= 4 &&
+            r.every((v: any) => Array.isArray(v) && v.length >= 2);
           const sanitizePoly = (poly: any): any[] | null => {
             if (!Array.isArray(poly) || poly.length === 0) return null;
             if (!validRing(poly[0])) return null;

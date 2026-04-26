@@ -14,12 +14,7 @@ import {
   type GeoUnitHierarchy,
   type S3URI
 } from "../../../shared/entities";
-import { buildBlockAssignment } from "../../../shared/boundary";
-import {
-  buildSplitBlockMap,
-  expandBlockToDistrict,
-  importCsvToDefinition
-} from "../../../shared/csv-import";
+import { buildSplitBlockMap } from "../../../shared/csv-import";
 
 const s3 = new S3Client({});
 
@@ -71,7 +66,17 @@ async function loadArtifacts(s3URI: S3URI): Promise<RegionArtifacts> {
 
 export interface MigrationResult {
   readonly newDefinition: DistrictsDefinition;
+  // Old GEOIDs that have no path forward into the new build (no direct hit,
+  // no forward-split parent, no reverse-split base).
   readonly missingGeoIds: readonly string[];
+  // New GEOIDs left at district 0 because the old data pointing at them
+  // disagreed and we couldn't safely resolve. Two flavors collapse here:
+  //   (a) reverse-split where any contributing sub-block had block-level
+  //       intent (user explicitly drew a sub-block boundary in the old
+  //       definition) — refuses to defer to the precinct.
+  //   (b) precinct-level rollup tried but the precinct's other singletons
+  //       disagreed too.
+  readonly conflictedNewIds: readonly string[];
 }
 
 export function migrateDefinition(
@@ -79,46 +84,164 @@ export function migrateDefinition(
   oldRegion: RegionArtifacts,
   newRegion: RegionArtifacts
 ): MigrationResult {
-  // 1. Flatten the old definition to a per-block-index assignment using the
-  //    old hierarchy. assignment[i] is the district for old blockIds[i].
-  const assignment = buildBlockAssignment(oldDefinition, oldRegion.hierarchy, oldRegion.numBlocks);
+  // 1. Walk the old definition + hierarchy together. For each old block,
+  //    record its district AND whether the assignment came from a number
+  //    node at a non-leaf level (precinct-or-broader intent) versus from a
+  //    leaf-level number embedded in an array (block-level intent — the user
+  //    explicitly assigned at sub-precinct granularity).
+  const oldAssignment = new Uint8Array(oldRegion.numBlocks);
+  // 1 = precinct-or-broader intent; 0 = block-level (or unassigned).
+  const oldPrecinctIntent = new Uint8Array(oldRegion.numBlocks);
 
-  // 2. Materialize the assigned (block, district) pairs keyed by stable GEOID.
-  //    Skip district 0 (unassigned) — the rebuild step defaults missing
-  //    blocks to 0 anyway, so omitting them keeps the map small and lets us
-  //    detect drops cleanly via the missingGeoIds report.
-  const records: [string, string][] = [];
+  function fillSubtree(district: number, hier: GeoUnitHierarchy | number) {
+    if (typeof hier === "number") {
+      oldAssignment[hier] = district;
+      oldPrecinctIntent[hier] = 1;
+      return;
+    }
+    for (const child of hier) fillSubtree(district, child);
+  }
+  function walkOld(defn: DistrictsDefinition | number, hier: GeoUnitHierarchy | number) {
+    if (typeof hier === "number") {
+      // Leaf — defn must be a scalar district. Intent stays 0 (default).
+      if (typeof defn === "number") oldAssignment[hier] = defn;
+      return;
+    }
+    if (typeof defn === "number") {
+      // Number at a non-leaf level: every block under here gets `defn`,
+      // and the intent is precinct-or-broader.
+      fillSubtree(defn, hier);
+      return;
+    }
+    for (let i = 0; i < hier.length; i++) {
+      walkOld(defn[i] as DistrictsDefinition | number, hier[i]);
+    }
+  }
+  walkOld(oldDefinition, oldRegion.hierarchy);
+
+  // 2. Index old blocks by GEOID with their (district, intent).
+  const oldByGeoId = new Map<string, { d: number; precinctIntent: boolean }>();
   for (let i = 0; i < oldRegion.numBlocks; i++) {
-    if (assignment[i] !== 0) {
-      records.push([oldRegion.blockIds[i], String(assignment[i])]);
+    if (oldAssignment[i] !== 0) {
+      oldByGeoId.set(oldRegion.blockIds[i], {
+        d: oldAssignment[i],
+        precinctIntent: oldPrecinctIntent[i] === 1
+      });
     }
   }
 
-  // 3. Re-key against the new block universe. expandBlockToDistrict handles
-  //    the "old block was split into N new sub-blocks" case (parent GEOID in
-  //    old → "<GEOID>-1", "<GEOID>-2" in new). Direct GEOID hits stay direct.
-  const newBlockIdSet = new Set(newRegion.blockIds);
+  // 3. For each new block, collect every old district that maps onto it
+  //    (direct hit, forward split, reverse split). Track whether all
+  //    contributing votes came from precinct-or-broader intent — if any
+  //    contributor had block-level intent the user explicitly chose
+  //    sub-precinct granularity, and the new precinct is not allowed to
+  //    paper over that disagreement.
+  const oldSplitMap = buildSplitBlockMap(oldRegion.blockIds);
   const newSplitMap = buildSplitBlockMap(newRegion.blockIds);
-  const { blockToDistrict } = expandBlockToDistrict(records, newBlockIdSet, newSplitMap);
+  const newBlockIdSet = new Set(newRegion.blockIds);
 
-  // 4. Track GEOIDs that didn't survive — neither a direct hit nor a split
-  //    parent. Caller decides whether to warn or abort.
-  const missingGeoIds: string[] = [];
-  for (const [oldId] of records) {
-    if (!newBlockIdSet.has(oldId) && !newSplitMap.has(oldId)) {
-      missingGeoIds.push(oldId);
+  type Vote = { districts: Set<number>; allPrecinctIntent: boolean };
+  const newVotes: Vote[] = [];
+  for (let i = 0; i < newRegion.numBlocks; i++) {
+    const newId = newRegion.blockIds[i];
+    const v: Vote = { districts: new Set(), allPrecinctIntent: true };
+
+    function addVote(geoId: string) {
+      const e = oldByGeoId.get(geoId);
+      if (!e) return;
+      v.districts.add(e.d);
+      if (!e.precinctIntent) v.allPrecinctIntent = false;
     }
+
+    addVote(newId); // direct hit
+    const dashIdx = newId.indexOf("-");
+    if (dashIdx !== -1) addVote(newId.substring(0, dashIdx)); // forward-split parent
+    const splits = oldSplitMap.get(newId);
+    if (splits) for (const s of splits) addVote(s); // reverse-split sub-blocks
+
+    newVotes.push(v);
   }
 
-  // 5. Walk the new hierarchy to assemble the compact nested definition,
-  //    collapsing parents whose children share an assignment.
-  const newDefinition = importCsvToDefinition(
-    newRegion.blockIds,
-    newRegion.hierarchy,
-    blockToDistrict
-  );
+  // 4. Walk the new hierarchy. At the smallest grouping (parent-of-leaves —
+  //    the precinct in a county→precinct→block hierarchy), aggregate child
+  //    votes:
+  //      - If non-ambiguous singletons all agree on D and there's no
+  //        block-level holdout, the whole precinct is D and ambiguous
+  //        children inherit it. (Precinct-rollup — the new behavior.)
+  //      - Otherwise per-child fallback: singletons keep their value;
+  //        ambiguous children stay 0 and are reported as conflicted.
+  //    Higher levels collapse uniform branches as before.
+  const conflictedNewIds: string[] = [];
 
-  return { newDefinition, missingGeoIds };
+  function resolvePrecinct(blockIndices: readonly number[]): DistrictsDefinition | number {
+    let singletonAnchor: number | null = null;
+    let singletonsDisagree = false;
+    let hasBlockLevelHoldout = false;
+    for (const idx of blockIndices) {
+      const v = newVotes[idx];
+      if (v.districts.size === 1) {
+        const d = v.districts.values().next().value as number;
+        if (singletonAnchor === null) singletonAnchor = d;
+        else if (singletonAnchor !== d) singletonsDisagree = true;
+      } else if (v.districts.size > 1 && !v.allPrecinctIntent) {
+        hasBlockLevelHoldout = true;
+      }
+    }
+    const canRollUp = !singletonsDisagree && !hasBlockLevelHoldout && singletonAnchor !== null;
+
+    if (canRollUp) {
+      const D = singletonAnchor as number;
+      const children = blockIndices.map(idx => {
+        const v = newVotes[idx];
+        if (v.districts.size === 1) return v.districts.values().next().value as number;
+        if (v.districts.size > 1 && v.allPrecinctIntent) return D;
+        return 0;
+      });
+      if (children.every(c => c === D)) return D;
+      return children;
+    }
+
+    return blockIndices.map(idx => {
+      const v = newVotes[idx];
+      if (v.districts.size === 1) return v.districts.values().next().value as number;
+      if (v.districts.size > 1) conflictedNewIds.push(newRegion.blockIds[idx]);
+      return 0;
+    });
+  }
+
+  function buildNode(node: GeoUnitHierarchy | number): DistrictsDefinition | number {
+    if (typeof node === "number") {
+      // Leaf at a non-precinct depth (root-level block, etc.) — no precinct
+      // to defer to, so ambiguous votes have to stay unresolved.
+      const v = newVotes[node];
+      if (v.districts.size === 1) return v.districts.values().next().value as number;
+      if (v.districts.size > 1) conflictedNewIds.push(newRegion.blockIds[node]);
+      return 0;
+    }
+    if (node.every(c => typeof c === "number")) {
+      return resolvePrecinct(node as readonly number[]);
+    }
+    const results = node.map(c => buildNode(c));
+    if (results.every(r => r === results[0])) return results[0];
+    return results;
+  }
+  // Root MUST stay an array — DistrictsDefinition is MutableGeoUnitCollection[]
+  // and downstream callers index into it.
+  const newDefinition = newRegion.hierarchy.map(c => buildNode(c)) as DistrictsDefinition;
+
+  // 5. Track old GEOIDs with no path into the new build.
+  const missingGeoIds: string[] = [];
+  for (let i = 0; i < oldRegion.numBlocks; i++) {
+    if (oldAssignment[i] === 0) continue;
+    const oldId = oldRegion.blockIds[i];
+    if (newBlockIdSet.has(oldId)) continue;
+    if (newSplitMap.has(oldId)) continue;
+    const dashIdx = oldId.indexOf("-");
+    if (dashIdx !== -1 && newBlockIdSet.has(oldId.substring(0, dashIdx))) continue;
+    missingGeoIds.push(oldId);
+  }
+
+  return { newDefinition, missingGeoIds, conflictedNewIds };
 }
 
 export default class RetireRegion extends Command {
@@ -147,7 +270,7 @@ export default class RetireRegion extends Command {
     }),
     strict: Flags.boolean({
       description:
-        "Abort if any assigned block GEOID from the old topology is missing in the new (default: log warnings and leave those geoUnits unassigned)",
+        "Abort if any project hits a missing GEOID or an unresolvable block-level conflict (default: log warnings and leave those geoUnits unassigned)",
       default: false
     })
   };
@@ -205,15 +328,17 @@ export default class RetireRegion extends Command {
       let migrated = 0;
       let failed = 0;
       const totalMissing = new Set<string>();
+      const totalConflicted = new Set<string>();
 
       for (const project of projects) {
         try {
-          const { newDefinition, missingGeoIds } = migrateDefinition(
+          const { newDefinition, missingGeoIds, conflictedNewIds } = migrateDefinition(
             project.districtsDefinition,
             oldRegion,
             newRegion
           );
           for (const id of missingGeoIds) totalMissing.add(id);
+          for (const id of conflictedNewIds) totalConflicted.add(id);
 
           if (missingGeoIds.length > 0) {
             this.log(
@@ -222,6 +347,17 @@ export default class RetireRegion extends Command {
             if (flags.strict) {
               this.error(
                 `--strict: refusing to migrate ${project.id} because ${missingGeoIds.length} assigned GEOIDs are missing from the target topology (first: ${missingGeoIds.slice(0, 5).join(", ")}). Drop --strict to migrate with those geoUnits unassigned.`
+              );
+            }
+          }
+
+          if (conflictedNewIds.length > 0) {
+            this.log(
+              `  ${project.name} (${project.id}): ${conflictedNewIds.length} new block(s) left unassigned (old data conflicted and could not be resolved at the precinct level)`
+            );
+            if (flags.strict) {
+              this.error(
+                `--strict: refusing to migrate ${project.id} because ${conflictedNewIds.length} new block(s) couldn't be resolved (first: ${conflictedNewIds.slice(0, 5).join(", ")}). Drop --strict to migrate with those blocks unassigned.`
               );
             }
           }
@@ -258,6 +394,11 @@ export default class RetireRegion extends Command {
           `Across all projects, ${totalMissing.size} unique GEOIDs were not present in target.`
         );
       }
+      if (totalConflicted.size > 0) {
+        this.log(
+          `Across all projects, ${totalConflicted.size} unique new block(s) couldn't be resolved.`
+        );
+      }
 
       if (failed > 0) {
         this.error(
@@ -286,8 +427,26 @@ export default class RetireRegion extends Command {
         relations: ["regionConfig"]
       });
 
+      // Chambers are shared resources (many projects → one chamber row), so
+      // we migrate them by re-pointing region_config_id rather than creating
+      // a parallel set on target and updating every project's chamber_id.
+      // That means target should not already have chambers of its own — if
+      // it does, someone re-ran seed-us-chambers after publish-region
+      // --replaces and re-pointing would create duplicate (target, name)
+      // rows. Bail and let the operator sort it out.
+      const targetChambers = await chamberRepo.find({
+        where: { regionConfig: { id: target.id } }
+      });
+      if (targetChambers.length > 0) {
+        this.error(
+          `Target RegionConfig ${target.id} already has ${targetChambers.length} chamber(s); refusing to re-point source chambers because that would create duplicates. Likely cause: seed-us-chambers was re-run after publish-region --replaces. Delete the target's chambers (${targetChambers.map(c => c.id).join(", ")}) and re-run.`
+        );
+      }
+
       if (dryRun) {
-        this.log(`Would delete ${sourceChambers.length} chamber(s) tied to source RegionConfig.`);
+        this.log(
+          `Would re-point ${sourceChambers.length} chamber(s) from source to target RegionConfig.`
+        );
         if (sourceTemplates.length > 0) {
           this.log(
             `Would skip deleting source RegionConfig — ${sourceTemplates.length} ProjectTemplate(s) still reference it: ${sourceTemplates.map(t => t.id).join(", ")}`
@@ -299,8 +458,17 @@ export default class RetireRegion extends Command {
       }
 
       if (sourceChambers.length > 0) {
-        await chamberRepo.delete(sourceChambers.map(c => c.id));
-        this.log(`Deleted ${sourceChambers.length} chamber(s) tied to source RegionConfig`);
+        // Cast to any: same TypeORM QueryDeepPartialEntity instantiation-depth
+        // workaround used in the project update above.
+        await chamberRepo.update(
+          sourceChambers.map(c => c.id),
+          {
+            regionConfig: { id: target.id }
+          } as any
+        );
+        this.log(
+          `Re-pointed ${sourceChambers.length} chamber(s) from source to target RegionConfig`
+        );
       }
 
       if (sourceTemplates.length > 0) {

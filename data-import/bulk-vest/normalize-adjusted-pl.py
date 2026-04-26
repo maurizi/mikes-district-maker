@@ -484,38 +484,43 @@ def normalize_ny(zf: zipfile.ZipFile) -> list[dict]:
 
 
 def normalize_pa(zf: zipfile.ZipFile) -> list[dict]:
-    """PA: XLSX at VTD level (9-digit FIPS), NOT block level.
-    P-table columns. Will need proportional distribution to blocks in prepare-dev-data."""
-    wb = openpyxl.load_workbook(
-        io.BytesIO(zf.read("2021 Prison Adjusted Census Population.xlsx")),
-        read_only=True,
-    )
-    ws = wb[wb.sheetnames[0]]
-    rows_iter = ws.iter_rows(values_only=True)
-    header = next(rows_iter)
-    col = {str(name): i for i, name in enumerate(header)}
+    """PA: WP_Blocks.dbf at TIGER block level (15-digit GEOID20). Standard
+    PL P-table columns; values stored as scientific-notation floats so we
+    parse with float() before casting to int.
 
-    # PA has VTD-level data: STFID is 9-digit (state+county+vtd).
-    # P0010001=total, P0010003=white, P0010004=black, P0010006=asian, P0020002=hispanic
-    # These are adjusted values in the standard PL table column naming.
-    rows = []
-    for r in rows_iter:
-        stfid = str(r[col["STFID"]])
-        rows.append(
-            compute_other(
-                {
-                    "GEOID": stfid,  # VTD-level, not block
-                    "adj_population": int(r[col["P0010001"]] or 0),
-                    "adj_white": int(r[col["P0010003"]] or 0),
-                    "adj_black": int(r[col["P0010004"]] or 0),
-                    "adj_asian": int(r[col["P0010006"]] or 0),
-                    "adj_hispanic": int(r[col["P0020002"]] or 0),
-                }
-            )
-        )
-    wb.close()
-    print(f"  NOTE: PA data is VTD-level ({len(rows)} VTDs), not block-level.")
-    print(f"  Will need proportional distribution to blocks in prepare-dev-data.")
+    Replaces the prior VTD-level XLSX source (which produced 9-digit IDs
+    that didn't match block GEOIDs and silently zeroed out PA's adj_*
+    columns in the prepare-region-data merge).
+    """
+    with zf.open("WP_Blocks.dbf") as f:
+        data = f.read()
+
+    dbf_rows = read_dbf(
+        data,
+        ["GEOID20", "P0010001", "P0010003", "P0010004", "P0010006", "P0020002"],
+    )
+
+    def _f(s: str) -> int:
+        return int(float(s)) if s else 0
+
+    # PA's source data carries 16-digit GEOIDs ending in A/B for blocks that
+    # were split for VTD assignment purposes. Our atomic-block pipeline
+    # needs whole-block totals, so we merge each XXXA+XXXB pair back into
+    # the parent 15-digit GEOID by summing adj_* values.
+    NUMERIC = ("adj_population", "adj_white", "adj_black", "adj_asian", "adj_hispanic")
+    merged: dict[str, dict] = {}
+    for r in dbf_rows:
+        geoid = r["GEOID20"]
+        if len(geoid) == 16 and geoid[-1].isalpha():
+            geoid = geoid[:-1]
+        rec = merged.setdefault(geoid, {"GEOID": geoid, **{k: 0 for k in NUMERIC}})
+        rec["adj_population"] += _f(r["P0010001"])
+        rec["adj_white"] += _f(r["P0010003"])
+        rec["adj_black"] += _f(r["P0010004"])
+        rec["adj_asian"] += _f(r["P0010006"])
+        rec["adj_hispanic"] += _f(r["P0020002"])
+
+    rows = [compute_other(rec) for rec in merged.values()]
     return rows
 
 
@@ -584,7 +589,7 @@ STATE_HANDLERS = {
     "NJ": ("nj_pl2020_b_official.zip", normalize_nj),
     "NV": ("nv_pl2020_official.zip", normalize_nv),
     "NY": ("ny_pl2020_official.zip", normalize_ny),
-    "PA": ("pa_pl2020_official.zip", normalize_pa),
+    "PA": ("pa_pl2020_official_blocks.zip", normalize_pa),
     "VA": ("va_pl2020_official.zip", normalize_va),
     "WA": ("wa_pl2020_b_official_adjusted.zip", normalize_wa),
 }

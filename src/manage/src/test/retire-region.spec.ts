@@ -143,6 +143,124 @@ describe("migrateDefinition", () => {
     });
   });
 
+  it("collapses old sub-blocks into a single new base when they agree", () => {
+    // Old: "A-1", "A-2" both in district 3.
+    const oldRegion = region(["A-1", "A-2", "B"], [[0, 1, 2]]);
+    const oldDefinition: DistrictsDefinition = [[3, 3, 0]];
+
+    // New build merged the splits — just "A" now.
+    const newRegion = region(["A", "B"], [[0, 1]]);
+
+    const { newDefinition, missingGeoIds, conflictedNewIds } = migrateDefinition(
+      oldDefinition,
+      oldRegion,
+      newRegion
+    );
+
+    expect(missingGeoIds).toEqual([]);
+    expect(conflictedNewIds).toEqual([]);
+    expect(definitionByBlockId(newDefinition, newRegion)).toEqual({ A: 3 });
+  });
+
+  it("preserves block-level intent — won't roll up a sub-block boundary the user explicitly drew", () => {
+    // Old: one precinct, defined block-level (the array form means the user
+    // assigned at block granularity rather than collapsing to a number).
+    // A-1 and A-2 are in different districts — that's an intentional
+    // sub-block boundary inside a single old precinct.
+    const oldRegion = region(["A-1", "A-2", "C1"], [[0, 1, 2]]);
+    const oldDefinition: DistrictsDefinition = [[3, 7, 3]];
+
+    // New build merged the splits; new precinct has merged A and C1.
+    const newRegion = region(["A", "C1"], [[0, 1]]);
+
+    const { newDefinition, missingGeoIds, conflictedNewIds } = migrateDefinition(
+      oldDefinition,
+      oldRegion,
+      newRegion
+    );
+
+    expect(missingGeoIds).toEqual([]);
+    // Even though C1 anchors the new precinct to district 3, A's two halves
+    // had block-level intent — refuse to defer; A stays unassigned.
+    expect(conflictedNewIds).toEqual(["A"]);
+    expect(definitionByBlockId(newDefinition, newRegion)).toEqual({ C1: 3 });
+  });
+
+  it("rolls up an ambiguous merged block when its new precinct's other blocks anchor to one district", () => {
+    // Old: two precincts, both collapsed to a number (precinct-level intent).
+    //   Precinct A = district 3, contains A-1 (split block) and C1.
+    //   Precinct B = district 7, contains A-2 (the other half of the split).
+    // The split was at the old precinct boundary.
+    const oldRegion = region(["A-1", "C1", "A-2"], [[0, 1], [2]]);
+    const oldDefinition: DistrictsDefinition = [3, 7];
+
+    // New build merged the splits AND drew a new precinct around new "A" + C1.
+    // (A-2's old geometry is no longer in this new precinct; it lives elsewhere
+    // and is dropped from this test's frame.)
+    const newRegion = region(["A", "C1"], [[0, 1]]);
+
+    const { newDefinition, missingGeoIds, conflictedNewIds } = migrateDefinition(
+      oldDefinition,
+      oldRegion,
+      newRegion
+    );
+
+    expect(missingGeoIds).toEqual([]);
+    expect(conflictedNewIds).toEqual([]);
+    // C1 anchors to 3. A is ambiguous {3,7} but both sources had precinct-level
+    // intent, so it defers to the precinct and inherits 3. Whole precinct = 3.
+    expect(definitionByBlockId(newDefinition, newRegion)).toEqual({ A: 3, C1: 3 });
+  });
+
+  it("leaves a merged block unassigned when the new precinct's anchors themselves disagree", () => {
+    // Old: two precincts, both collapsed (precinct-level intent).
+    //   Precinct A = 3, contains A-1, C1.
+    //   Precinct B = 7, contains A-2, D1.
+    const oldRegion = region(
+      ["A-1", "C1", "A-2", "D1"],
+      [
+        [0, 1],
+        [2, 3]
+      ]
+    );
+    const oldDefinition: DistrictsDefinition = [3, 7];
+
+    // New build merged splits, then drew a new precinct that crosses the old
+    // district line — pulls C1 (old district 3) and D1 (old district 7) under
+    // one new precinct alongside the merged A.
+    const newRegion = region(["A", "C1", "D1"], [[0, 1, 2]]);
+
+    const { newDefinition, missingGeoIds, conflictedNewIds } = migrateDefinition(
+      oldDefinition,
+      oldRegion,
+      newRegion
+    );
+
+    expect(missingGeoIds).toEqual([]);
+    // C1 anchors 3, D1 anchors 7 — singletons disagree. No precinct rollup.
+    // A stays unassigned (and reported); singletons keep their values.
+    expect(conflictedNewIds).toEqual(["A"]);
+    expect(definitionByBlockId(newDefinition, newRegion)).toEqual({ C1: 3, D1: 7 });
+  });
+
+  it("treats unassigned old sub-blocks as abstaining from the merge vote", () => {
+    // Old: A-1 -> 3, A-2 unassigned. Only A-1 votes; merged base inherits 3.
+    const oldRegion = region(["A-1", "A-2", "B"], [[0, 1, 2]]);
+    const oldDefinition: DistrictsDefinition = [[3, 0, 0]];
+
+    const newRegion = region(["A", "B"], [[0, 1]]);
+
+    const { newDefinition, missingGeoIds, conflictedNewIds } = migrateDefinition(
+      oldDefinition,
+      oldRegion,
+      newRegion
+    );
+
+    expect(missingGeoIds).toEqual([]);
+    expect(conflictedNewIds).toEqual([]);
+    expect(definitionByBlockId(newDefinition, newRegion)).toEqual({ A: 3 });
+  });
+
   it("collapses uniform branches into the compact number form", () => {
     // 6 blocks across 3 parents — uniform district 1 in parent 0, uniform
     // district 2 in parent 1, mixed in parent 2.

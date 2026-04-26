@@ -9,13 +9,62 @@ Commands are run via `./scripts/manage` from the project root, which executes in
 
 # Commands
 
-* [`manage prepare-dev-data STATEFIPS STATEABBR`](#manage-prepare-dev-data-statefips-stateabbr)
+* [`manage-py prepare-region-data STATEFIPS STATEABBR`](#manage-py-prepare-region-data-statefips-stateabbr) — Python pipeline, no block splitting (recommended for new regions)
+* [`manage prepare-dev-data STATEFIPS STATEABBR`](#manage-prepare-dev-data-statefips-stateabbr) — Legacy TS pipeline with block splitting
 * [`manage process-geojson FILE`](#manage-process-geojson-file)
 * [`manage publish-region STATICDATADIR COUNTRYCODE REGIONCODE REGIONNAME`](#manage-publish-region-staticdatadir-countrycode-regioncode-regionname)
 * [`manage update-region STATICDATADIR UPDATES3DIR`](#manage-update-region-staticdatadir-updates3dir)
 * [`manage bulk-reprocess-regions CONFIGFILE`](#manage-bulk-reprocess-regions-configfile)
 * [`manage update-organization CONFIG`](#manage-update-organization-config)
 * [`manage create-random-projects NUMBER [REGION]`](#manage-create-random-projects-number-region)
+
+## `manage-py prepare-region-data STATEFIPS STATEABBR`
+
+Python-based alternative to `prepare-dev-data`, following the Redistricting Data Hub methodology. Each TIGER block is treated as an atomic unit and assigned in full to whichever VEST precinct covers the majority of its area (via [`maup.assign`](https://maup.readthedocs.io/)). Votes are disaggregated from precincts to blocks weighted by VAP_MOD (VAP minus adult incarcerated population) and reconciled so per-precinct totals are preserved exactly.
+
+Unlike `prepare-dev-data`, this command:
+- Does not split blocks at precinct boundaries (no `-1`, `-2` sub-block IDs).
+- Skips the noding/polygonize/vertex-patching geometry repair path.
+- Produces a precinct layer that is the dissolved union of its assigned blocks (block-resolution approximation of the VEST shape).
+
+The output GeoJSON is drop-in compatible with `process-geojson` — same property schema, same hierarchy keys (`block`, `precinct`, `county`), so the downstream `process-geojson → publish-region` steps do not change.
+
+```
+USAGE
+  $ manage-py prepare-region-data STATEFIPS STATEABBR -v <vest.zip> -p <field> [OPTIONS]
+
+ARGUMENTS
+  STATEFIPS  2-digit state FIPS code (e.g. 10 for Delaware)
+  STATEABBR  State abbreviation (e.g. DE)
+
+FLAGS
+  -v, --vest=<path>               Path to VEST election shapefile zip (required)
+  -p, --vest-precinct-field=<s>   VEST precinct-id field name; optionally `idField:nameField` for
+                                  display name (required)
+  -o, --output=<path>             [default: dev-data/output.geojson] Output GeoJSON file path
+  -c, --census-cache=<prefix>     Path prefix for cached Census blocks + demographics (shares
+                                  shape with prepare-dev-data)
+  -a, --additional-vest=<pairs>   Comma-separated precinctField:path pairs for additional
+                                  election years (each year produces year-suffixed vote columns)
+      --bef-dir=<path>            Directory containing per-state BEF CSV subdirectories
+                                  (used for nearest-precinct fallback warnings)
+      --adj-dir=<path>            Directory containing {STATE}.csv adjusted-PL files
+
+EXAMPLES
+  # Delaware with 2020 presidential voting data. Paths are inside the
+  # manage container, where ./dev-data on the host is mounted at
+  # /home/node/app/manage/dev-data (the working directory). VEST zips
+  # staged under dev-data/staging/, matching data-import/bulk-vest/.
+  $ ./scripts/manage-py prepare-region-data 10 DE \
+      --vest dev-data/staging/de_2020.zip -p PRECINCT -o dev-data/de.geojson
+
+  # Then feed into process-geojson unchanged:
+  $ ./scripts/manage process-geojson dev-data/de.geojson \
+      -l block,precinct,county -n 8,4,0 -x 14,12,8 \
+      -d population,white,black,asian,hispanic,other \
+      -v democrat,republican,otherparty \
+      -o dev-data/de-output/
+```
 
 ## `manage prepare-dev-data STATEFIPS STATEABBR`
 

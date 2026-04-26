@@ -8,7 +8,7 @@ set -e
 # Usage: process-state.sh <json-row>
 # Reads all config from the JSON row passed as $1.
 #
-# Set UPDATE_ONLY=true to skip the geometry pipeline (prepare-dev-data +
+# Set UPDATE_ONLY=true to skip the geometry pipeline (prepare-region-data +
 # process-geojson) and just refresh votes via update-voting-data on the
 # existing dev-data/output/<state> directory. Useful when the only change
 # is the disaggregation methodology or new VEST data.
@@ -102,7 +102,7 @@ fi
 
 # Step 1: Prepare data (skip if geojson already exists)
 if [[ -f "$GEOJSON_HOST" ]]; then
-  echo "  [$state_abbr] GeoJSON already exists, skipping prepare-dev-data"
+  echo "  [$state_abbr] GeoJSON already exists, skipping prepare-region-data"
 else
   echo "  [$state_abbr] Copying election zips..."
   cp "$DATA_DIR/$vest_2020" "$DEV_DATA/staging/"
@@ -124,25 +124,26 @@ else
   append_year "$vest_2022" "$precinct_field_2022"
   append_year "$vest_2024" "$precinct_field_2024"
 
-  echo "  [$state_abbr] Running prepare-dev-data..."
+  echo "  [$state_abbr] Running prepare-region-data..."
   cd "$PROJECT_DIR"
-  SIMPLIFY_ARG=""
-  if [[ -n "$simplify_precincts" && "$simplify_precincts" != "0" ]]; then
-    SIMPLIFY_ARG="--simplifyPrecincts $simplify_precincts"
-  fi
+
+  # simplify_precincts was consumed by prepare-dev-data's precinct geometry
+  # simplification pass. prepare-region-data doesn't have a separate precinct
+  # layer (precincts are dissolved from blocks in process-geojson), so that
+  # knob has no analog here; arc simplification still happens via process-
+  # geojson's -s flag below.
 
   ADJ_DIR_ARG=""
   if [[ -d "dev-data/adjusted-pl" && -f "dev-data/adjusted-pl/${state_abbr}.csv" ]]; then
-    ADJ_DIR_ARG="--adjDir dev-data/adjusted-pl"
+    ADJ_DIR_ARG="--adj-dir dev-data/adjusted-pl"
   fi
 
-  ./scripts/manage prepare-dev-data "$state_fips" "$state_abbr" \
+  ./scripts/manage-py prepare-region-data "$state_fips" "$state_abbr" \
     -v "dev-data/staging/$vest_2020" \
     -p "$precinct_field_2020" \
     -c "dev-data/census-cache/${state_abbr}.geojson" \
-    --befDir dev-data/befs \
-    ${ADDITIONAL:+--additionalVest "$ADDITIONAL"} \
-    $SIMPLIFY_ARG \
+    --bef-dir dev-data/befs \
+    ${ADDITIONAL:+--additional-vest "$ADDITIONAL"} \
     $ADJ_DIR_ARG \
     -o "$GEOJSON_REL"
 

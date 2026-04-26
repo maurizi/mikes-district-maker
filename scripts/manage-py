@@ -1,0 +1,22 @@
+#!/bin/bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# © 2026 Michael Maurizi Jr.
+#
+# Dockerized entry point for the Python region-data pipeline, parallel to
+# scripts/manage. Paths are resolved inside the manage container, where
+# ./dev-data on the host is mounted at /home/node/app/manage/dev-data
+# (the working directory). Example:
+#   ./scripts/manage-py prepare-region-data 10 DE \
+#       --vest dev-data/staging/de_2020.zip -p PRECINCT -o dev-data/de.geojson
+
+set -e
+
+if [[ -n "${DB_DEBUG}" ]]; then
+    set -x
+fi
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    docker compose up -d database chromium
+    docker compose run --no-deps --rm manage \
+        python -m prepare_region_data.cli "$@"
+fi

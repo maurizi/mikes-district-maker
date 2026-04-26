@@ -41,8 +41,9 @@ export default class PublishRegion extends Command {
       required: true
     }),
     regionName: Args.string({
-      description: "Name of the region, e.g. Pennsylvania",
-      required: true
+      description:
+        "Name of the region, e.g. Pennsylvania. Optional with --replaces (inherits from the active row being archived).",
+      required: false
     })
   };
 
@@ -67,6 +68,14 @@ export default class PublishRegion extends Command {
       await dataSource.destroy();
       this.error(
         `An active RegionConfig already exists for ${args.countryCode}/${args.regionCode} (id=${existingActive.id}, version=${existingActive.version.toISOString()}). Re-run with --replaces to archive it.`
+      );
+    }
+
+    const regionName = args.regionName ?? existingActive?.name;
+    if (!regionName) {
+      await dataSource.destroy();
+      this.error(
+        `regionName is required (no active RegionConfig found for ${args.countryCode}/${args.regionCode} to inherit from).`
       );
     }
 
@@ -100,7 +109,7 @@ export default class PublishRegion extends Command {
 
     this.log("Saving region config to database");
     const regionConfig = new RegionConfig();
-    regionConfig.name = args.regionName;
+    regionConfig.name = regionName;
     regionConfig.countryCode = args.countryCode;
     regionConfig.regionCode = args.regionCode;
     regionConfig.s3URI = `s3://${flags.bucketName}/${keyPrefix}/`;

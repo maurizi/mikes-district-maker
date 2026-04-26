@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# © 2026 Michael Maurizi Jr.
+
+[project]
+name = "prepare-region-data"
+version = "0.1.0"
+description = "No-split, block-as-atomic-unit region-data preparation pipeline for DistrictBuilder"
+requires-python = ">=3.11"
+dependencies = [
+    "geopandas>=1.0",
+    "shapely>=2.0",
+    "maup>=2.0",
+    "pandas>=2.0",
+    "pyproj>=3.6",
+    "fiona>=1.10",
+    "click>=8.1",
+    "requests>=2.31",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+prepare-region-data = "prepare_region_data.cli:main"
+
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["prepare_region_data*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

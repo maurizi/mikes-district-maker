@@ -28,6 +28,14 @@ src/cli/lib
 # Manage build
 src/manage/lib
 
+# Python (manage pipeline)
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.venv-*/
+.pytest_cache/
+
 # Ansible
 deployment/ansible/roles/azavea.*
 

@@ -73,11 +73,24 @@ You will need a PlanScore API token to test the PlanScore integration. Email inf
 
 #### Preparing data from Census sources
 
-The `prepare-dev-data` command automates downloading Census TIGER block shapefiles, demographics, and optionally VEST election data:
+Two pipelines are available for generating per-block input GeoJSON:
+
+- **`prepare-region-data`** (Python, recommended for new regions) — follows the Redistricting Data Hub methodology: TIGER blocks are the atomic unit, votes are disaggregated from precincts by VAP_MOD weighting, and precincts are rendered as the dissolved union of their assigned blocks. No block splitting.
+- **`prepare-dev-data`** (legacy TypeScript) — splits TIGER blocks at VEST precinct boundaries to preserve original precinct geometry at sub-block resolution.
+
+Both emit the same GeoJSON property schema, so `process-geojson` and `publish-region` are unchanged.
 
 ```bash
-# Download and prepare Delaware data with 2020 election results
-./scripts/manage prepare-dev-data 10 DE --vest /data/de_2020.zip -o dev-data/de.geojson
+# VEST zips are staged under dev-data/staging/, which is mounted into the
+# manage container at /home/node/app/manage/dev-data/staging/.
+
+# Python pipeline (no block splitting)
+./scripts/manage-py prepare-region-data 10 DE \
+    --vest dev-data/staging/de_2020.zip -p PRECINCT -o dev-data/de.geojson
+
+# ...or the legacy TypeScript pipeline (splits blocks)
+./scripts/manage prepare-dev-data 10 DE \
+    --vest dev-data/staging/de_2020.zip -o dev-data/de.geojson
 
 # Process into tiles and static files
 ./scripts/manage process-geojson dev-data/de.geojson \

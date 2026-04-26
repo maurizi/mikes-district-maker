@@ -255,7 +255,9 @@ const projectDataReducer = (
         Cmd.run(fetchAllStaticData, {
           successActionCreator: staticDataFetchSuccess,
           failActionCreator: staticDataFetchFailure,
-          args: [action.payload.project.regionConfig.keyPrefix] as Parameters<typeof fetchAllStaticData>
+          args: [action.payload.project.regionConfig.keyPrefix] as Parameters<
+            typeof fetchAllStaticData
+          >
         })
       );
     case getType(projectDataFetchFailure):
@@ -617,8 +619,7 @@ const projectDataReducer = (
         const isOwner = getCurrentUserId() === project.user.id;
         const wasTriggeredBySave = isOwner && state.saving === "saving";
         const isBlank = isBlankDistrictsDefinition(project.districtsDefinition);
-        const needsInitialThumbnail =
-          isOwner && !isBlank && project.districtProperties == null;
+        const needsInitialThumbnail = isOwner && !isBlank && project.districtProperties == null;
         const needsCompletenessUpdate = isOwner && project.isComplete !== isComplete;
         const regionConfig = project.regionConfig;
         const nextState = updateCurrentState(

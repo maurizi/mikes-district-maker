@@ -436,9 +436,11 @@ const functions = {
 
     return Promise.all(
       mutableDistrictGeounitAccum.map(baseGeounitIdsForDistrict =>
-        getDemographics(baseGeounitIdsForDistrict, staticMetadata, project.regionConfig.keyPrefix).then(
-          staticCounts => staticCounts.demographics
-        )
+        getDemographics(
+          baseGeounitIdsForDistrict,
+          staticMetadata,
+          project.regionConfig.keyPrefix
+        ).then(staticCounts => staticCounts.demographics)
       )
     );
   }

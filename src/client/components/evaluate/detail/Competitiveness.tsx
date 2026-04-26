@@ -115,7 +115,6 @@ const CompetitivenessMetricDetail = ({
   const projectHasNoEmptyDistricts =
     geojson && geojson.features.slice(1).every(feature => feature.geometry.coordinates.length > 0);
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   function sendToPlanScore() {
     setPlanScoreLoaded("pending");
     project &&

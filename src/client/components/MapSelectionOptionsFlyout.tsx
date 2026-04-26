@@ -17,13 +17,7 @@ import Icon from "./Icon";
 import { type IStaticMetadata, type GroupTotal } from "../../shared/entities";
 import { type ElectionYear } from "../types";
 import { getOfficeYearCombos, officeName } from "../functions";
-
-const POPULATION_LABELS: { readonly [key: string]: string } = {
-  population: "All people",
-  adj_population: "Adjusted for prison population",
-  VAP: "Voting age population (VAP)",
-  CVAP: "Citizen voting age population (CVAP)"
-};
+import { POPULATION_LABELS } from "../constants/map";
 
 const style: Record<string, ThemeUIStyleObject> = {
   button: {

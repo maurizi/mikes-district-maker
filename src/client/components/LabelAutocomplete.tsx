@@ -20,6 +20,7 @@ import { type IStaticMetadata } from "../../shared/entities";
 import store from "../store";
 import { setMapLabel } from "../actions/districtDrawing";
 import Icon from "./Icon";
+import { POPULATION_LABELS } from "../constants/map";
 
 interface LabelOption {
   readonly id: string;
@@ -33,10 +34,21 @@ function buildOptions(metadata: IStaticMetadata): readonly LabelOption[] {
   // Demographics
   if (metadata.demographics) {
     for (const file of metadata.demographics) {
+      const groupData =
+        metadata.demographicsGroups && metadata.demographicsGroups.length > 1
+          ? metadata.demographicsGroups.find(
+              group => group.total === file.id || group.subgroups.includes(file.id)
+            )
+          : undefined;
+      const group =
+        groupData === undefined
+          ? "Demographics"
+          : groupData?.tooltip || POPULATION_LABELS[groupData.total!];
+      const label = capitalizeFirstLetter(file.id.replace(/adj_/, "Adjusted "));
       options.push({
         id: file.id,
-        label: capitalizeFirstLetter(file.id),
-        group: "Demographics"
+        label,
+        group
       });
     }
   }
@@ -195,7 +207,15 @@ const LabelAutocomplete = ({
   const displayValue = isOpen ? filter : getDisplayLabel(options, selectedLabel);
 
   return (
-    <Box sx={{ position: "relative" }}>
+    <Box
+      sx={{
+        position: "relative",
+        display: "flex",
+        border: "1px solid",
+        borderColor: "gray.2",
+        borderRadius: "4px"
+      }}
+    >
       <Input
         ref={e => {
           // Merge refs: floating-ui reference + our input ref
@@ -219,10 +239,9 @@ const LabelAutocomplete = ({
           fontSize: 1,
           py: 1,
           px: 2,
-          border: "1px solid",
-          borderColor: "gray.2",
-          borderRadius: "4px",
           cursor: "pointer",
+          border: "none",
+          textOverflow: "ellipsis",
           "&:focus": {
             borderColor: "blue.3",
             outline: "none"
@@ -238,16 +257,12 @@ const LabelAutocomplete = ({
             store.dispatch(setMapLabel(undefined));
           }}
           sx={{
-            position: "absolute",
-            right: "6px",
-            top: "50%",
-            transform: "translateY(-50%)",
             background: "none",
             border: "none",
             cursor: "pointer",
             color: "gray.5",
             fontSize: 1,
-            p: 0,
+            p: 2,
             lineHeight: 1,
             "&:hover": { color: "gray.8" }
           }}

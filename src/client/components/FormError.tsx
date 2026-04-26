@@ -17,7 +17,14 @@ export default function FormError({
       : undefined;
   return errorMessage ? (
     <Box
-      sx={{ px: 2, py: 1, mb: 1, borderRadius: "2px", backgroundColor: "warning", color: "#141414" }}
+      sx={{
+        px: 2,
+        py: 1,
+        mb: 1,
+        borderRadius: "2px",
+        backgroundColor: "warning",
+        color: "#141414"
+      }}
     >
       {errorMessage}
     </Box>

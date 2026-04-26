@@ -95,3 +95,9 @@ export const mergeBasemap = (
     layers: mergedLayers
   };
 };
+export const POPULATION_LABELS: { readonly [key: string]: string } = {
+  population: "All people",
+  adj_population: "Prison-adjusted population",
+  VAP: "Voting age population (VAP)",
+  CVAP: "Citizen voting age population (CVAP)"
+};

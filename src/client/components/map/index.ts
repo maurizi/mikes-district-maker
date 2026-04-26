@@ -588,9 +588,7 @@ export function generateMapLayers(
   applyLabelRegionFilter(map, bboxToPolygon(bbox));
 }
 
-export function bboxToPolygon(
-  bbox: readonly [number, number, number, number]
-): GeoJSON.Polygon {
+export function bboxToPolygon(bbox: readonly [number, number, number, number]): GeoJSON.Polygon {
   const [minLng, minLat, maxLng, maxLat] = bbox;
   return {
     type: "Polygon",
@@ -611,10 +609,7 @@ export function bboxToPolygon(
 // the already-wrapped current filter, which avoids nested wrappers when the
 // geometry upgrades (bbox → dissolved outline) or a basemap swap restores the
 // original (keeping our cache consistent with the freshly restored filter).
-const originalLabelFilters = new Map<
-  string,
-  maplibregl.FilterSpecification | null | undefined
->();
+const originalLabelFilters = new Map<string, maplibregl.FilterSpecification | null | undefined>();
 
 // Wrap each basemap label layer's filter with a point-in-polygon check so only
 // labels inside the active region render. Protomaps' `places` and `pois` tiles

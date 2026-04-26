@@ -216,10 +216,8 @@ const CompetitivenessMetricDetail = ({
         {planScoreLoaded === false ? (
           <Button
             sx={style.planscoreButton}
-            // disabled={!projectHasNoEmptyDistricts}
-            // onClick={() => sendToPlanScore()}
-            disabled={true}
-            title="Coming soon!"
+            disabled={!projectHasNoEmptyDistricts}
+            onClick={() => sendToPlanScore()}
           >
             {projectHasNoEmptyDistricts ? (
               <span>Send to PlanScore API</span>

@@ -101,6 +101,7 @@ import {
 import { fetchAllStaticData } from "../s3";
 import { mergeDistricts, exportCsv as workerExportCsv } from "../worker-functions";
 import { renderThumbnailPng } from "../thumbnail-render";
+import { getCurrentUserId } from "../jwt";
 import { isBlankDistrictsDefinition } from "../../shared/functions";
 import { saveAs } from "file-saver";
 import { toast } from "react-toastify";
@@ -610,10 +611,15 @@ const projectDataReducer = (
         //     the user saves an unrelated change).
         // Each check reads the pre-merge project from state, so it only fires
         // when there's actually something new to persist.
-        const wasTriggeredBySave = state.saving === "saving";
+        // Owner check: viewing someone else's map (or being logged out) still
+        // runs the merge to draw the districts, but must not call the
+        // ownership-gated PATCH / thumbnail-upload-url endpoints.
+        const isOwner = getCurrentUserId() === project.user.id;
+        const wasTriggeredBySave = isOwner && state.saving === "saving";
         const isBlank = isBlankDistrictsDefinition(project.districtsDefinition);
-        const needsInitialThumbnail = !isBlank && project.districtProperties == null;
-        const needsCompletenessUpdate = project.isComplete !== isComplete;
+        const needsInitialThumbnail =
+          isOwner && !isBlank && project.districtProperties == null;
+        const needsCompletenessUpdate = isOwner && project.isComplete !== isComplete;
         const regionConfig = project.regionConfig;
         const nextState = updateCurrentState(
           {

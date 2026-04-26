@@ -3,7 +3,7 @@
 
 import jwtDecode from "jwt-decode";
 
-import { type JWT } from "../shared/entities";
+import { type JWT, type JWTPayload, type UserId } from "../shared/entities";
 
 const JWT_ITEM_KEY = "jwt";
 
@@ -17,4 +17,15 @@ export const jwtIsExpired = (jwt: JWT) => {
 export const isUserLoggedIn = (): boolean => {
   const token = getJWT();
   return token !== null && !jwtIsExpired(token);
+};
+export const getCurrentUserId = (): UserId | null => {
+  const token = getJWT();
+  if (token === null || jwtIsExpired(token)) {
+    return null;
+  }
+  try {
+    return jwtDecode<JWTPayload>(token).id;
+  } catch {
+    return null;
+  }
 };

@@ -6,7 +6,6 @@ import {
   readFileSync,
   writeFileSync,
   existsSync,
-  unlinkSync,
   createReadStream,
   openSync,
   writeSync,
@@ -15,6 +14,8 @@ import {
 } from "fs";
 import { join } from "path";
 import { type IStaticFile, type IStaticMetadata } from "../../../shared/entities";
+import { type PropertyOverride } from "../../../shared/ctopo";
+import { rewriteContainer } from "../../../shared/ctopo/encode";
 import { geojsonPolygonLabels, tileJoin, tippecanoe } from "../lib/cmd";
 import { abbreviateNumber } from "./process-geojson";
 import { abbrev, mkTypedArray } from "../lib/voting-data";
@@ -206,6 +207,17 @@ export default class UpdateVotingData extends Command {
     closeSync(outFd);
     renameSync(tmpBlockPath, blockFullPath);
 
+    // Collect per-geolevel voting arrays in feature-index order so we
+    // can hand them straight to rewriteContainer below — the
+    // *-full.geojson iteration order matches the topology's geometry
+    // order for that level (both are produced from the same encode
+    // pass in process-geojson.ts).
+    const higherLevelArrays: Record<string, Record<string, number[]>> = {};
+    for (const gl of geoLevelIds.slice(1)) {
+      higherLevelArrays[gl] = {};
+      for (const id of allNewVotingIds) higherLevelArrays[gl][id] = [];
+    }
+
     // ── Step 3: Update higher-level *-full.geojson files ──
     for (const gl of geoLevelIds.slice(1)) {
       const fullPath = join(dir, `${gl}-full.geojson`);
@@ -242,8 +254,10 @@ export default class UpdateVotingData extends Command {
         // Assign aggregated voting data
         const agg = levelValue !== undefined ? aggregates[gl][levelValue] : undefined;
         for (const id of allNewVotingIds) {
-          props[id] = agg ? agg[id] || 0 : 0;
-          props[abbrev(id)] = abbreviateNumber(props[id]);
+          const value = agg ? agg[id] || 0 : 0;
+          props[id] = value;
+          props[abbrev(id)] = abbreviateNumber(value);
+          higherLevelArrays[gl][id].push(value);
         }
 
         writeSync(fd, JSON.stringify(feature) + "\n");
@@ -253,37 +267,41 @@ export default class UpdateVotingData extends Command {
       renameSync(tmpPath, fullPath);
     }
 
-    // ── Step 4: Write .buf files ──
-    this.log("\nWriting .buf files...");
+    // ── Step 4: Swap voting sections in region.ctopo ──
+    this.log("\nRewriting region.ctopo with new voting data...");
 
-    // Delete old voting .buf files that are no longer needed
-    for (const id of oldVotingIds) {
-      if (!allNewVotingIds.includes(id)) {
-        const bufPath = join(dir, `${id}.buf`);
-        if (existsSync(bufPath)) {
-          unlinkSync(bufPath);
-          this.log(`  Deleted ${id}.buf`);
-        }
+    const ctopoPath = join(dir, "region.ctopo");
+    if (!existsSync(ctopoPath)) {
+      this.error("region.ctopo not found in output directory");
+    }
+
+    // One override per (geolevel, voting id). For the base level we
+    // already collected per-feature values in votingDataArrays during
+    // step 2; higher levels were collected during step 3.
+    const overrides: PropertyOverride[] = [];
+    for (const id of allNewVotingIds) {
+      overrides.push({ name: `${baseGeoLevel}/${id}`, data: votingDataArrays[id] });
+      for (const gl of geoLevelIds.slice(1)) {
+        overrides.push({ name: `${gl}/${id}`, data: higherLevelArrays[gl][id] });
       }
     }
 
-    // Write new voting .buf files
-    const votingMetadata: IStaticFile[] = allNewVotingIds.map(id => {
-      const data = votingDataArrays[id];
-      const typedData = mkTypedArray(data);
-      const fileName = `${id}.buf`;
-      writeFileSync(join(dir, fileName), typedData);
-      this.log(`  Wrote ${fileName} (${typedData.constructor.name}, ${data.length} elements)`);
-      return {
-        id,
-        fileName,
-        bytesPerElement: typedData.BYTES_PER_ELEMENT,
-        unsigned:
-          typedData instanceof Uint8Array ||
-          typedData instanceof Uint16Array ||
-          typedData instanceof Uint32Array
-      };
-    });
+    const tmpCtopo = ctopoPath + ".tmp";
+    await rewriteContainer(ctopoPath, tmpCtopo, overrides);
+    renameSync(tmpCtopo, ctopoPath);
+    this.log(`  Swapped ${overrides.length} voting sections across ${geoLevelIds.length} layers`);
+
+    // votingMetadata feeds the legacy IStaticMetadata.voting list — kept
+    // populated so a subsequent run of this command can identify stale
+    // voting columns to strip from the *-full.geojson files. The .buf
+    // files themselves are no longer written; their data lives in
+    // region.ctopo's per-layer voting sections.
+    const votingMetadata: IStaticFile[] = allNewVotingIds.map(id => ({
+      id,
+      fileName: `${id}.buf`,
+      bytesPerElement: 4,
+      unsigned: true
+    }));
 
     // ── Step 5: Regenerate label tiles ──
     this.log("\nRegenerating label tiles...");

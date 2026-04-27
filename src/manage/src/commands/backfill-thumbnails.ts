@@ -13,17 +13,18 @@ import {
   type DistrictProperties,
   type DistrictsGeoJSON,
   type GeoUnitHierarchy,
-  type IStaticFile,
   type IStaticMetadata,
   type ThumbnailGeoJSON,
+  type TypedArray,
   type TypedArrays
 } from "../../../shared/entities";
 import {
-  type AdjacencyData,
-  buildBlockAssignment,
-  buildReverseIndex,
-  computeDistrictBoundaries
-} from "../../../shared/boundary";
+  type CtopoClient,
+  type RangeFetcher,
+  CtopoClient as CtopoClientCtor,
+  makeRangeFetcher
+} from "../../../shared/ctopo";
+import { buildBlockAssignment, computeDistrictBoundaries } from "../../../shared/boundary";
 import { getVoting } from "../../../shared/functions";
 import { simplifyForThumbnail } from "../../../shared/thumbnail";
 
@@ -531,35 +532,13 @@ window.renderDistricts = function (coloredDistricts, bounds) {
 interface RegionData {
   readonly geoUnitHierarchy: GeoUnitHierarchy;
   readonly numBlocks: number;
-  readonly adjacencyData: AdjacencyData;
+  readonly client: CtopoClient;
   readonly bbox: readonly [number, number, number, number];
   readonly staticMetadata: IStaticMetadata;
-  // Parallel to staticMetadata.voting — one TypedArray per voting file with
-  // per-block counts. Empty when the region has no voting data configured.
+  // Parallel to staticMetadata.voting — one TypedArray per voting id
+  // with per-block counts. Empty when the region has no voting data
+  // configured.
   readonly staticVoting: TypedArrays;
-}
-
-// Mirror of src/client/s3.ts fetchStaticFiles — pick the right TypedArray
-// based on bytesPerElement + unsigned.
-async function fetchStaticTypedArrays(
-  keyPrefix: string,
-  files: readonly IStaticFile[]
-): Promise<TypedArrays> {
-  return Promise.all(
-    files.map(async file => {
-      const buf = await s3GetBytes(keyPrefix, file.fileName);
-      const unsigned = file.unsigned ?? true;
-      const bpe = file.bytesPerElement;
-      if (unsigned) {
-        if (bpe === 1) return new Uint8Array(buf);
-        if (bpe === 2) return new Uint16Array(buf);
-        return new Uint32Array(buf);
-      }
-      if (bpe === 1) return new Int8Array(buf);
-      if (bpe === 2) return new Int16Array(buf);
-      return new Int32Array(buf);
-    })
-  );
 }
 
 function regionArtifactsBucket(): string {
@@ -578,31 +557,33 @@ async function s3GetJson<T>(keyPrefix: string, fileName: string): Promise<T> {
   return JSON.parse(body) as T;
 }
 
-async function s3GetBytes(keyPrefix: string, fileName: string): Promise<ArrayBuffer> {
-  const res = await s3.send(
-    new GetObjectCommand({ Bucket: regionArtifactsBucket(), Key: `${keyPrefix}${fileName}` })
-  );
-  const bytes = (await res.Body?.transformToByteArray()) ?? new Uint8Array();
-  // Slice to the exact bounds — Node Buffers may share an oversized backing
-  // ArrayBuffer, which would corrupt typed-array views built from .buffer.
-  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+// Wrap the AWS SDK's GetObjectCommand in a RangeFetcher so the ctopo
+// client can issue Range GETs against the bucket using the same
+// implicit credentials the rest of this command uses.
+function makeS3Fetcher(keyPrefix: string, fileName: string): RangeFetcher {
+  return makeRangeFetcher(async rangeHeader => {
+    const res = await s3.send(
+      new GetObjectCommand({
+        Bucket: regionArtifactsBucket(),
+        Key: `${keyPrefix}${fileName}`,
+        Range: rangeHeader
+      })
+    );
+    const bytes = (await res.Body?.transformToByteArray()) ?? new Uint8Array();
+    // Slice to exact bounds — Node Buffers may share an oversized
+    // backing ArrayBuffer that would corrupt typed-array views.
+    return new Uint8Array(
+      bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+    );
+  });
 }
 
 async function loadRegionData(keyPrefix: string): Promise<RegionData> {
-  const [geoUnitHierarchy, adjBuf, offsetsBuf, coordsBuf, transform, metadata] = await Promise.all([
+  const [geoUnitHierarchy, metadata, client] = await Promise.all([
     s3GetJson<GeoUnitHierarchy>(keyPrefix, "geounit-hierarchy.json"),
-    s3GetBytes(keyPrefix, "adjacency.bin"),
-    s3GetBytes(keyPrefix, "arc-offsets.bin"),
-    s3GetBytes(keyPrefix, "arc-coords.bin"),
-    s3GetJson<AdjacencyData["transform"]>(keyPrefix, "transform.json"),
-    s3GetJson<IStaticMetadata>(keyPrefix, "static-metadata.json")
+    s3GetJson<IStaticMetadata>(keyPrefix, "static-metadata.json"),
+    CtopoClientCtor.openWith(makeS3Fetcher(keyPrefix, "region.ctopo"))
   ]);
-  const adjacencyData: AdjacencyData = {
-    adjacency: new Int32Array(adjBuf),
-    arcOffsets: new Uint32Array(offsetsBuf),
-    arcCoords: coordsBuf,
-    transform
-  };
   // Count base-level leaves in the hierarchy (== block count).
   const stack: (GeoUnitHierarchy | number)[] = [geoUnitHierarchy];
   let numBlocks = 0;
@@ -614,17 +595,20 @@ async function loadRegionData(keyPrefix: string): Promise<RegionData> {
       for (let i = current.length - 1; i >= 0; i--) stack.push(current[i]);
     }
   }
-  // Load per-block voting binaries if the region has voting data. Enables the
-  // partisan breakdown in districtProperties that the OG card description
-  // reads — skipping this would mean backfilled projects fall back to the
-  // generic "N districts" copy until the user re-saves through the editor.
-  const staticVoting = metadata.voting
-    ? await fetchStaticTypedArrays(keyPrefix, metadata.voting)
+  // Load per-block voting sections if the region has voting data.
+  // Enables the partisan breakdown in districtProperties that the OG
+  // card description reads — skipping this would mean backfilled
+  // projects fall back to the generic "N districts" copy until the
+  // user re-saves through the editor.
+  const baseLayer = metadata.geoLevelHierarchy[0].id;
+  const votingViews = metadata.voting
+    ? await Promise.all(metadata.voting.map(v => client.property(`${baseLayer}/${v.id}`)))
     : [];
+  const staticVoting = votingViews as unknown as TypedArray[];
   return {
     geoUnitHierarchy,
     numBlocks,
-    adjacencyData,
+    client,
     bbox: metadata.bbox,
     staticMetadata: metadata,
     staticVoting
@@ -637,16 +621,16 @@ async function loadRegionData(keyPrefix: string): Promise<RegionData> {
 // aggregated so the OG card can report partisan breakdown. When the user
 // later opens the project in the editor, the worker recomputes everything
 // fresh and overwrites these with full data.
-function buildThumbnail(project: Project, region: RegionData): ThumbnailGeoJSON {
-  const reverseIndex = buildReverseIndex(region.adjacencyData.adjacency, region.numBlocks);
+async function buildThumbnail(project: Project, region: RegionData): Promise<ThumbnailGeoJSON> {
+  const baseLayer = region.staticMetadata.geoLevelHierarchy[0].id;
   const assignment = buildBlockAssignment(
     project.districtsDefinition,
     region.geoUnitHierarchy,
     region.numBlocks
   );
-  const boundaries = computeDistrictBoundaries(
-    region.adjacencyData,
-    reverseIndex,
+  const boundaries = await computeDistrictBoundaries(
+    region.client,
+    baseLayer,
     assignment,
     project.numberOfDistricts
   );
@@ -852,7 +836,7 @@ export default class BackfillThumbnails extends Command {
 
         for (const project of regionProjects) {
           try {
-            const thumbnail = buildThumbnail(project, region);
+            const thumbnail = await buildThumbnail(project, region);
             const districtProperties: readonly DistrictProperties[] = thumbnail.features.map(
               f => f.properties
             );

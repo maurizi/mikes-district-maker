@@ -98,8 +98,11 @@ import {
   submitProject,
   uploadProjectThumbnail
 } from "../api";
-import { fetchAllStaticData } from "../s3";
-import { mergeDistricts, exportCsv as workerExportCsv } from "../worker-functions";
+import {
+  fetchAllStaticData,
+  mergeDistricts,
+  exportCsv as workerExportCsv
+} from "../worker-functions";
 import { renderThumbnailPng } from "../thumbnail-render";
 import { getCurrentUserId } from "../jwt";
 import { isBlankDistrictsDefinition } from "../../shared/functions";

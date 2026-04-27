@@ -15,12 +15,39 @@ import {
   type IStaticMetadata,
   type ThumbnailGeoJSON
 } from "../shared/entities";
-import { type DistrictsGeoJSON, type StaticCounts } from "../client/types";
+import { type DistrictsGeoJSON, type StaticCounts, type StaticProjectData } from "../client/types";
+import { fetchGeoUnitHierarchy, fetchStaticMetadata } from "./s3";
 import { type WorkerFunctions } from "./worker";
 
 const worker = Comlink.wrap<WorkerFunctions>(
   new Worker(new URL("./worker.ts", import.meta.url), { type: "module" })
 );
+
+// TEMP perf instrumentation — mirror worker/ctopo BroadcastChannel
+// messages onto the page console. Remove after texas perf.
+if (typeof BroadcastChannel !== "undefined") {
+  const ch = new BroadcastChannel("ctopo-perf");
+  ch.onmessage = (e: MessageEvent<string>) => {
+    // eslint-disable-next-line no-console
+    console.log(e.data);
+  };
+}
+
+// Fetch the JSON sidecars locally and ask the worker for the
+// `.ctopo`-resident staticGeoLevels — only the worker opens a ctopo
+// client, so the bootstrap chain runs once per session instead of
+// once per JS context.
+export async function fetchAllStaticData(
+  keyPrefix: string,
+  version: Date | string | number
+): Promise<StaticProjectData> {
+  const [staticMetadata, geoUnitHierarchy] = await Promise.all([
+    fetchStaticMetadata(keyPrefix, version),
+    fetchGeoUnitHierarchy(keyPrefix, version)
+  ]);
+  const staticGeoLevels = await worker.fetchStaticGeoLevels(keyPrefix, version, staticMetadata);
+  return { staticMetadata, geoUnitHierarchy, staticGeoLevels };
+}
 
 function replacer(this: unknown, key: string | number, value: unknown): unknown {
   if (value instanceof Set) {

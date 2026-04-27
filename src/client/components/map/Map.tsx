@@ -536,7 +536,11 @@ const DistrictsMap = ({
   useEffect(() => {
     if (!map) return;
     let cancelled = false;
-    computeRegionOutline(staticMetadata, project.regionConfig.keyPrefix, project.regionConfig.version)
+    computeRegionOutline(
+      staticMetadata,
+      project.regionConfig.keyPrefix,
+      project.regionConfig.version
+    )
       .then(outline => {
         if (cancelled) return;
         regionOutlineRef.current = outline;

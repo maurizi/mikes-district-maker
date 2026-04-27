@@ -11,8 +11,10 @@
     "baseUrl": ".",
     "paths": {
       "geojson": ["./node_modules/@types/geojson"],
+      "topojson-specification": ["./node_modules/@types/topojson-specification"],
       "@turf/bbox": ["./node_modules/@turf/bbox"],
-      "simplify-geojson": ["./node_modules/simplify-geojson"]
+      "simplify-geojson": ["./node_modules/simplify-geojson"],
+      "@bokuweb/zstd-wasm": ["./node_modules/@bokuweb/zstd-wasm"]
     },
     "strict": true,
     "strictPropertyInitialization": false,

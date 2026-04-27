@@ -18,6 +18,7 @@
     "check-format": "prettier --check 'src/{client,shared}/**/*.{ts,tsx,json,css}'"
   },
   "dependencies": {
+    "@bokuweb/zstd-wasm": "^0.0.27",
     "@emotion/react": "11.14.0",
     "@emotion/styled": "11.14.1",
     "@floating-ui/react": "^0.27.19",
@@ -102,6 +103,7 @@
     "@types/react-dom": "18.3.7",
     "@types/react-table": "^7.7.20",
     "@types/styled-system__css": "^5.0.22",
+    "@types/topojson-specification": "1.0.1",
     "@vitejs/plugin-react": "^4.6.0",
     "comlink": "^4.4.2",
     "eslint": "9.28.0",

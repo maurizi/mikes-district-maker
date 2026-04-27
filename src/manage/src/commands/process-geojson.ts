@@ -39,9 +39,10 @@ import {
   type IStaticMetadata,
   type DemographicsGroup
 } from "../../../shared/entities";
-import { extractAdjacencyData } from "../lib/extract-adjacency";
+import { writeContainer } from "../../../shared/ctopo/encode";
+import { CtopoClient, makeRangeFetcher } from "../../../shared/ctopo";
 import { geojsonPolygonLabels, tileJoin, tippecanoe } from "../lib/cmd";
-import { abbrev, mkTypedArray } from "../lib/voting-data";
+import { abbrev } from "../lib/voting-data";
 import _ from "lodash";
 
 // Shoelace area of a linear ring in its own coordinate units (deg² here).
@@ -194,6 +195,16 @@ max string length of ~512MB).
       char: "t",
       description: "Maximum tile size in bytes for tippecanoe (default 750000)",
       default: "750000"
+    }),
+
+    skipTiles: Flags.boolean({
+      description:
+        "Skip vector-tile generation (tippecanoe + tileJoin). Use when iterating on the .ctopo encoder — basemap tiles are unaffected by encoder changes and re-rendering them takes minutes per state."
+    }),
+
+    writeBenchTopology: Flags.boolean({
+      description:
+        "Also write topo-bench.json next to topo.json — same TopoJSON structure but unfiltered (every demographic + voting field plus the parent-index sections that are populated post addGeoLevelIndices). Used as the input for the .ctopo encoder benchmark sweep so we can re-encode under different presets without re-running process-geojson. Multi-GB on big states; only set when benching."
     })
   };
 
@@ -331,45 +342,90 @@ max string length of ~512MB).
 
     this.addGeoLevelIndices(topoJsonHierarchy, geoLevelIds);
 
-    ux.action.start("Extracting adjacency data");
-    extractAdjacencyData(topoJsonHierarchy, geoLevelIds[0], geoLevelIds, flags.outputDir);
-    ux.action.stop();
+    if (flags.writeBenchTopology) {
+      // Bench input: same TopoJSON structure as topo.json, but
+      // unfiltered (no filterTopoJson) and emitted *after* the
+      // parent-index properties have been added. The .ctopo
+      // benchmark sweep re-encodes from this file, so it must
+      // contain every property the encoder would normally pack into
+      // the production region.ctopo.
+      await this.writeBenchTopology(flags.outputDir, topoJsonHierarchy);
+    }
 
     // Include source geojson in output to make reprocessing easier
     this.log("Copying source file to output");
     copyFileSync(args.file, join(flags.outputDir, "input.geojson"));
 
-    this.writeIntermediaryGeoJson(flags.outputDir, topoJsonHierarchy, geoLevelIds);
+    let geoLevelHierarchyInfo: GeoLevelInfo[];
+    if (flags.skipTiles) {
+      // Encoder-iteration shortcut: skip the multi-minute tippecanoe
+      // pass and synthesize the same {id, minZoom, maxZoom} info that
+      // writeVectorTiles would have returned. Existing tiles.pmtiles
+      // (if any) is left in place from a prior run.
+      this.log("--skip-tiles: skipping vector tile generation");
+      geoLevelHierarchyInfo = geoLevelIds.map((id, idx) => ({
+        id,
+        minZoom: parseInt(minZooms[idx]) || 0,
+        maxZoom: parseInt(maxZooms[idx]) || 14
+      }));
+    } else {
+      this.writeIntermediaryGeoJson(flags.outputDir, topoJsonHierarchy, geoLevelIds);
+      geoLevelHierarchyInfo = this.writeVectorTiles(
+        flags.outputDir,
+        geoLevelIds,
+        minZooms,
+        maxZooms,
+        demographicIds,
+        votingIds,
+        maximumTileBytes
+      );
+    }
 
-    const geoLevelHierarchyInfo = this.writeVectorTiles(
-      flags.outputDir,
-      geoLevelIds,
-      minZooms,
-      maxZooms,
-      demographicIds,
-      votingIds,
-      maximumTileBytes
-    );
-
-    const demographicMetaData = this.writeNumericData(
-      flags.outputDir,
-      topoJsonHierarchy,
-      geoLevelIds[0],
-      demographicIds
-    );
-
-    const votingMetaData = this.writeNumericData(
-      flags.outputDir,
-      topoJsonHierarchy,
-      geoLevelIds[0],
-      votingIds
-    );
-
-    const geoLevelMetaData = this.writeGeoLevelIndices(
-      flags.outputDir,
-      topoJsonHierarchy,
-      geoLevelIds
-    );
+    // One container holds the global arcs, every layer's geometry CSR
+    // triple, and every per-feature property (demographics, voting,
+    // GEOIDs, names, parent indices) the consumer needs. The encoder
+    // walks `topoJsonHierarchy.objects` and packs whatever properties
+    // are attached to each geometry — the topology already carries
+    // demographics + voting on the base layer geometries at this point,
+    // so no manual extraction step is needed.
+    ux.action.start("Writing ctopo container");
+    // Per-layer parent-index sections (`${layer}/${parentKey}Idx`) are
+    // read at hierarchy-load time to map geounit ids → integer indices,
+    // so they belong in the open-time front-load region. addGeoLevelIndices
+    // emits one `${parentKey}Idx` property per geometry per ancestor
+    // geolevel; build the matching section names from the layer hierarchy.
+    // geoLevelIds is base-first (e.g. ["block", "precinct", "county"]).
+    // addGeoLevelIndices walks top-down and writes a `${parent}Idx`
+    // property on every geometry for each ancestor geolevel — so for
+    // a given layer at index `i`, the parents are at indices > i.
+    // Section names land as `${layer}/${parent}Idx`.
+    const frontLoadedIdxSections: string[] = votingIds
+      .filter(
+        id =>
+          (id.startsWith("democrat") || id.startsWith("republican")) &&
+          (id.endsWith("16") || id.endsWith("20") || id.endsWith("24"))
+      )
+      .map(id => `block/${id}`);
+    for (let i = 0; i < geoLevelIds.length - 1; i++) {
+      const layer = geoLevelIds[i];
+      for (let j = i + 1; j < geoLevelIds.length; j++) {
+        frontLoadedIdxSections.push(`${layer}/${geoLevelIds[j]}Idx`);
+      }
+    }
+    await writeContainer(join(flags.outputDir, "region.ctopo"), topoJsonHierarchy, {
+      compression: "zst",
+      blockCompressArcCoords: true,
+      frontLoadedSectionNames: frontLoadedIdxSections,
+      onProgress: event => {
+        if (event.stage === "compress-group") {
+          const totalNote = event.total !== undefined ? `/${event.total}` : "";
+          this.log(
+            `  compressed region ${event.index}${totalNote}${event.detail !== undefined ? `: ${event.detail}` : ""}`
+          );
+        }
+      }
+    });
+    ux.action.stop();
 
     this.writeGeounitHierarchy(flags.outputDir, topoJsonHierarchy, geoLevelIds);
 
@@ -377,9 +433,9 @@ max string length of ~512MB).
       flags.outputDir,
       topoJsonHierarchy,
       geoLevelIds[geoLevelIds.length - 1],
-      demographicMetaData,
-      geoLevelMetaData,
-      votingMetaData,
+      demographicIds,
+      votingIds,
+      geoLevelIds,
       bbox,
       geoLevelHierarchyInfo,
       this.getDemographicsGroups(flags.demographics)
@@ -647,11 +703,11 @@ max string length of ~512MB).
     );
   }
 
-  // Reads previous geo-properties from S3 for sorting. The payload is big
-  // (hundreds of MB for TX/CA/FL) and contains all demographic/voting fields
-  // per feature, but we only need the geoLevelIds fields for sort + verify.
-  // We spool the body to a temp file, then stream-parse per level, projecting
-  // each item down to just the id fields so peak memory stays small.
+  // Reads previous geo-properties from S3 for sorting. Tries the post-ctopo
+  // path first — open the previous prefix's `region.ctopo` over S3 Range GETs
+  // and pull the small `{layer}/{geoLevelId}` columns directly, avoiding
+  // the multi-hundred-MB download of the legacy geo-properties.json. Falls
+  // back to that JSON only when the prefix predates the ctopo migration.
   async readPrevGeoProperties(
     inputS3Dir: string,
     geoLevelIds: readonly string[]
@@ -661,6 +717,95 @@ max string length of ~512MB).
     const bucket = uriComponents[2];
     const keyPrefix = uriComponents.slice(3).join("/");
 
+    try {
+      return await this.readPrevGeoPropertiesFromCtopo(s3Client, bucket, keyPrefix, geoLevelIds);
+    } catch (err) {
+      if (!isNoSuchKey(err)) throw err;
+      this.log("Previous prefix has no region.ctopo; falling back to geo-properties.json");
+      return this.readPrevGeoPropertiesFromJson(s3Client, bucket, keyPrefix, geoLevelIds);
+    }
+  }
+
+  // Pull each `{layer}/{id}` column out of the previous region.ctopo and
+  // assemble the same Record<level, Record<id, value>[]> shape the sort
+  // step expects. Columns absent at a layer (e.g. `county/block`) stay
+  // unset, mirroring the JSON path where missing keys read as undefined.
+  async readPrevGeoPropertiesFromCtopo(
+    s3Client: S3Client,
+    bucket: string,
+    keyPrefix: string,
+    geoLevelIds: readonly string[]
+  ): Promise<Record<string, Record<string, unknown>[]>> {
+    const fetcher = makeRangeFetcher(async rangeHeader => {
+      const res = await s3Client.send(
+        new GetObjectCommand({
+          Bucket: bucket,
+          Key: `${keyPrefix}region.ctopo`,
+          Range: rangeHeader
+        })
+      );
+      const bytes = (await res.Body?.transformToByteArray()) ?? new Uint8Array();
+      // Slice to exact bounds — Node Buffers may share an oversized backing
+      // ArrayBuffer that would corrupt typed-array views.
+      return new Uint8Array(
+        bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+      );
+    });
+
+    const client = await CtopoClient.openWith(fetcher);
+    try {
+      const result: Record<string, Record<string, unknown>[]> = {};
+      for (const level of geoLevelIds) {
+        const layerMeta = client.meta.layers.find(l => l.name === level);
+        if (layerMeta === undefined) continue;
+        const numFeatures = layerMeta.numGeometries;
+
+        const columns: Record<string, unknown[]> = {};
+        for (const id of geoLevelIds) {
+          const sectionName = `${level}/${id}`;
+          const entry = client.sections.find(s => s.name === sectionName);
+          if (entry === undefined) continue;
+          if (entry.dtype === "strings") {
+            const arr = await client.strings(sectionName);
+            const list: unknown[] = new Array(arr.length);
+            for (let i = 0; i < arr.length; i++) list[i] = arr.get(i);
+            columns[id] = list;
+          } else {
+            const view = (await client.property(sectionName)) as unknown as ArrayLike<number>;
+            const list: unknown[] = new Array(view.length);
+            for (let i = 0; i < view.length; i++) list[i] = view[i];
+            columns[id] = list;
+          }
+        }
+
+        const items: Record<string, unknown>[] = new Array(numFeatures);
+        for (let i = 0; i < numFeatures; i++) {
+          const row: Record<string, unknown> = {};
+          for (const id of geoLevelIds) {
+            if (id in columns) row[id] = columns[id][i];
+          }
+          items[i] = row;
+        }
+        result[level] = items;
+      }
+      return result;
+    } finally {
+      client.close();
+    }
+  }
+
+  // Legacy path for prefixes published before the ctopo migration. The
+  // payload is big (hundreds of MB for TX/CA/FL) and contains all
+  // demographic/voting fields per feature, but we only need the geoLevelIds
+  // fields for sort + verify. Spool the body to a temp file, then
+  // stream-parse per level, projecting each item down to just the id
+  // fields so peak memory stays small.
+  async readPrevGeoPropertiesFromJson(
+    s3Client: S3Client,
+    bucket: string,
+    keyPrefix: string,
+    geoLevelIds: readonly string[]
+  ): Promise<Record<string, Record<string, unknown>[]>> {
     const response = await s3Client.send(
       new GetObjectCommand({
         Bucket: bucket,
@@ -720,6 +865,25 @@ max string length of ~512MB).
     });
   }
 
+  // Bench-only: dumps the unfiltered topology (every demographic +
+  // voting field still attached, plus the parent-index properties
+  // populated by addGeoLevelIndices) to topo-bench.json. The .ctopo
+  // encoder benchmark reads this file as its source of truth so it
+  // can re-encode under different presets without re-running the
+  // multi-minute geojson → topology stages.
+  async writeBenchTopology(dir: string, topology: Topology<Objects<{}>>) {
+    this.log("Writing topo-bench.json (unfiltered topology for encoder bench)");
+    const path = join(dir, "topo-bench.json");
+    const output = createWriteStream(path, { encoding: "utf-8" });
+    await new Promise<void>((resolve, reject) => {
+      const stream = new JsonStreamStringify(topology);
+      stream.pipe(output);
+      output.on("finish", resolve);
+      stream.on("error", reject);
+      output.on("error", reject);
+    });
+  }
+
   filterTopoJson(
     topology: Topology<Objects<{}>>,
     demographics: readonly string[],
@@ -748,79 +912,14 @@ max string length of ~512MB).
     };
   }
 
-  // Create demographic or voting static data and write to disk
-  writeNumericData(
-    dir: string,
-    topology: Topology<Objects<{}>>,
-    geoLevel: string,
-    ids: readonly string[]
-  ): IStaticFile[] {
-    const features: Feature[] = (topology.objects[geoLevel] as any).geometries;
-    return ids.map(id => {
-      this.log(`Writing static data file for ${id}`);
-      const fileName = `${id}.buf`;
-
-      // For demographic static data, we want an arraybuffer of base geounits where
-      // each data element represents the demographic data contained in that geounit.
-      const data = features.map(f => f?.properties?.[id]);
-      const typedData = mkTypedArray(data);
-      writeFileSync(join(dir, fileName), typedData);
-      return {
-        id,
-        fileName,
-        bytesPerElement: typedData.BYTES_PER_ELEMENT,
-        unsigned:
-          typedData instanceof Uint8Array ||
-          typedData instanceof Uint16Array ||
-          typedData instanceof Uint32Array
-      };
-    });
-  }
-
-  // Create geolevel index data and write to disk
-  writeGeoLevelIndices(
-    dir: string,
-    topology: Topology<Objects<{}>>,
-    geoLevels: readonly string[]
-  ): IStaticFile[] {
-    return geoLevels.slice(1).map((geoLevel, idx) => {
-      this.log(`Writing ${geoLevel} index file`);
-      const childFeatures: Feature[] = (topology.objects[geoLevels[idx]] as any).geometries;
-      const features: Feature[] = (topology.objects[geoLevel] as any).geometries;
-      const geoLevelIdToIndex = new Map(features.map((f, i) => [f?.properties?.[geoLevel], i]));
-      const fileName = `${geoLevel}.buf`;
-
-      // For geolevel static data, we want an arraybuffer of child geounits where
-      // each data element represents the geolevel index of that geounit.
-      // For example, for county-tract-block:
-      //  - county.buf is a list of tracts where each value is the county index the tract belongs to
-      //  - tract.buf is a list of blocks where each value is the tract index the block belongs to
-      // With this information, we're able to answer questions such as:
-      //  - Given a county id, which tracts belong to it?
-      //  - Given a tract id, which blocks belong to it?
-      const data = mkTypedArray(
-        childFeatures.map(f => {
-          return geoLevelIdToIndex.get(f?.properties?.[geoLevel]) || 0;
-        })
-      );
-      writeFileSync(join(dir, fileName), data);
-      return {
-        id: geoLevel,
-        fileName,
-        bytesPerElement: data.BYTES_PER_ELEMENT,
-        unsigned: true
-      };
-    });
-  }
-
   // Write static metadata file to disk
   writeStaticMetadata(
     dir: string,
     topology: Topology<Objects<{}>>,
     topLevelId: string,
-    demographicMetadata: IStaticFile[],
-    geoLevelMetadata: IStaticFile[],
-    votingMetadata: IStaticFile[],
+    demographicIds: readonly string[],
+    votingIds: readonly string[],
+    geoLevelIds: readonly string[],
     bbox: [number, number, number, number],
     geoLevelHierarchy: GeoLevelInfo[],
     demographicsGroups: readonly DemographicsGroup[]
@@ -836,10 +935,23 @@ max string length of ~512MB).
       0
     );
 
+    // The IStaticFile entries used to describe per-property `.buf`
+    // sidecars (id + filename + dtype). The data lives in region.ctopo
+    // now and the client reads it via client.property("{layer}/{id}"),
+    // but the id list is still authoritative for telling consumers
+    // *which* properties to aggregate. fileName / bytesPerElement /
+    // unsigned are vestigial and ignored by post-migration callers.
+    const idStub = (id: string): IStaticFile => ({
+      id,
+      fileName: "",
+      bytesPerElement: 0,
+      unsigned: true
+    });
+
     const staticMetadata: IStaticMetadata = {
-      demographics: demographicMetadata,
-      geoLevels: geoLevelMetadata,
-      voting: votingMetadata,
+      demographics: demographicIds.map(idStub),
+      geoLevels: geoLevelIds.slice(1).map(idStub),
+      voting: votingIds.map(idStub),
       bbox,
       geoLevelHierarchy,
       demographicsGroups,
@@ -1200,6 +1312,15 @@ max string length of ~512MB).
 
     return null;
   }
+}
+
+// S3 returns NoSuchKey on a missing object; the SDK surfaces it as either
+// the typed error name or the underlying HTTP 404. Match both so the
+// fallback fires regardless of which transport path the SDK took.
+function isNoSuchKey(err: unknown): boolean {
+  if (err === null || typeof err !== "object") return false;
+  const e = err as { name?: string; Code?: string; $metadata?: { httpStatusCode?: number } };
+  return e.name === "NoSuchKey" || e.Code === "NoSuchKey" || e.$metadata?.httpStatusCode === 404;
 }
 
 export function abbreviateNumber(value: number) {

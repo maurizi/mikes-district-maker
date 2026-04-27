@@ -87,7 +87,10 @@ export default defineConfig(({ command }) => ({
   },
   test: {
     environment: "jsdom",
-    include: ["src/client/**/*.{test,spec}.{ts,tsx}"],
+    include: [
+      "src/client/**/*.{test,spec}.{ts,tsx}",
+      "src/shared/**/*.{test,spec}.ts"
+    ],
     setupFiles: ["src/client/test-setup.ts"]
   }
 }));

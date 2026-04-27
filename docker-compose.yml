@@ -34,6 +34,7 @@ services:
       # UUID project IDs make it safe for dev and prod to share one bucket.
       # Override locally if you want isolation.
       - THUMBNAILS_BUCKET=${THUMBNAILS_BUCKET:-districtbuilder-production-thumbnails}
+      - REGION_ARTIFACTS_BUCKET=${REGION_ARTIFACTS_BUCKET:-districtbuilder-dev-238046523378}
       - JWT_SECRET=insecure
       - JWT_EXPIRATION_IN_MS=604800000 # 1 week
       - CLIENT_URL=http://localhost:3003
@@ -94,6 +95,7 @@ services:
       - AWS_PROFILE=${AWS_PROFILE:-district-builder}
       - AWS_REGION=${AWS_REGION:-us-east-1}
       - THUMBNAILS_BUCKET=${THUMBNAILS_BUCKET:-districtbuilder-production-thumbnails}
+      - REGION_ARTIFACTS_BUCKET=${REGION_ARTIFACTS_BUCKET:-districtbuilder-dev-238046523378}
       # Reaches the chromium sidecar on the internal docker network.
       - PUPPETEER_BROWSER_URL=${PUPPETEER_BROWSER_URL:-http://chromium:3000}
       - NODE_OPTIONS=--max-old-space-size=24384

@@ -168,7 +168,12 @@ S3_BUCKET="districtbuilder-dev-238046523378"
 S3_PREFIX="s3://${S3_BUCKET}/regions/US/${state_abbr}/"
 LATEST_VERSION=$(AWS_PROFILE=district-builder aws s3 ls "$S3_PREFIX" | tail -1 | awk '{print $2}')
 INPUT_S3_DIR_FLAG=""
-if [[ -n "$LATEST_VERSION" ]]; then
+# SKIP_INPUT_S3=1 forces a fresh sort instead of reading the previous
+# version's block ordering off S3 — needed when the .ctopo format on
+# S3 is incompatible with the current encoder (e.g. an in-flight
+# format change). Stable arc-id ordering across rebuilds is lost for
+# this run; subsequent rebuilds re-establish it from the new file.
+if [[ -n "$LATEST_VERSION" && "${SKIP_INPUT_S3:-}" != "1" ]]; then
   INPUT_S3_DIR_FLAG="--inputS3Dir ${S3_PREFIX}${LATEST_VERSION}"
 else
   echo "  [$state_abbr] WARNING: No existing S3 version found, proceeding without --inputS3Dir"
@@ -209,6 +214,14 @@ if [[ -n "$ADJ_COLS" ]]; then
 fi
 
 cd "$PROJECT_DIR"
+# SKIP_TILES=1 skips the multi-minute tippecanoe pass — useful only
+# when iterating on the .ctopo encoder. Tiles aren't regenerated, so
+# the existing tiles.pmtiles in the output dir is left in place.
+SKIP_TILES_FLAG=""
+if [[ "${SKIP_TILES:-}" == "1" || "${SKIP_TILES:-}" == "true" ]]; then
+  SKIP_TILES_FLAG="--skipTiles"
+  echo "  [$state_abbr] SKIP_TILES set, will pass --skipTiles to process-geojson"
+fi
 ./scripts/manage process-geojson "$GEOJSON_REL" \
   -l block,precinct,county \
   -n "$min_zoom" \
@@ -223,6 +236,7 @@ cd "$PROJECT_DIR"
   -t "$max_tile_bytes" \
   $BIG_ARG \
   $INPUT_S3_DIR_FLAG \
+  $SKIP_TILES_FLAG \
   -o "dev-data/output/${state_abbr}"
 
 if [[ "$NO_PUBLISH" == "true" ]]; then

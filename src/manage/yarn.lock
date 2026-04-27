@@ -1343,6 +1343,11 @@
   resolved "https://registry.npmjs.org/@bcoe/v8-coverage/-/v8-coverage-0.2.3.tgz"
   integrity sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==
 
+"@bokuweb/zstd-wasm@^0.0.27":
+  version "0.0.27"
+  resolved "https://registry.yarnpkg.com/@bokuweb/zstd-wasm/-/zstd-wasm-0.0.27.tgz#89d8ed8c37528c4b9d11f47826b9f603346dfc4c"
+  integrity sha512-GDm2uOTK3ESjnYmSeLQifJnBsRCWajKLvN32D2ZcQaaCIJI/Hse9s74f7APXjHit95S10UImsRGkTsbwHmrtmg==
+
 "@borewit/text-codec@^0.2.1":
   version "0.2.2"
   resolved "https://registry.npmjs.org/@borewit/text-codec/-/text-codec-0.2.2.tgz"
@@ -5475,6 +5480,11 @@ functions-have-names@^1.2.3:
   version "1.2.3"
   resolved "https://registry.npmjs.org/functions-have-names/-/functions-have-names-1.2.3.tgz"
   integrity sha512-xckBUXyTIqT97tq2x2AMb+g163b5JFysYk0x4qxNFwbfQkmNZoiRHb6sPzI9/QV33WeuvVYBUIiD4NzNIyqaRQ==
+
+fzstd@^0.1.1:
+  version "0.1.1"
+  resolved "https://registry.yarnpkg.com/fzstd/-/fzstd-0.1.1.tgz#a3da29f2fff45070ca90073f866d97e0c56a4a52"
+  integrity sha512-dkuVSOKKwh3eas5VkJy1AW1vFpet8TA/fGmVA5krThl8YcOVE/8ZIoEA1+U1vEn5ckxxhLirSdY837azmbaNHA==
 
 gdal-async@^3.12.3:
   version "3.12.3"

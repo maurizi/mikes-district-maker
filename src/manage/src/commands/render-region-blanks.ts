@@ -19,11 +19,8 @@ import {
   type IStaticMetadata,
   type ThumbnailGeoJSON
 } from "../../../shared/entities";
-import {
-  type AdjacencyData,
-  buildReverseIndex,
-  computeDistrictBoundaries
-} from "../../../shared/boundary";
+import { CtopoClient, makeRangeFetcher, type RangeFetcher } from "../../../shared/ctopo";
+import { computeDistrictBoundaries } from "../../../shared/boundary";
 import { simplifyForThumbnail } from "../../../shared/thumbnail";
 
 const s3 = new S3Client({});
@@ -101,7 +98,8 @@ window.renderDistricts = function (coloredDistricts, bounds) {
 interface RegionData {
   readonly geoUnitHierarchy: GeoUnitHierarchy;
   readonly numBlocks: number;
-  readonly adjacencyData: AdjacencyData;
+  readonly client: CtopoClient;
+  readonly baseLayer: string;
   readonly bbox: readonly [number, number, number, number];
 }
 
@@ -121,29 +119,28 @@ async function s3GetJson<T>(keyPrefix: string, fileName: string): Promise<T> {
   return JSON.parse(body) as T;
 }
 
-async function s3GetBytes(keyPrefix: string, fileName: string): Promise<ArrayBuffer> {
-  const res = await s3.send(
-    new GetObjectCommand({ Bucket: regionArtifactsBucket(), Key: `${keyPrefix}${fileName}` })
-  );
-  const bytes = (await res.Body?.transformToByteArray()) ?? new Uint8Array();
-  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+function makeS3Fetcher(keyPrefix: string, fileName: string): RangeFetcher {
+  return makeRangeFetcher(async rangeHeader => {
+    const res = await s3.send(
+      new GetObjectCommand({
+        Bucket: regionArtifactsBucket(),
+        Key: `${keyPrefix}${fileName}`,
+        Range: rangeHeader
+      })
+    );
+    const bytes = (await res.Body?.transformToByteArray()) ?? new Uint8Array();
+    return new Uint8Array(
+      bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+    );
+  });
 }
 
 async function loadRegionData(keyPrefix: string): Promise<RegionData> {
-  const [geoUnitHierarchy, adjBuf, offsetsBuf, coordsBuf, transform, metadata] = await Promise.all([
+  const [geoUnitHierarchy, metadata, client] = await Promise.all([
     s3GetJson<GeoUnitHierarchy>(keyPrefix, "geounit-hierarchy.json"),
-    s3GetBytes(keyPrefix, "adjacency.bin"),
-    s3GetBytes(keyPrefix, "arc-offsets.bin"),
-    s3GetBytes(keyPrefix, "arc-coords.bin"),
-    s3GetJson<AdjacencyData["transform"]>(keyPrefix, "transform.json"),
-    s3GetJson<IStaticMetadata>(keyPrefix, "static-metadata.json")
+    s3GetJson<IStaticMetadata>(keyPrefix, "static-metadata.json"),
+    CtopoClient.openWith(makeS3Fetcher(keyPrefix, "region.ctopo"))
   ]);
-  const adjacencyData: AdjacencyData = {
-    adjacency: new Int32Array(adjBuf),
-    arcOffsets: new Uint32Array(offsetsBuf),
-    arcCoords: coordsBuf,
-    transform
-  };
   const stack: (GeoUnitHierarchy | number)[] = [geoUnitHierarchy];
   let numBlocks = 0;
   while (stack.length > 0) {
@@ -154,18 +151,28 @@ async function loadRegionData(keyPrefix: string): Promise<RegionData> {
       for (let i = current.length - 1; i >= 0; i--) stack.push(current[i]);
     }
   }
-  return { geoUnitHierarchy, numBlocks, adjacencyData, bbox: metadata.bbox };
+  return {
+    geoUnitHierarchy,
+    numBlocks,
+    client,
+    baseLayer: metadata.geoLevelHierarchy[0].id,
+    bbox: metadata.bbox
+  };
 }
 
 // Produces a ThumbnailGeoJSON with a single feature for district 0 containing
 // the entire region outline. No property lookups (demographics/voting) because
 // a blank map has no assignments to summarize.
-function buildBlankThumbnail(region: RegionData): ThumbnailGeoJSON {
-  const reverseIndex = buildReverseIndex(region.adjacencyData.adjacency, region.numBlocks);
+async function buildBlankThumbnail(region: RegionData): Promise<ThumbnailGeoJSON> {
   // All blocks assigned to district 0 (unassigned). numberOfDistricts = 0
   // tells computeDistrictBoundaries to only emit the district-0 feature.
   const assignment = new Uint8Array(region.numBlocks);
-  const boundaries = computeDistrictBoundaries(region.adjacencyData, reverseIndex, assignment, 0);
+  const boundaries = await computeDistrictBoundaries(
+    region.client,
+    region.baseLayer,
+    assignment,
+    0
+  );
   const features: Feature<MultiPolygon, DistrictProperties>[] = boundaries.map((b, i) => ({
     type: "Feature",
     id: i,
@@ -341,7 +348,7 @@ export default class RenderRegionBlanks extends Command {
         }
         try {
           const regionData = await loadRegionData(region.keyPrefix);
-          const thumbnail = buildBlankThumbnail(regionData);
+          const thumbnail = await buildBlankThumbnail(regionData);
           const squarePng = await renderPngInFreshPage(
             getBrowser,
             thumbnail,

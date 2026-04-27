@@ -224,6 +224,11 @@
     "@babel/helper-string-parser" "^7.27.1"
     "@babel/helper-validator-identifier" "^7.28.5"
 
+"@bokuweb/zstd-wasm@^0.0.27":
+  version "0.0.27"
+  resolved "https://registry.yarnpkg.com/@bokuweb/zstd-wasm/-/zstd-wasm-0.0.27.tgz#89d8ed8c37528c4b9d11f47826b9f603346dfc4c"
+  integrity sha512-GDm2uOTK3ESjnYmSeLQifJnBsRCWajKLvN32D2ZcQaaCIJI/Hse9s74f7APXjHit95S10UImsRGkTsbwHmrtmg==
+
 "@csstools/color-helpers@^5.1.0":
   version "5.1.0"
   resolved "https://registry.npmjs.org/@csstools/color-helpers/-/color-helpers-5.1.0.tgz"
@@ -2714,6 +2719,13 @@
   version "7.1.3"
   resolved "https://registry.npmjs.org/@types/supercluster/-/supercluster-7.1.3.tgz"
   integrity sha512-Z0pOY34GDFl3Q6hUFYf3HkTwKEE02e7QgtJppBt+beEAxnyOpJua+voGFvxINBHa06GwLFFym7gRPY2SiKIfIA==
+  dependencies:
+    "@types/geojson" "*"
+
+"@types/topojson-specification@1.0.1":
+  version "1.0.1"
+  resolved "https://registry.yarnpkg.com/@types/topojson-specification/-/topojson-specification-1.0.1.tgz#a80cb294290b79f2d674d3f5938c544ed2bd9d80"
+  integrity sha512-ZZYZUgkmUls9Uhxx2WZNt9f/h2+H3abUUjOVmq+AaaDFckC5oAwd+MDp95kBirk+XCXrYj0hfpI6DSUiJMrpYQ==
   dependencies:
     "@types/geojson" "*"
 

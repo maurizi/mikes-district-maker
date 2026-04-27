@@ -7,11 +7,10 @@ import {
   type TypedArrays,
   type GeoUnitHierarchy,
   type HttpsURI,
-  type IStaticFile,
   type IStaticMetadata
 } from "../shared/entities";
-import { type AdjacencyData } from "../shared/boundary";
-import { type StaticProjectData, type WorkerProjectData } from "./types";
+import { type CtopoClient, openContainer } from "../shared/ctopo";
+import { type WorkerProjectData } from "./types";
 
 const s3Axios = axios.create();
 
@@ -70,94 +69,68 @@ export async function fetchGeoUnitHierarchy(
   });
 }
 
-async function fetchStaticFiles(
-  keyPrefix: string,
-  version: Date | string | number,
-  files: readonly IStaticFile[]
-): Promise<TypedArrays> {
-  const requests = files.map(fileMeta =>
-    s3Axios.get(staticDataUri(keyPrefix, fileMeta.fileName, version), {
-      responseType: "arraybuffer"
-    })
-  );
+// One CtopoClient per (keyPrefix, version) tuple, shared by every caller
+// that needs to read sections out of the container. Caching here means
+// the bootstrap Range GET fires once per region per page load, not once
+// per consumer; including the version in the cache key means a
+// republished region opens a fresh client (matching the URL-level
+// cache-buster) instead of reusing stale section offsets.
+const clientCache = new Map<string, Promise<CtopoClient>>();
 
-  return new Promise((resolve, reject) => {
-    axios
-      .all(requests)
-      .then(response =>
-        resolve(
-          response.map((res, ind) => {
-            const bpe = files[ind].bytesPerElement;
-            const unsigned = files[ind].unsigned;
-            const typedArrayConstructor =
-              unsigned || unsigned === undefined
-                ? bpe === 1
-                  ? Uint8Array
-                  : bpe === 2
-                    ? Uint16Array
-                    : Uint32Array
-                : bpe === 1
-                  ? Int8Array
-                  : bpe === 2
-                    ? Int16Array
-                    : Int32Array;
-
-            const typedArray = new typedArrayConstructor(res.data);
-            return typedArray;
-          })
-        )
-      )
-      .catch(error => reject(error.message));
-  });
+function clientCacheKey(keyPrefix: string, version: Date | string | number): string {
+  return `${keyPrefix}@${versionParam(version)}`;
 }
 
-export async function fetchAllStaticData(
+// Front-prefetch budget for the open path. 0 disables it entirely —
+// open then just awaits the suffix-range footer GET (one RTT) and
+// section bytes fetch on demand. Larger values pre-warm the
+// byte-range cache with front-loaded sections, but on slow / throttled
+// connections the prefetch chunks compete with on-demand boundary
+// fetches and end up slowing total time-to-ready. Empirically 0 has
+// been fastest for state-sized regions on our test connection.
+//
+// TODO: move to a region_config column once we have a feel for the
+// right per-region tuning.
+const FRONT_PREFETCH_BYTES = 0;
+
+export function getCtopoClient(
   keyPrefix: string,
   version: Date | string | number
-): Promise<StaticProjectData> {
-  return fetchStaticMetadata(keyPrefix, version)
-    .then(staticMetadata =>
-      Promise.all([
-        Promise.resolve(staticMetadata),
-        fetchGeoUnitHierarchy(keyPrefix, version),
-        fetchStaticFiles(keyPrefix, version, staticMetadata.geoLevels)
-      ])
-    )
-    .then(([staticMetadata, geoUnitHierarchy, staticGeoLevels]) => ({
-      staticMetadata,
-      geoUnitHierarchy,
-      staticGeoLevels
-    }));
+): Promise<CtopoClient> {
+  const key = clientCacheKey(keyPrefix, version);
+  let cached = clientCache.get(key);
+  if (cached === undefined) {
+    cached = openContainer(staticDataUri(keyPrefix, "region.ctopo", version), {
+      frontPrefetchBytes: FRONT_PREFETCH_BYTES
+    });
+    clientCache.set(key, cached);
+  }
+  return cached;
+}
+
+export async function fetchSections(
+  client: CtopoClient,
+  sectionNames: readonly string[]
+): Promise<TypedArrays> {
+  // property() is typed as ArrayBufferView in the public surface; the
+  // concrete return is always the matching TypedArray (Uint8Array,
+  // Float64Array, etc.) since we only call it on numeric-dtype
+  // sections here.
+  const views = await Promise.all(sectionNames.map(n => client.property(n)));
+  return views as unknown as TypedArrays;
 }
 
 export async function fetchBlockIds(
   keyPrefix: string,
   version: Date | string | number
 ): Promise<readonly string[]> {
-  const response = await s3Axios.get<string[]>(staticDataUri(keyPrefix, "block-ids.json", version));
-  return response.data;
-}
-
-export async function fetchAdjacencyData(
-  keyPrefix: string,
-  version: Date | string | number
-): Promise<AdjacencyData> {
-  const [adjResp, offsetsResp, coordsResp, transformResp] = await Promise.all([
-    s3Axios.get(staticDataUri(keyPrefix, "adjacency.bin", version), { responseType: "arraybuffer" }),
-    s3Axios.get(staticDataUri(keyPrefix, "arc-offsets.bin", version), {
-      responseType: "arraybuffer"
-    }),
-    s3Axios.get(staticDataUri(keyPrefix, "arc-coords.bin", version), {
-      responseType: "arraybuffer"
-    }),
-    s3Axios.get(staticDataUri(keyPrefix, "transform.json", version))
-  ]);
-  return {
-    adjacency: new Int32Array(adjResp.data),
-    arcOffsets: new Uint32Array(offsetsResp.data),
-    arcCoords: coordsResp.data,
-    transform: transformResp.data
-  };
+  const client = await getCtopoClient(keyPrefix, version);
+  const baseLayer = client.meta.layers[0].name;
+  // The base-layer id property lives in `{baseLayer}/{baseLayer}` —
+  // the producer attaches the GEOID under the layer's own name on each
+  // geometry (see process-geojson.ts).
+  const ids = await client.strings(`${baseLayer}/${baseLayer}`);
+  return Array.from(ids);
 }
 
 export async function fetchWorkerStaticData(
@@ -165,13 +138,26 @@ export async function fetchWorkerStaticData(
   version: Date | string | number,
   staticMetadata: IStaticMetadata
 ): Promise<WorkerProjectData> {
-  return Promise.all([
-    fetchGeoUnitHierarchy(keyPrefix, version),
-    fetchStaticFiles(keyPrefix, version, staticMetadata.demographics),
-    staticMetadata.voting && fetchStaticFiles(keyPrefix, version, staticMetadata.voting)
-  ]).then(([geoUnitHierarchy, staticDemographics, staticVotingData]) => ({
-    geoUnitHierarchy,
-    staticDemographics,
-    staticVotingData
-  }));
+  const [client, geoUnitHierarchy] = await Promise.all([
+    getCtopoClient(keyPrefix, version),
+    fetchGeoUnitHierarchy(keyPrefix, version)
+  ]);
+  const baseLayer = staticMetadata.geoLevelHierarchy[0].id;
+  // Kick off demographics and voting concurrently — both go through
+  // the client's microtask-batched fetcher, so issuing them in the
+  // same tick collapses to a single coalesced Range GET covering both
+  // sets of sections.
+  const [staticDemographics, staticVotingData] = await Promise.all([
+    fetchSections(
+      client,
+      staticMetadata.demographics.map(d => `${baseLayer}/${d.id}`)
+    ),
+    staticMetadata.voting
+      ? fetchSections(
+          client,
+          staticMetadata.voting.map(v => `${baseLayer}/${v.id}`)
+        )
+      : Promise.resolve(undefined)
+  ]);
+  return { geoUnitHierarchy, staticDemographics, staticVotingData };
 }

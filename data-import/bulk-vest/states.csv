@@ -42,7 +42,7 @@ RI,44,Rhode Island,ri_2020.zip,VTDST20:NAME20,ri_2018.zip,VTDST20,ri_2016.zip,VT
 SC,45,South Carolina,sc_2020.zip,PCODE:NAME,sc_2018.zip,PCODE,sc_2016.zip,PCODE,sc_2022_gen_prec.zip,UNIQUE_ID,sc_2024_gen_prec.zip,UNIQUE_ID,0.0000000025,1e5,"10,4,0","14,12,8",500000,true,published,0,
 SD,46,South Dakota,sd_2020.zip,NAME,sd_2018.zip,NAME,sd_2016.zip,NAME,,,,,0.0000000025,1e5,"10,4,0","14,12,8",500000,true,published,0,
 TN,47,Tennessee,tn_2020.zip,NAME,tn_2018.zip,NAME,tn_2016.zip,NAME,,,tn_2024_gen_prec.zip,UNIQUE_ID,0.0000000025,1e5,"11,4,0","14,12,8",650000,true,published,0,
-TX,48,Texas,tx_2020.zip,PCTKEY,tx_2018.zip,PCTKEY,tx_2016.zip,PCTKEY,tx_2022_gen_tx_vtd.zip,UNIQUE_ID,tx_2024_gen_tx_vtd.zip,UNIQUE_ID,0.0000000025,1e5,"11,4,0","14,12,8",650000,true,published,0,
+TX,48,Texas,tx_2020.zip,PCTKEY,tx_2018.zip,PCTKEY,tx_2016.zip,PCTKEY,tx_2022_gen_tx_vtd.zip,UNIQUE_ID,tx_2024_gen_tx_vtd.zip,UNIQUE_ID,0.0000000025,1e5,"11,4,0","14,12,8",650000,true,pending,0,
 UT,49,Utah,ut_2020.zip,PRECINCT:NAME,ut_2018.zip,PRECINCT,ut_2016.zip,PRECINCT,,,ut_2024_gen_prec.zip,UNIQUE_ID,0.0000000025,1e6,"11,4,0","14,12,8",650000,true,published,0,
 VA,51,Virginia,va_2020.zip,PRECINCT,va_2018.zip,PRECINCT,va_2016.zip,PRECINCT,,,va_2024_gen_prec.zip,UNIQUE_ID,0.0000000025,1e5,"11,4,0","14,12,8",650000,true,published,0,extra years: 2017=va_2017.zip
 VT,50,Vermont,vt_2020.zip,NAME20,vt_2018.zip,NAME20,vt_2016.zip,NAME20,,,vt_2024_gen_prec.zip,UNIQUE_ID,0.0000000025,1e5,"10,4,0","14,12,8",500000,true,published,0,

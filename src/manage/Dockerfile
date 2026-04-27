@@ -39,6 +39,7 @@ RUN set -ex \
   g++ \
   curl \
   ca-certificates \
+  zstd \
   " \
   && apt-get update && apt-get install -yq $deps --no-install-recommends
 

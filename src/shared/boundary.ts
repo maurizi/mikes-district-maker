@@ -2,61 +2,26 @@
 // © 2026 Michael Maurizi Jr.
 
 /**
- * District boundary computation using pre-computed adjacency index.
- *
- * Replaces the server's topojson.mergeArcs() with a typed-array-based approach:
- * 1. Scan adjacency index to find boundary arcs per district
- * 2. Group blocks into connected components (for contiguity)
- * 3. Stitch arcs into closed rings per component
- * 4. Decode arc coordinates using transform
+ * District boundary computation. Domain layer over the generic ctopo
+ * library: builds per-district block sets from a districts definition,
+ * splits each into connected components, and asks ctopo.merge to
+ * compute the union of arcs (interior cancellation, ring stitching,
+ * coord decode) for each component. Returns one MultiPolygon per
+ * district plus its Polsby-Popper compactness and contiguity flag.
  */
 
 import { type MultiPolygon } from "geojson";
+
+import { type CtopoClient, merge, neighbors } from "./ctopo";
 import { type Contiguity, type DistrictsDefinition, type GeoUnitHierarchy } from "./entities";
 
-export interface AdjacencyData {
-  readonly adjacency: Int32Array; // [forwardBlock, reverseBlock] per arc
-  readonly arcCoords: ArrayBuffer; // packed coordinates
-  readonly arcOffsets: Uint32Array; // byte offsets into arcCoords
-  readonly transform: { scale: [number, number]; translate: [number, number] } | null;
-}
-
-export interface ReverseIndex {
-  readonly offsets: Uint32Array; // block -> start position in arcIds
-  readonly arcIds: Int32Array; // signed arc IDs per block
-}
-
-// --- Build reverse index from adjacency (block -> arcs) ---
-
-export function buildReverseIndex(adjacency: Int32Array, numBlocks: number): ReverseIndex {
-  const numArcs = adjacency.length / 2;
-
-  // Pass 1: count arcs per block
-  const counts = new Uint32Array(numBlocks);
-  for (let i = 0; i < numArcs; i++) {
-    const fwd = adjacency[i * 2];
-    const rev = adjacency[i * 2 + 1];
-    if (fwd >= 0) counts[fwd]++;
-    if (rev >= 0) counts[rev]++;
-  }
-
-  // Prefix sum -> offsets
-  const offsets = new Uint32Array(numBlocks + 1);
-  for (let i = 0; i < numBlocks; i++) {
-    offsets[i + 1] = offsets[i] + counts[i];
-  }
-
-  // Pass 2: fill signed arc IDs
-  const arcIds = new Int32Array(offsets[numBlocks]);
-  const pos = new Uint32Array(numBlocks);
-  for (let i = 0; i < numArcs; i++) {
-    const fwd = adjacency[i * 2];
-    const rev = adjacency[i * 2 + 1];
-    if (fwd >= 0) arcIds[offsets[fwd] + pos[fwd]++] = i;
-    if (rev >= 0) arcIds[offsets[rev] + pos[rev]++] = ~i;
-  }
-
-  return { offsets, arcIds };
+// TEMP perf instrumentation — broadcast to the same channel the
+// ctopo client uses; main thread mirrors it to the page console.
+// Remove after texas perf investigation.
+const _perfChannel =
+  typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel("ctopo-perf");
+function perfLog(msg: string): void {
+  if (_perfChannel !== null) _perfChannel.postMessage(msg);
 }
 
 // --- Build flat block -> district assignment from DistrictsDefinition ---
@@ -84,33 +49,23 @@ export function buildBlockAssignment(
 // --- Find connected components of same-district blocks ---
 
 function findComponents(
-  districtBlocks: number[],
-  adjacency: Int32Array,
-  reverseIndex: ReverseIndex
+  blockIds: ReadonlyArray<number>,
+  adjacency: ReadonlyArray<ReadonlyArray<number>>
 ): number[][] {
-  const blockSet = new Set(districtBlocks);
+  const inDistrict = new Set(blockIds);
   const visited = new Set<number>();
   const components: number[][] = [];
 
-  for (const block of districtBlocks) {
-    if (visited.has(block)) continue;
+  for (const seed of blockIds) {
+    if (visited.has(seed)) continue;
     const component: number[] = [];
-    const stack = [block];
-    visited.add(block);
+    const stack = [seed];
+    visited.add(seed);
     while (stack.length > 0) {
-      const b = stack.pop()!;
-      component.push(b);
-      // Find neighbors via reverse index
-      const start = reverseIndex.offsets[b];
-      const end = reverseIndex.offsets[b + 1];
-      for (let j = start; j < end; j++) {
-        const signedArc = reverseIndex.arcIds[j];
-        const arcId = signedArc >= 0 ? signedArc : ~signedArc;
-        // The other block sharing this arc
-        const fwd = adjacency[arcId * 2];
-        const rev = adjacency[arcId * 2 + 1];
-        const neighbor = fwd === b ? rev : fwd;
-        if (neighbor >= 0 && blockSet.has(neighbor) && !visited.has(neighbor)) {
+      const block = stack.pop()!;
+      component.push(block);
+      for (const neighbor of adjacency[block]) {
+        if (inDistrict.has(neighbor) && !visited.has(neighbor)) {
           visited.add(neighbor);
           stack.push(neighbor);
         }
@@ -121,262 +76,74 @@ function findComponents(
   return components;
 }
 
-// --- Find boundary arcs for a connected component ---
+// --- Main: compute district boundaries ---
 
-function findComponentBoundaryArcs(
-  blockSet: Set<number>,
-  adjacency: Int32Array,
-  reverseIndex: ReverseIndex
-): number[] {
-  const arcs: number[] = [];
-  const seen = new Set<number>();
-
-  for (const blockId of blockSet) {
-    const start = reverseIndex.offsets[blockId];
-    const end = reverseIndex.offsets[blockId + 1];
-    for (let j = start; j < end; j++) {
-      const signedArc = reverseIndex.arcIds[j];
-      const arcId = signedArc >= 0 ? signedArc : ~signedArc;
-      if (seen.has(arcId)) continue;
-      seen.add(arcId);
-
-      const fwdBlock = adjacency[arcId * 2];
-      const revBlock = adjacency[arcId * 2 + 1];
-      const fwdIn = fwdBlock >= 0 && blockSet.has(fwdBlock);
-      const revIn = revBlock >= 0 && blockSet.has(revBlock);
-
-      if (fwdIn && !revIn) arcs.push(arcId);
-      else if (revIn && !fwdIn) arcs.push(~arcId);
-    }
-  }
-  return arcs;
+export interface DistrictBoundary {
+  readonly geometry: MultiPolygon;
+  readonly compactness: number;
+  readonly contiguity: Contiguity;
 }
 
-// --- Stitch arcs into rings (port of topojson-client/src/stitch.js) ---
+export async function computeDistrictBoundaries(
+  client: CtopoClient,
+  baseLayer: string,
+  assignment: Uint8Array,
+  numberOfDistricts: number,
+  signal?: AbortSignal
+): Promise<DistrictBoundary[]> {
+  const t0 = performance.now();
+  perfLog(`[boundary] start (${numberOfDistricts} districts)`);
+  const adjacency = await neighbors(client, baseLayer, signal);
+  perfLog(`[boundary] neighbors ready at ${(performance.now() - t0).toFixed(0)}ms`);
 
-interface ArcEndpoints {
-  start(arcId: number): string;
-  end(arcId: number): string;
-}
-
-function buildArcEndpoints(
-  arcCoords: ArrayBuffer,
-  arcOffsets: Uint32Array,
-  transform: AdjacencyData["transform"]
-): ArcEndpoints {
-  const isQuantized = transform !== null;
-  const bytesPerPoint = isQuantized ? 8 : 16;
-  const view = new DataView(arcCoords);
-
-  function getStart(arcId: number): [number, number] {
-    const offset = arcOffsets[arcId];
-    if (isQuantized) {
-      return [view.getInt32(offset, true), view.getInt32(offset + 4, true)];
-    }
-    return [view.getFloat64(offset, true), view.getFloat64(offset + 8, true)];
+  // Bucket blocks by district id (0..numberOfDistricts inclusive —
+  // index 0 is the unassigned "district").
+  const districtBlocks: number[][] = Array.from({ length: numberOfDistricts + 1 }, () => []);
+  for (let i = 0; i < assignment.length; i++) {
+    districtBlocks[assignment[i]].push(i);
   }
 
-  function getEnd(arcId: number): [number, number] {
-    const startOffset = arcOffsets[arcId];
-    const endOffset = arcOffsets[arcId + 1];
-    const numPoints = (endOffset - startOffset) / bytesPerPoint;
-
-    if (isQuantized) {
-      // Delta-encoded: accumulate all deltas to get final position
-      let x = 0,
-        y = 0;
-      for (let i = 0; i < numPoints; i++) {
-        const off = startOffset + i * 8;
-        x += view.getInt32(off, true);
-        y += view.getInt32(off + 4, true);
+  // Compute each district in parallel — every merge call goes through
+  // the client's range coalescer, which dedupes overlapping arc fetches
+  // across districts.
+  const result = await Promise.all(
+    districtBlocks.map(async blocks => {
+      if (blocks.length === 0) {
+        return {
+          geometry: { type: "MultiPolygon" as const, coordinates: [] },
+          compactness: 0,
+          contiguity: "" as Contiguity
+        };
       }
-      return [x, y];
-    }
-    const lastOffset = endOffset - bytesPerPoint;
-    return [view.getFloat64(lastOffset, true), view.getFloat64(lastOffset + 8, true)];
-  }
 
-  return {
-    start(signedArcId: number): string {
-      const [p0, p1] = signedArcId >= 0 ? getStart(signedArcId) : getEnd(~signedArcId);
-      return `${p0},${p1}`;
-    },
-    end(signedArcId: number): string {
-      const [p0, p1] = signedArcId >= 0 ? getEnd(signedArcId) : getStart(~signedArcId);
-      return `${p0},${p1}`;
-    }
-  };
-}
+      const components = findComponents(blocks, adjacency);
+      // Merge each component independently so each ends up as its own
+      // polygon in the final MultiPolygon. ctopo.merge collapses all
+      // rings of a single call into one polygon (largest ring as
+      // exterior, the rest as holes), which is exactly the per-component
+      // shape we want.
+      const componentPolys = await Promise.all(
+        components.map(async component => {
+          const result = await merge(client, [{ layer: baseLayer, indices: component }], signal);
+          return result.coordinates;
+        })
+      );
 
-function stitchArcs(
-  arcs: number[],
-  endpoints: ArcEndpoints,
-  arcCoords: ArrayBuffer,
-  arcOffsets: Uint32Array,
-  transform: AdjacencyData["transform"]
-): number[][] {
-  const isQuantized = transform !== null;
-  const bytesPerPoint = isQuantized ? 8 : 16;
-
-  // Check for empty arcs (2 points where delta is [0,0]) and move them to front
-  const view = new DataView(arcCoords);
-  let emptyIndex = -1;
-  arcs.forEach((signedI, j) => {
-    const i = signedI >= 0 ? signedI : ~signedI;
-    const start = arcOffsets[i];
-    const end = arcOffsets[i + 1];
-    const numPoints = (end - start) / bytesPerPoint;
-    if (numPoints < 3 && isQuantized) {
-      // Check if second point delta is [0,0]
-      const dx = view.getInt32(start + 8, true);
-      const dy = view.getInt32(start + 12, true);
-      if (!dx && !dy) {
-        const t = arcs[++emptyIndex];
-        arcs[emptyIndex] = signedI;
-        arcs[j] = t;
+      const multiPolyCoords: number[][][][] = [];
+      for (const polys of componentPolys) {
+        for (const poly of polys) multiPolyCoords.push(poly);
       }
-    }
-  });
 
-  const stitchedArcs: Record<number, number> = {};
-  const fragmentByStart: Record<string, any> = {};
-  const fragmentByEnd: Record<string, any> = {};
-  const fragments: number[][] = [];
-
-  arcs.forEach(i => {
-    const start = endpoints.start(i);
-    const end = endpoints.end(i);
-
-    let f = fragmentByEnd[start];
-    if (f) {
-      delete fragmentByEnd[f.end];
-      f.push(i);
-      f.end = end;
-      const g = fragmentByStart[end];
-      if (g) {
-        delete fragmentByStart[g.start];
-        const fg = g === f ? f : f.concat(g);
-        fg.start = f.start;
-        fg.end = g.end;
-        fragmentByStart[fg.start] = fragmentByEnd[fg.end] = fg;
-      } else {
-        fragmentByStart[f.start] = fragmentByEnd[f.end] = f;
-      }
-    } else {
-      f = fragmentByStart[end];
-      if (f) {
-        delete fragmentByStart[f.start];
-        f.unshift(i);
-        f.start = start;
-        const g = fragmentByEnd[start];
-        if (g) {
-          delete fragmentByEnd[g.end];
-          const gf = g === f ? f : g.concat(f);
-          gf.start = g.start;
-          gf.end = f.end;
-          fragmentByStart[gf.start] = fragmentByEnd[gf.end] = gf;
-        } else {
-          fragmentByStart[f.start] = fragmentByEnd[f.end] = f;
-        }
-      } else {
-        f = [i] as any;
-        f.start = start;
-        f.end = end;
-        fragmentByStart[start] = fragmentByEnd[end] = f;
-      }
-    }
-  });
-
-  function flush(byEnd: Record<string, any>, byStart: Record<string, any>) {
-    for (const k in byEnd) {
-      const f = byEnd[k];
-      delete byStart[f.start];
-      delete f.start;
-      delete f.end;
-      f.forEach((i: number) => {
-        stitchedArcs[i < 0 ? ~i : i] = 1;
-      });
-      fragments.push(f);
-    }
-  }
-
-  flush(fragmentByEnd, fragmentByStart);
-  flush(fragmentByStart, fragmentByEnd);
-  arcs.forEach(i => {
-    if (!stitchedArcs[i < 0 ? ~i : i]) fragments.push([i]);
-  });
-
-  return fragments;
-}
-
-// --- Decode arc coordinates into a GeoJSON ring ---
-
-function decodeRing(
-  arcIndices: number[],
-  arcCoords: ArrayBuffer,
-  arcOffsets: Uint32Array,
-  transform: AdjacencyData["transform"]
-): number[][] {
-  const isQuantized = transform !== null;
-  const bytesPerPoint = isQuantized ? 8 : 16;
-  const view = new DataView(arcCoords);
-  const ring: number[][] = [];
-
-  for (const signedArc of arcIndices) {
-    const arcId = signedArc >= 0 ? signedArc : ~signedArc;
-    const forward = signedArc >= 0;
-    const start = arcOffsets[arcId];
-    const end = arcOffsets[arcId + 1];
-    const numPoints = (end - start) / bytesPerPoint;
-
-    // Decode points
-    const points: number[][] = [];
-    if (isQuantized) {
-      let x = 0,
-        y = 0;
-      for (let i = 0; i < numPoints; i++) {
-        const off = start + i * 8;
-        x += view.getInt32(off, true);
-        y += view.getInt32(off + 4, true);
-        points.push([
-          x * transform.scale[0] + transform.translate[0],
-          y * transform.scale[1] + transform.translate[1]
-        ]);
-      }
-    } else {
-      for (let i = 0; i < numPoints; i++) {
-        const off = start + i * 16;
-        points.push([view.getFloat64(off, true), view.getFloat64(off + 8, true)]);
-      }
-    }
-
-    if (!forward) points.reverse();
-
-    // Append all except last point (shared with next arc's start)
-    for (let i = 0; i < points.length - 1; i++) {
-      ring.push(points[i]);
-    }
-  }
-
-  // Close the ring
-  if (ring.length > 0) {
-    ring.push(ring[0]);
-  }
-  return ring;
-}
-
-// --- Ring area (shoelace formula) for exterior/hole classification ---
-
-function ringArea(ring: number[][]): number {
-  let area = 0;
-  const n = ring.length;
-  let b = ring[n - 1];
-  for (let i = 0; i < n; i++) {
-    const a = b;
-    b = ring[i];
-    area += a[0] * b[1] - a[1] * b[0];
-  }
-  return Math.abs(area);
+      const [compactness, contiguity] = calcPolsbyPopper(multiPolyCoords);
+      return {
+        geometry: { type: "MultiPolygon" as const, coordinates: multiPolyCoords },
+        compactness,
+        contiguity
+      };
+    })
+  );
+  perfLog(`[boundary] done at ${(performance.now() - t0).toFixed(0)}ms`);
+  return result;
 }
 
 // --- Compute Polsby-Popper compactness ---
@@ -415,81 +182,4 @@ function calcPolsbyPopper(coordinates: number[][][][]): [number, Contiguity] {
 
   if (perimeter === 0) return [0, "contiguous"];
   return [(4 * Math.PI * areaM2) / (perimeter * perimeter), "contiguous"];
-}
-
-// --- Main: compute district boundaries ---
-
-export interface DistrictBoundary {
-  readonly geometry: MultiPolygon;
-  readonly compactness: number;
-  readonly contiguity: Contiguity;
-}
-
-export function computeDistrictBoundaries(
-  adjacencyData: AdjacencyData,
-  reverseIndex: ReverseIndex,
-  assignment: Uint8Array,
-  numberOfDistricts: number
-): DistrictBoundary[] {
-  const { adjacency, arcCoords, arcOffsets, transform } = adjacencyData;
-  const endpoints = buildArcEndpoints(arcCoords, arcOffsets, transform);
-
-  const results: DistrictBoundary[] = [];
-
-  for (let d = 0; d <= numberOfDistricts; d++) {
-    // Collect blocks in this district
-    const districtBlocks: number[] = [];
-    for (let i = 0; i < assignment.length; i++) {
-      if (assignment[i] === d) districtBlocks.push(i);
-    }
-
-    if (districtBlocks.length === 0) {
-      results.push({
-        geometry: { type: "MultiPolygon", coordinates: [] },
-        compactness: 0,
-        contiguity: ""
-      });
-      continue;
-    }
-
-    // Find connected components
-    const components = findComponents(districtBlocks, adjacency, reverseIndex);
-
-    // Build MultiPolygon: one polygon per component
-    const multiPolyCoords: number[][][][] = [];
-    for (const component of components) {
-      const blockSet = new Set(component);
-      const boundaryArcs = findComponentBoundaryArcs(blockSet, adjacency, reverseIndex);
-      if (boundaryArcs.length === 0) continue;
-
-      const rings = stitchArcs([...boundaryArcs], endpoints, arcCoords, arcOffsets, transform);
-      if (rings.length === 0) continue;
-
-      // Decode rings to coordinates, filtering out degenerate rings (< 4 positions)
-      const decodedRings = rings
-        .map(r => decodeRing(r, arcCoords, arcOffsets, transform))
-        .filter(r => r.length >= 4);
-      if (decodedRings.length === 0) continue;
-
-      if (decodedRings.length > 1) {
-        // Sort by area, largest first (exterior ring)
-        const areas = decodedRings.map(r => ringArea(r));
-        const indexed = areas.map((a, i) => ({ area: a, idx: i }));
-        indexed.sort((a, b) => b.area - a.area);
-        multiPolyCoords.push(indexed.map(x => decodedRings[x.idx]));
-      } else {
-        multiPolyCoords.push(decodedRings);
-      }
-    }
-
-    const [compactness, contiguity] = calcPolsbyPopper(multiPolyCoords);
-
-    results.push({
-      geometry: { type: "MultiPolygon", coordinates: multiPolyCoords },
-      compactness,
-      contiguity
-    });
-  }
-
-  return results;
 }

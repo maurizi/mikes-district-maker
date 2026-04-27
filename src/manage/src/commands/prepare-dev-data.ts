@@ -1299,727 +1299,728 @@ export default class PrepareDevData extends Command {
           if (rejectedCands.has(candBi)) continue;
           if (splitParents.has(candBi)) continue;
           if (assignment.get(candBi) === targetPi) continue;
-      const splitBi = candBi;
-      const splitGeom = blockGeoms[splitBi];
-      const splitProps = blockFeatures[splitBi].properties as Record<string, any>;
-      const splitGeoId = splitProps.GEOID20 as string;
-      const splitDemo = blockDemographics.get(splitGeoId);
-      if (!splitDemo) {
-        this.log(`   WARNING: block ${splitGeoId} has no demographics; skipping rescue`);
-        continue;
-      }
+          const splitBi = candBi;
+          const splitGeom = blockGeoms[splitBi];
+          const splitProps = blockFeatures[splitBi].properties as Record<string, any>;
+          const splitGeoId = splitProps.GEOID20 as string;
+          const splitDemo = blockDemographics.get(splitGeoId);
+          if (!splitDemo) {
+            this.log(`   WARNING: block ${splitGeoId} has no demographics; skipping rescue`);
+            continue;
+          }
 
-      // Include every precinct that bbox-overlaps and geometrically touches
-      // the block, so nodeAndSplit sees the full partition and doesn't drop
-      // any face (dropping = attributing area to the wrong precinct). Slivers
-      // from 3rd/4th precincts that barely clip a corner get merged into the
-      // previous assignee below, so the final sub-blocks are the two we care
-      // about (target + prev) with no micro-pieces.
-      const previousAssignee = assignment.get(splitBi);
-      if (previousAssignee === undefined || previousAssignee === targetPi) {
-        // Candidate sweep already filters assignment.get(bi) === targetPi,
-        // so this would only trip if the assignment map is unexpectedly
-        // missing the chosen block. Skip rather than guess.
-        this.log(
-          `   WARNING: block ${splitGeoId} has no usable previous assignee; skipping rescue`
-        );
-        continue;
-      }
-      const intersectingPrecincts: { geom: any; idx: number }[] = [];
-      const seenPrecinctIdx = new Set<number>();
-      const includePrecinct = (idx: number): void => {
-        if (seenPrecinctIdx.has(idx)) return;
-        const pg = precinctGeoms[idx];
-        if (!pg) return;
-        intersectingPrecincts.push({ geom: pg, idx });
-        seenPrecinctIdx.add(idx);
-      };
-      includePrecinct(targetPi);
-      includePrecinct(previousAssignee);
-      const [bMinX, bMinY, bMaxX, bMaxY] = featureBbox(blockFeatures[splitBi]);
-      const blockCands = precinctTree.search({
-        minX: bMinX - SEARCH_BUFFER_M,
-        minY: bMinY - SEARCH_BUFFER_M,
-        maxX: bMaxX + SEARCH_BUFFER_M,
-        maxY: bMaxY + SEARCH_BUFFER_M
-      });
-      for (const cand of blockCands) {
-        if (seenPrecinctIdx.has(cand.index)) continue;
-        const pg = precinctGeoms[cand.index];
-        if (!pg) continue;
-        const inter = geosHelper.intersection(splitGeom, pg);
-        if (!inter) continue;
-        const a = geosHelper.area(inter);
-        geosHelper.free(inter);
-        if (a > 0) includePrecinct(cand.index);
-      }
+          // Include every precinct that bbox-overlaps and geometrically touches
+          // the block, so nodeAndSplit sees the full partition and doesn't drop
+          // any face (dropping = attributing area to the wrong precinct). Slivers
+          // from 3rd/4th precincts that barely clip a corner get merged into the
+          // previous assignee below, so the final sub-blocks are the two we care
+          // about (target + prev) with no micro-pieces.
+          const previousAssignee = assignment.get(splitBi);
+          if (previousAssignee === undefined || previousAssignee === targetPi) {
+            // Candidate sweep already filters assignment.get(bi) === targetPi,
+            // so this would only trip if the assignment map is unexpectedly
+            // missing the chosen block. Skip rather than guess.
+            this.log(
+              `   WARNING: block ${splitGeoId} has no usable previous assignee; skipping rescue`
+            );
+            continue;
+          }
+          const intersectingPrecincts: { geom: any; idx: number }[] = [];
+          const seenPrecinctIdx = new Set<number>();
+          const includePrecinct = (idx: number): void => {
+            if (seenPrecinctIdx.has(idx)) return;
+            const pg = precinctGeoms[idx];
+            if (!pg) return;
+            intersectingPrecincts.push({ geom: pg, idx });
+            seenPrecinctIdx.add(idx);
+          };
+          includePrecinct(targetPi);
+          includePrecinct(previousAssignee);
+          const [bMinX, bMinY, bMaxX, bMaxY] = featureBbox(blockFeatures[splitBi]);
+          const blockCands = precinctTree.search({
+            minX: bMinX - SEARCH_BUFFER_M,
+            minY: bMinY - SEARCH_BUFFER_M,
+            maxX: bMaxX + SEARCH_BUFFER_M,
+            maxY: bMaxY + SEARCH_BUFFER_M
+          });
+          for (const cand of blockCands) {
+            if (seenPrecinctIdx.has(cand.index)) continue;
+            const pg = precinctGeoms[cand.index];
+            if (!pg) continue;
+            const inter = geosHelper.intersection(splitGeom, pg);
+            if (!inter) continue;
+            const a = geosHelper.area(inter);
+            geosHelper.free(inter);
+            if (a > 0) includePrecinct(cand.index);
+          }
 
-      // Use previousAssignee as the fallback precinct for any face
-      // inside the block but outside all supplied precincts (happens when
-      // a block extends into water or off-map areas). This guarantees
-      // the sub-blocks tile the parent with no area loss.
-      const rawFaces = geosHelper.nodeAndSplit(
-        splitGeom,
-        intersectingPrecincts,
-        previousAssignee
-      );
-      if (rawFaces.length === 0) {
-        this.log(`   WARNING: nodeAndSplit produced no faces for ${splitGeoId}; skipping`);
-        continue;
-      }
-      // GEOS polygonize can emit sub-m² sliver faces from float drift along
-      // precinct/block boundary intersections. They carry no meaningful
-      // assignment but survive into the output MultiPolygon, where
-      // topojson quantization can snap them into siblings or neighbors and
-      // produce visible overlaps. Drop anything below 1 m² — real precinct
-      // slivers are orders of magnitude larger.
-      const FACE_NOISE_M2 = 1;
-      const faces: typeof rawFaces = [];
-      for (const f of rawFaces) {
-        if (f.area < FACE_NOISE_M2) geosHelper.free(f.geom);
-        else faces.push(f);
-      }
-      if (faces.length === 0) {
-        this.log(`   WARNING: nodeAndSplit produced only sliver faces for ${splitGeoId}; skipping`);
-        continue;
-      }
-      const totalSubArea = faces.reduce((s, f) => s + f.area, 0);
-      if (totalSubArea === 0) {
-        for (const f of faces) geosHelper.free(f.geom);
-        continue;
-      }
-
-      // Sanity: sub-blocks must now tile the parent — if not, something
-      // went wrong (e.g., a face's representative point was on the
-      // boundary so it got dropped). Log and skip rather than emit a
-      // lossy split.
-      const parentArea = geosHelper.area(splitGeom);
-      if (parentArea > 0) {
-        const drift = Math.abs(totalSubArea - parentArea) / parentArea;
-        if (drift > 0.01) {
-          this.log(
-            `   SKIP: block ${splitGeoId} rescue still drifts ${(drift * 100).toFixed(1)}%` +
-              ` despite fallback (parent=${parentArea.toFixed(0)} m²,` +
-              ` sub-sum=${totalSubArea.toFixed(0)} m²); target precinct stays as-is`
+          // Use previousAssignee as the fallback precinct for any face
+          // inside the block but outside all supplied precincts (happens when
+          // a block extends into water or off-map areas). This guarantees
+          // the sub-blocks tile the parent with no area loss.
+          const rawFaces = geosHelper.nodeAndSplit(
+            splitGeom,
+            intersectingPrecincts,
+            previousAssignee
           );
-          for (const f of faces) geosHelper.free(f.geom);
-          continue;
-        }
-      }
+          if (rawFaces.length === 0) {
+            this.log(`   WARNING: nodeAndSplit produced no faces for ${splitGeoId}; skipping`);
+            continue;
+          }
+          // GEOS polygonize can emit sub-m² sliver faces from float drift along
+          // precinct/block boundary intersections. They carry no meaningful
+          // assignment but survive into the output MultiPolygon, where
+          // topojson quantization can snap them into siblings or neighbors and
+          // produce visible overlaps. Drop anything below 1 m² — real precinct
+          // slivers are orders of magnitude larger.
+          const FACE_NOISE_M2 = 1;
+          const faces: typeof rawFaces = [];
+          for (const f of rawFaces) {
+            if (f.area < FACE_NOISE_M2) geosHelper.free(f.geom);
+            else faces.push(f);
+          }
+          if (faces.length === 0) {
+            this.log(
+              `   WARNING: nodeAndSplit produced only sliver faces for ${splitGeoId}; skipping`
+            );
+            continue;
+          }
+          const totalSubArea = faces.reduce((s, f) => s + f.area, 0);
+          if (totalSubArea === 0) {
+            for (const f of faces) geosHelper.free(f.geom);
+            continue;
+          }
 
-      // Group faces by precinct (a precinct may take multiple disjoint pieces
-      // of the block); emit one sub-block per precinct.
-      const facesByPrecinct = new Map<number, { geom: any; area: number }[]>();
-      for (const f of faces) {
-        let arr = facesByPrecinct.get(f.precinctIdx);
-        if (!arr) {
-          arr = [];
-          facesByPrecinct.set(f.precinctIdx, arr);
-        }
-        arr.push({ geom: f.geom, area: f.area });
-      }
-
-      // Merge sub-block slivers into the largest non-sliver group. Slivers
-      // (sub-mm² up to a few hundred m²) come from precinct boundaries just
-      // clipping a corner of the block — they collapse in downstream
-      // simplification and can erase a precinct from the rendered map.
-      // The target precinct is always protected (even if its face is small,
-      // we need it to survive the rescue).
-      const MIN_SUB_AREA_M2 = 100;
-      const precinctAreas = new Map<number, number>();
-      for (const [pi, pFaces] of facesByPrecinct) {
-        precinctAreas.set(
-          pi,
-          pFaces.reduce((s, f) => s + f.area, 0)
-        );
-      }
-      let largestPi = -1;
-      let largestArea = 0;
-      for (const [pi, a] of precinctAreas) {
-        if (a > largestArea) {
-          largestArea = a;
-          largestPi = pi;
-        }
-      }
-      if (largestPi !== -1) {
-        const slivers: number[] = [];
-        for (const [pi, a] of precinctAreas) {
-          if (pi === largestPi || pi === targetPi) continue;
-          if (a < MIN_SUB_AREA_M2) slivers.push(pi);
-        }
-        for (const sliverPi of slivers) {
-          const sliverFaces = facesByPrecinct.get(sliverPi)!;
-          const largestFaces = facesByPrecinct.get(largestPi)!;
-          for (const f of sliverFaces) largestFaces.push(f);
-          facesByPrecinct.delete(sliverPi);
-        }
-      }
-      // Per-face target sliver merge: if target has multiple disconnected
-      // faces and some are below the threshold, reassign the tiny faces to
-      // the largest non-target precinct's face group. Parent block stays
-      // fully tiled — just a different precinct owns each tiny piece, so we
-      // avoid emitting a target sub-block with artifact-prone micro parts.
-      // The largest target face is always kept (it's the actual bridge).
-      const targetFacesInit = facesByPrecinct.get(targetPi);
-      if (targetFacesInit && targetFacesInit.length > 1) {
-        // Find the largest non-target precinct (best candidate to absorb slivers)
-        let absorbPi = -1;
-        let absorbArea = 0;
-        for (const [pi, a] of precinctAreas) {
-          if (pi === targetPi) continue;
-          if (!facesByPrecinct.has(pi)) continue; // already merged away
-          if (a > absorbArea) {
-            absorbArea = a;
-            absorbPi = pi;
-          }
-        }
-        if (absorbPi !== -1) {
-          targetFacesInit.sort((a, b) => b.area - a.area);
-          const keep: typeof targetFacesInit = [targetFacesInit[0]]; // always keep largest
-          const reassign: typeof targetFacesInit = [];
-          for (let i = 1; i < targetFacesInit.length; i++) {
-            if (targetFacesInit[i].area < MIN_SUB_AREA_M2) reassign.push(targetFacesInit[i]);
-            else keep.push(targetFacesInit[i]);
-          }
-          if (reassign.length > 0) {
-            const absorbFaces = facesByPrecinct.get(absorbPi)!;
-            for (const f of reassign) absorbFaces.push(f);
-            facesByPrecinct.set(targetPi, keep);
-          }
-        }
-      }
-      // Build a lookup of the parent block's exact vertex coords so we can
-      // snap sub-block vertices to them. GEOS polygonize inside nodeAndSplit
-      // drifts coords by ~1 ULP relative to the parent's reprojection-only
-      // path; the resulting float mismatch breaks topojson's shared-junction
-      // detection at the county layer and leaves degenerate "spike" holes.
-      // Key granularity is 0.1 µm — orders of magnitude above ULP (~0.1 nm at
-      // UTM easting magnitudes), orders of magnitude below any real vertex
-      // separation, so collisions are impossible.
-      const parentGeomForSnap = blockFeatures[splitBi].geometry as Polygon | MultiPolygon;
-      const parentVertMap = new Map<string, number[]>();
-      const pPolysSnap =
-        parentGeomForSnap.type === "Polygon"
-          ? [parentGeomForSnap.coordinates]
-          : parentGeomForSnap.coordinates;
-      for (const poly of pPolysSnap) {
-        for (const ring of poly) {
-          for (const v of ring) {
-            parentVertMap.set(`${Math.round(v[0] * 1e7)},${Math.round(v[1] * 1e7)}`, v);
-          }
-        }
-      }
-      // Signed shoelace area (used to test whether an inner spike loop is
-      // zero-area noise or a real sub-polygon).
-      const ringSignedArea = (r: number[][]): number => {
-        let a = 0;
-        for (let i = 0, n = r.length - 1; i < n; i++) {
-          a += r[i][0] * r[i + 1][1] - r[i + 1][0] * r[i][1];
-        }
-        return a / 2;
-      };
-
-      const snapRing = (ring: number[][]): number[][] => {
-        let snapped = ring.map(v => {
-          const k = `${Math.round(v[0] * 1e7)},${Math.round(v[1] * 1e7)}`;
-          return parentVertMap.get(k) ?? v;
-        });
-        // Pass 1: drop consecutive duplicates (introduced when snap collapses
-        // multiple GEOS-drifted verts onto one parent vertex).
-        const dedup: number[][] = [snapped[0]];
-        for (let i = 1; i < snapped.length; i++) {
-          const prev = dedup[dedup.length - 1];
-          if (snapped[i][0] !== prev[0] || snapped[i][1] !== prev[1]) dedup.push(snapped[i]);
-        }
-        // Pass 2: remove zero-width spikes. When a precinct cut coincides with
-        // a parent block boundary edge, polygonize emits the adjacent face
-        // with a self-touching outer ring like ...X, B, A, B, Y... — the
-        // ring dips out to A and comes back to B with zero enclosed area.
-        // Detect non-consecutive duplicate vertices, and if the loop between
-        // them has near-zero signed area, splice it out. Iterate because
-        // there can be nested spikes.
-        snapped = dedup;
-        while (true) {
-          const seen = new Map<string, number>();
-          let pinchStart = -1;
-          let pinchEnd = -1;
-          for (let i = 0; i < snapped.length - 1; i++) {
-            const key = `${snapped[i][0]},${snapped[i][1]}`;
-            const prev = seen.get(key);
-            if (prev !== undefined && i - prev > 1) {
-              pinchStart = prev;
-              pinchEnd = i;
-              break;
-            }
-            seen.set(key, i);
-          }
-          if (pinchStart < 0) break;
-          const inner = snapped.slice(pinchStart, pinchEnd + 1);
-          if (Math.abs(ringSignedArea(inner)) > 1e-6) {
-            // Non-zero-area loop — topology-preserving, don't splice out.
-            // We could emit as a separate polygon here, but haven't seen a
-            // real case yet; log and bail on the splice.
-            break;
-          }
-          snapped = [...snapped.slice(0, pinchStart + 1), ...snapped.slice(pinchEnd + 1)];
-        }
-        // Pass 3: drop collinear overshoot vertices. Pattern is ...A, B, C...
-        // where C lies strictly between A and B on line A-B — the ring walks
-        // past C to B then backtracks to C. GEOS polygonize emits this when a
-        // precinct-cut vertex is collinear with a parent-edge segment and the
-        // noder doesn't split at it. Neighbors visit the same 4 verts in the
-        // topologically correct order ...A, C, B..., so under topojson's
-        // per-arc dedup the two sides don't match and the county boundary
-        // gets a tiny spurious hole. Dropping B makes the sub-block's order
-        // match the neighbor's (...A, C, next).
-        let overshootChanged = true;
-        while (overshootChanged) {
-          overshootChanged = false;
-          for (let i = 0; i + 2 < snapped.length; i++) {
-            const a = snapped[i];
-            const b = snapped[i + 1];
-            const c = snapped[i + 2];
-            const cross =
-              (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
-            if (Math.abs(cross) > 1e-14) continue;
-            const dx = b[0] - a[0];
-            const dy = b[1] - a[1];
-            if (dx === 0 && dy === 0) continue;
-            const t =
-              Math.abs(dx) > Math.abs(dy)
-                ? (c[0] - a[0]) / dx
-                : (c[1] - a[1]) / dy;
-            if (t > 1e-9 && t < 1 - 1e-9) {
-              snapped.splice(i + 1, 1);
-              overshootChanged = true;
-              break;
+          // Sanity: sub-blocks must now tile the parent — if not, something
+          // went wrong (e.g., a face's representative point was on the
+          // boundary so it got dropped). Log and skip rather than emit a
+          // lossy split.
+          const parentArea = geosHelper.area(splitGeom);
+          if (parentArea > 0) {
+            const drift = Math.abs(totalSubArea - parentArea) / parentArea;
+            if (drift > 0.01) {
+              this.log(
+                `   SKIP: block ${splitGeoId} rescue still drifts ${(drift * 100).toFixed(1)}%` +
+                  ` despite fallback (parent=${parentArea.toFixed(0)} m²,` +
+                  ` sub-sum=${totalSubArea.toFixed(0)} m²); target precinct stays as-is`
+              );
+              for (const f of faces) geosHelper.free(f.geom);
+              continue;
             }
           }
-        }
-        // Ring must close — if closure dropped, restore.
-        if (snapped.length < 4) return snapped;
-        const first = snapped[0];
-        const last = snapped[snapped.length - 1];
-        if (first[0] !== last[0] || first[1] !== last[1]) snapped.push(first);
-        return snapped;
-      };
 
-      // Convert all face GEOS geoms to snapped GeoJSON upfront — we need the
-      // target's geometry for the verification check below before we decide
-      // whether to commit, and if we skip, we need to free the GEOS handles.
-      type SnappedFace = { polys: number[][][][]; area: number };
-      const facesGjByPrecinct = new Map<number, SnappedFace>();
-      for (const [pi, pFaces] of facesByPrecinct) {
-        const polys: number[][][][] = [];
-        let area = 0;
-        for (const f of pFaces) {
-          const gj = geosHelper.toGeoJSON(f.geom);
-          geosHelper.free(f.geom);
-          if (!gj) continue;
-          const snapPoly = (poly: number[][][]): number[][][] => poly.map(snapRing);
-          if (gj.type === "Polygon") polys.push(snapPoly(gj.coordinates));
-          else for (const p of gj.coordinates) polys.push(snapPoly(p));
-          area += f.area;
-        }
-        if (polys.length > 0) facesGjByPrecinct.set(pi, { polys, area });
-      }
+          // Group faces by precinct (a precinct may take multiple disjoint pieces
+          // of the block); emit one sub-block per precinct.
+          const facesByPrecinct = new Map<number, { geom: any; area: number }[]>();
+          for (const f of faces) {
+            let arr = facesByPrecinct.get(f.precinctIdx);
+            if (!arr) {
+              arr = [];
+              facesByPrecinct.set(f.precinctIdx, arr);
+            }
+            arr.push({ geom: f.geom, area: f.area });
+          }
 
-      // Cross-sibling vertex unification. snapRing handles verts that match a
-      // parent vertex, but sub-blocks often share GEOS-computed verts (new
-      // intersection points where precinct cuts hit parent boundary) that
-      // aren't parent verts. GEOS can emit 1-ULP-apart floats for the same
-      // geometric point in different faces; if siblings get different floats
-      // for a shared vert, their mutual cut boundary arc won't dedupe in
-      // topojson. Collapse to a single canonical value per 0.1 µm bucket.
-      {
-        const crossSibMap = new Map<string, number[]>();
-        for (const [, bundle] of facesGjByPrecinct) {
-          for (const poly of bundle.polys) {
+          // Merge sub-block slivers into the largest non-sliver group. Slivers
+          // (sub-mm² up to a few hundred m²) come from precinct boundaries just
+          // clipping a corner of the block — they collapse in downstream
+          // simplification and can erase a precinct from the rendered map.
+          // The target precinct is always protected (even if its face is small,
+          // we need it to survive the rescue).
+          const MIN_SUB_AREA_M2 = 100;
+          const precinctAreas = new Map<number, number>();
+          for (const [pi, pFaces] of facesByPrecinct) {
+            precinctAreas.set(
+              pi,
+              pFaces.reduce((s, f) => s + f.area, 0)
+            );
+          }
+          let largestPi = -1;
+          let largestArea = 0;
+          for (const [pi, a] of precinctAreas) {
+            if (a > largestArea) {
+              largestArea = a;
+              largestPi = pi;
+            }
+          }
+          if (largestPi !== -1) {
+            const slivers: number[] = [];
+            for (const [pi, a] of precinctAreas) {
+              if (pi === largestPi || pi === targetPi) continue;
+              if (a < MIN_SUB_AREA_M2) slivers.push(pi);
+            }
+            for (const sliverPi of slivers) {
+              const sliverFaces = facesByPrecinct.get(sliverPi)!;
+              const largestFaces = facesByPrecinct.get(largestPi)!;
+              for (const f of sliverFaces) largestFaces.push(f);
+              facesByPrecinct.delete(sliverPi);
+            }
+          }
+          // Per-face target sliver merge: if target has multiple disconnected
+          // faces and some are below the threshold, reassign the tiny faces to
+          // the largest non-target precinct's face group. Parent block stays
+          // fully tiled — just a different precinct owns each tiny piece, so we
+          // avoid emitting a target sub-block with artifact-prone micro parts.
+          // The largest target face is always kept (it's the actual bridge).
+          const targetFacesInit = facesByPrecinct.get(targetPi);
+          if (targetFacesInit && targetFacesInit.length > 1) {
+            // Find the largest non-target precinct (best candidate to absorb slivers)
+            let absorbPi = -1;
+            let absorbArea = 0;
+            for (const [pi, a] of precinctAreas) {
+              if (pi === targetPi) continue;
+              if (!facesByPrecinct.has(pi)) continue; // already merged away
+              if (a > absorbArea) {
+                absorbArea = a;
+                absorbPi = pi;
+              }
+            }
+            if (absorbPi !== -1) {
+              targetFacesInit.sort((a, b) => b.area - a.area);
+              const keep: typeof targetFacesInit = [targetFacesInit[0]]; // always keep largest
+              const reassign: typeof targetFacesInit = [];
+              for (let i = 1; i < targetFacesInit.length; i++) {
+                if (targetFacesInit[i].area < MIN_SUB_AREA_M2) reassign.push(targetFacesInit[i]);
+                else keep.push(targetFacesInit[i]);
+              }
+              if (reassign.length > 0) {
+                const absorbFaces = facesByPrecinct.get(absorbPi)!;
+                for (const f of reassign) absorbFaces.push(f);
+                facesByPrecinct.set(targetPi, keep);
+              }
+            }
+          }
+          // Build a lookup of the parent block's exact vertex coords so we can
+          // snap sub-block vertices to them. GEOS polygonize inside nodeAndSplit
+          // drifts coords by ~1 ULP relative to the parent's reprojection-only
+          // path; the resulting float mismatch breaks topojson's shared-junction
+          // detection at the county layer and leaves degenerate "spike" holes.
+          // Key granularity is 0.1 µm — orders of magnitude above ULP (~0.1 nm at
+          // UTM easting magnitudes), orders of magnitude below any real vertex
+          // separation, so collisions are impossible.
+          const parentGeomForSnap = blockFeatures[splitBi].geometry as Polygon | MultiPolygon;
+          const parentVertMap = new Map<string, number[]>();
+          const pPolysSnap =
+            parentGeomForSnap.type === "Polygon"
+              ? [parentGeomForSnap.coordinates]
+              : parentGeomForSnap.coordinates;
+          for (const poly of pPolysSnap) {
             for (const ring of poly) {
               for (const v of ring) {
-                const k = `${Math.round(v[0] * 1e7)},${Math.round(v[1] * 1e7)}`;
-                if (!crossSibMap.has(k)) crossSibMap.set(k, v);
+                parentVertMap.set(`${Math.round(v[0] * 1e7)},${Math.round(v[1] * 1e7)}`, v);
               }
             }
           }
-        }
-        for (const [, bundle] of facesGjByPrecinct) {
-          for (const poly of bundle.polys) {
-            for (let ri = 0; ri < poly.length; ri++) {
-              poly[ri] = poly[ri].map(v => {
-                const k = `${Math.round(v[0] * 1e7)},${Math.round(v[1] * 1e7)}`;
-                return crossSibMap.get(k) ?? v;
-              });
+          // Signed shoelace area (used to test whether an inner spike loop is
+          // zero-area noise or a real sub-polygon).
+          const ringSignedArea = (r: number[][]): number => {
+            let a = 0;
+            for (let i = 0, n = r.length - 1; i < n; i++) {
+              a += r[i][0] * r[i + 1][1] - r[i + 1][0] * r[i][1];
             }
-          }
-        }
-      }
-
-      // ── Verify the rescue actually helps the target precinct's topology ──
-      // Count target precinct's current connected components (with splitBi
-      // removed from its own blocks — it's assigned to previousAssignee, not
-      // target — and with prior-rescue sub-blocks included). Then count the
-      // components we'd have after adding the target's proposed sub-block.
-      // A rescue only makes sense if:
-      //  • orphan: always (adds the first piece)
-      //  • fragmented (assigned > vest): after-count < before-count (bridges)
-      //  • lost-pieces (assigned < vest): after-count > before-count (adds)
-      // Otherwise the rescue is just adding complexity — its sub-blocks cause
-      // the kind of topojson arc-dedup artifacts we've been tracking without
-      // improving the topology it was meant to restore.
-      const targetFaceBundle = facesGjByPrecinct.get(targetPi);
-      if (!targetFaceBundle) {
-        // nodeAndSplit didn't emit a face for the target — nothing to verify
-        // or commit; fall through to skip without counting as unnecessary.
-        continue;
-      }
-      // Candidate gate: target's *largest part* must be ≥ threshold. Total
-      // area would be misleading if it's dominated by a big part plus
-      // artifact-prone slivers. Require at least one meaningfully-sized
-      // bridge piece to justify the split.
-      //
-      // Exception for orphan rescues: the target currently has ZERO blocks.
-      // If we reject all candidates, the precinct vanishes entirely from the
-      // output — worse than keeping a sliver-sized sub-block. Orphans bypass
-      // both this gate and the sibling-double-edge check below.
-      const MIN_TARGET_PART_M2 = 100;
-      const isOrphan = rescue.reason === "orphan";
-      let targetLargestPartArea = 0;
-      for (const poly of targetFaceBundle.polys) {
-        const partArea = Math.abs(ringSignedArea(poly[0]));
-        if (partArea > targetLargestPartArea) targetLargestPartArea = partArea;
-      }
-      if (!isOrphan && targetLargestPartArea < MIN_TARGET_PART_M2) {
-        tinyTargetRejections++;
-        rejectedCands.add(splitBi); // deterministic — won't help in later greedy iters
-        continue;
-      }
-      const targetSubGeom: Polygon | MultiPolygon =
-        targetFaceBundle.polys.length === 1
-          ? { type: "Polygon", coordinates: targetFaceBundle.polys[0] }
-          : { type: "MultiPolygon", coordinates: targetFaceBundle.polys };
-      const currentTargetGeoms: (Polygon | MultiPolygon)[] = [];
-      const targetBlockIdxs = blocksByPrecinct.get(targetPi) || [];
-      for (const bi of targetBlockIdxs) {
-        if (bi === splitBi) continue;
-        if (splitParents.has(bi)) continue; // already split by a prior rescue
-        const g = blockFeatures[bi].geometry as Polygon | MultiPolygon | null;
-        if (g) currentTargetGeoms.push(g);
-      }
-      for (const sb of subBlocks) {
-        if (sb.precinctIdx === targetPi) currentTargetGeoms.push(sb.geom);
-      }
-      const compBefore = countComponents(currentTargetGeoms);
-      const compAfter = countComponents([...currentTargetGeoms, targetSubGeom]);
-      const rescueHelps =
-        rescue.reason === "orphan" ||
-        (rescue.reason === "fragmented" && compAfter < compBefore) ||
-        (rescue.reason === "lost-pieces" && compAfter > compBefore);
-      if (!rescueHelps) {
-        continue; // try next candidate
-      }
-
-      // ── Sibling-double-edge check ──
-      // Siblings legitimately share their mutual precinct-cut boundary (their
-      // interior shared edge, traversed in opposite directions). But they
-      // should NEVER both include a segment of the *parent's outer boundary*
-      // in their rings — when a precinct cut runs near-coincident with a
-      // parent block edge, polygonize can emit both siblings claiming that
-      // edge, which later causes topojson arc-dedup to leave degenerate
-      // spike holes in the dissolved county boundary.
-      //
-      // Detection: collect shared segments across sibling pairs, then filter
-      // to those lying on the parent outer boundary (collinear with a parent
-      // ring segment, strictly between its endpoints — so subdivided parent
-      // edges are caught too). If any shared segment is parent-lying, reject.
-      {
-        const canonSeg = (a: number[], b: number[]): string => {
-          if (a[0] < b[0] || (a[0] === b[0] && a[1] < b[1])) {
-            return `${a[0]},${a[1]}|${b[0]},${b[1]}`;
-          }
-          return `${b[0]},${b[1]}|${a[0]},${a[1]}`;
-        };
-        // Build per-sibling segment sets (each keyed by canonSeg).
-        const siblingSegs: { set: Set<string>; segs: [number[], number[]][] }[] = [];
-        for (const [, bundle] of facesGjByPrecinct) {
-          const set = new Set<string>();
-          const segs: [number[], number[]][] = [];
-          for (const poly of bundle.polys) {
-            for (const ring of poly) {
-              for (let i = 0; i < ring.length - 1; i++) {
-                const k = canonSeg(ring[i], ring[i + 1]);
-                if (!set.has(k)) {
-                  set.add(k);
-                  segs.push([ring[i], ring[i + 1]]);
-                }
-              }
-            }
-          }
-          siblingSegs.push({ set, segs });
-        }
-        // Find segments that appear in 2+ siblings.
-        const sharedKeys = new Set<string>();
-        for (let i = 0; i < siblingSegs.length; i++) {
-          for (let j = i + 1; j < siblingSegs.length; j++) {
-            for (const k of siblingSegs[i].set) {
-              if (siblingSegs[j].set.has(k)) sharedKeys.add(k);
-            }
-          }
-        }
-        // Parent outer-boundary segments (for the collinearity check).
-        const parentSegs: [number[], number[]][] = [];
-        for (const poly of pPolysSnap) {
-          for (const ring of poly) {
-            for (let i = 0; i < ring.length - 1; i++) parentSegs.push([ring[i], ring[i + 1]]);
-          }
-        }
-        // Is point p on (or nearly on) the closed segment a→b? We use
-        // perpendicular-distance tolerance (|cross|/seg_length ≤ 5 mm), not a
-        // fixed cross tolerance, because GEOS's computed intersection points
-        // can drift up to a few mm off the true line — the drift is bigger
-        // on longer parent segments, so we need a per-segment normalized
-        // tolerance. 5 mm is well below TIGER's ~10 cm vertex spacing (no
-        // false positives on distinct legit verts) and comfortably above
-        // GEOS's precision-model drift observed in real data (~2 mm max).
-        const MAX_PERP_M = 0.005;
-        const pointOnParentSeg = (p: number[], a: number[], b: number[]): boolean => {
-          const dx = b[0] - a[0];
-          const dy = b[1] - a[1];
-          const segLenSq = dx * dx + dy * dy;
-          if (segLenSq === 0) return false;
-          const cross = (p[0] - a[0]) * dy - (p[1] - a[1]) * dx;
-          if (cross * cross > MAX_PERP_M * MAX_PERP_M * segLenSq) return false;
-          const t = Math.abs(dx) > Math.abs(dy) ? (p[0] - a[0]) / dx : (p[1] - a[1]) / dy;
-          return t >= -1e-9 && t <= 1 + 1e-9;
-        };
-        // For each shared segment, check if BOTH its endpoints lie on the
-        // parent ring path (any parent segment, not necessarily the same).
-        // The legitimate shared-segment case (precinct cut between siblings)
-        // has interior endpoints not on ∂P; the bug case has both endpoints
-        // on ∂P (one typically at a parent corner, the other at a cut ∩ ∂P
-        // intersection point which sits on a parent segment).
-        // Minor concern: interior cuts that go vertex-to-vertex through the
-        // parent interior would also match (both endpoints are parent corners).
-        // That's rare and, if it does happen, rejecting the rescue and trying
-        // the next candidate is a safe conservative response.
-        const pointOnAnyParentSeg = (pt: number[]): boolean => {
-          for (const [p, q] of parentSegs) {
-            if (pointOnParentSeg(pt, p, q)) return true;
-          }
-          return false;
-        };
-        const checkedKeys = new Set<string>();
-        let doubledParentEdge = false;
-        outer: for (const sib of siblingSegs) {
-          for (const [a, b] of sib.segs) {
-            const key = canonSeg(a, b);
-            if (!sharedKeys.has(key) || checkedKeys.has(key)) continue;
-            checkedKeys.add(key);
-            if (pointOnAnyParentSeg(a) && pointOnAnyParentSeg(b)) {
-              doubledParentEdge = true;
-              break outer;
-            }
-          }
-        }
-        // DEBUG: log decision for the specific parents that produced holes
-        // in recent runs — helps verify whether check is firing correctly.
-        const debugBlocks = new Set([
-          "010199557012006", "010330208012007", "010259579022002", "010259579012014"
-        ]);
-        if (debugBlocks.has(splitGeoId)) {
-          this.log(
-            `   DEBUG ${splitGeoId} (target=${targetPi}, cand=${candIdx}): sharedKeys=${sharedKeys.size}, doubledParentEdge=${doubledParentEdge}, parentSegs=${parentSegs.length}`
-          );
-          // Helper: min cross-product magnitude from pt to any parent seg.
-          const minCrossToParent = (pt: number[]): number => {
-            let min = Infinity;
-            for (const [p, q] of parentSegs) {
-              const cross = (pt[0] - p[0]) * (q[1] - p[1]) - (pt[1] - p[1]) * (q[0] - p[0]);
-              const abs = Math.abs(cross);
-              if (abs < min) min = abs;
-            }
-            return min;
+            return a / 2;
           };
-          const reported = new Set<string>();
-          for (const sib of siblingSegs) {
-            for (const [a, b] of sib.segs) {
-              const key = canonSeg(a, b);
-              if (!sharedKeys.has(key) || reported.has(key)) continue;
-              reported.add(key);
-              const aOnParent = pointOnAnyParentSeg(a);
-              const bOnParent = pointOnAnyParentSeg(b);
-              if (!aOnParent && !bOnParent) continue;
-              const aCross = minCrossToParent(a);
-              const bCross = minCrossToParent(b);
-              this.log(
-                `     shared seg [${a[0].toFixed(3)},${a[1].toFixed(3)}]→[${b[0].toFixed(3)},${b[1].toFixed(3)}] aOnParent=${aOnParent}(minCross=${aCross.toExponential(2)}) bOnParent=${bOnParent}(minCross=${bCross.toExponential(2)})`
-              );
-            }
-          }
-        }
-        // Orphans bypass this gate too — see comment on MIN_TARGET_PART_M2.
-        if (doubledParentEdge && !isOrphan) {
-          doubledEdgeRescues++;
-          rejectedCands.add(splitBi); // deterministic rejection; don't retry in greedy
-          continue; // try next candidate
-        }
-      }
 
-      // ── Per-sibling parent-ring-path check ──
-      // For each sibling's outer ring, for each pair of consecutive parent-
-      // vertices in that ring, the parent ring path between them must be
-      // fully represented in the sibling's ring (all intermediate parent
-      // verts present, in order). If sub-block ring has Q → MID → R but
-      // parent ring has Q → P → R, the sub-block skipped P and leaves
-      // triangle Q-P-R unassigned → county-layer artifact hole.
-      //
-      // Direction detection: between two parent verts, there are two
-      // parent-ring paths (forward and reverse around the cyclic ring).
-      // The sub-block follows ONE of them (or takes an interior cut, with
-      // no intermediate parent verts on the path it's actually following).
-      // We pick the direction with FEWER intermediate parent verts as the
-      // hypothesis. If even that shorter path has a parent vert the
-      // sub-block is missing, reject.
-      //
-      // Orphans bypass this check.
-      if (!isOrphan) {
-        const parentOuterRing = pPolysSnap[0]?.[0];
-        if (parentOuterRing && parentOuterRing.length > 3) {
-          // Build index of parent outer ring verts by coord key (0.1 µm)
-          const parentVertIdx = new Map<string, number>();
-          const parentLen = parentOuterRing.length - 1; // exclude closing dup
-          for (let i = 0; i < parentLen; i++) {
-            const v = parentOuterRing[i];
-            const key = `${Math.round(v[0] * 1e7)},${Math.round(v[1] * 1e7)}`;
-            if (!parentVertIdx.has(key)) parentVertIdx.set(key, i);
+          const snapRing = (ring: number[][]): number[][] => {
+            let snapped = ring.map(v => {
+              const k = `${Math.round(v[0] * 1e7)},${Math.round(v[1] * 1e7)}`;
+              return parentVertMap.get(k) ?? v;
+            });
+            // Pass 1: drop consecutive duplicates (introduced when snap collapses
+            // multiple GEOS-drifted verts onto one parent vertex).
+            const dedup: number[][] = [snapped[0]];
+            for (let i = 1; i < snapped.length; i++) {
+              const prev = dedup[dedup.length - 1];
+              if (snapped[i][0] !== prev[0] || snapped[i][1] !== prev[1]) dedup.push(snapped[i]);
+            }
+            // Pass 2: remove zero-width spikes. When a precinct cut coincides with
+            // a parent block boundary edge, polygonize emits the adjacent face
+            // with a self-touching outer ring like ...X, B, A, B, Y... — the
+            // ring dips out to A and comes back to B with zero enclosed area.
+            // Detect non-consecutive duplicate vertices, and if the loop between
+            // them has near-zero signed area, splice it out. Iterate because
+            // there can be nested spikes.
+            snapped = dedup;
+            while (true) {
+              const seen = new Map<string, number>();
+              let pinchStart = -1;
+              let pinchEnd = -1;
+              for (let i = 0; i < snapped.length - 1; i++) {
+                const key = `${snapped[i][0]},${snapped[i][1]}`;
+                const prev = seen.get(key);
+                if (prev !== undefined && i - prev > 1) {
+                  pinchStart = prev;
+                  pinchEnd = i;
+                  break;
+                }
+                seen.set(key, i);
+              }
+              if (pinchStart < 0) break;
+              const inner = snapped.slice(pinchStart, pinchEnd + 1);
+              if (Math.abs(ringSignedArea(inner)) > 1e-6) {
+                // Non-zero-area loop — topology-preserving, don't splice out.
+                // We could emit as a separate polygon here, but haven't seen a
+                // real case yet; log and bail on the splice.
+                break;
+              }
+              snapped = [...snapped.slice(0, pinchStart + 1), ...snapped.slice(pinchEnd + 1)];
+            }
+            // Pass 3: drop collinear overshoot vertices. Pattern is ...A, B, C...
+            // where C lies strictly between A and B on line A-B — the ring walks
+            // past C to B then backtracks to C. GEOS polygonize emits this when a
+            // precinct-cut vertex is collinear with a parent-edge segment and the
+            // noder doesn't split at it. Neighbors visit the same 4 verts in the
+            // topologically correct order ...A, C, B..., so under topojson's
+            // per-arc dedup the two sides don't match and the county boundary
+            // gets a tiny spurious hole. Dropping B makes the sub-block's order
+            // match the neighbor's (...A, C, next).
+            let overshootChanged = true;
+            while (overshootChanged) {
+              overshootChanged = false;
+              for (let i = 0; i + 2 < snapped.length; i++) {
+                const a = snapped[i];
+                const b = snapped[i + 1];
+                const c = snapped[i + 2];
+                const cross = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+                if (Math.abs(cross) > 1e-14) continue;
+                const dx = b[0] - a[0];
+                const dy = b[1] - a[1];
+                if (dx === 0 && dy === 0) continue;
+                const t = Math.abs(dx) > Math.abs(dy) ? (c[0] - a[0]) / dx : (c[1] - a[1]) / dy;
+                if (t > 1e-9 && t < 1 - 1e-9) {
+                  snapped.splice(i + 1, 1);
+                  overshootChanged = true;
+                  break;
+                }
+              }
+            }
+            // Ring must close — if closure dropped, restore.
+            if (snapped.length < 4) return snapped;
+            const first = snapped[0];
+            const last = snapped[snapped.length - 1];
+            if (first[0] !== last[0] || first[1] !== last[1]) snapped.push(first);
+            return snapped;
+          };
+
+          // Convert all face GEOS geoms to snapped GeoJSON upfront — we need the
+          // target's geometry for the verification check below before we decide
+          // whether to commit, and if we skip, we need to free the GEOS handles.
+          type SnappedFace = { polys: number[][][][]; area: number };
+          const facesGjByPrecinct = new Map<number, SnappedFace>();
+          for (const [pi, pFaces] of facesByPrecinct) {
+            const polys: number[][][][] = [];
+            let area = 0;
+            for (const f of pFaces) {
+              const gj = geosHelper.toGeoJSON(f.geom);
+              geosHelper.free(f.geom);
+              if (!gj) continue;
+              const snapPoly = (poly: number[][][]): number[][][] => poly.map(snapRing);
+              if (gj.type === "Polygon") polys.push(snapPoly(gj.coordinates));
+              else for (const p of gj.coordinates) polys.push(snapPoly(p));
+              area += f.area;
+            }
+            if (polys.length > 0) facesGjByPrecinct.set(pi, { polys, area });
           }
-          let missingOnPath = false;
-          outerSib: for (const [, bundle] of facesGjByPrecinct) {
-            for (const poly of bundle.polys) {
-              const ring = poly[0];
-              if (!ring || ring.length < 4) continue;
-              // Sub-block ring verts with parent-ring positions
-              const pvHits: { ringPos: number; parentPos: number; key: string }[] = [];
-              for (let i = 0; i < ring.length - 1; i++) {
-                const v = ring[i];
-                const key = `${Math.round(v[0] * 1e7)},${Math.round(v[1] * 1e7)}`;
-                const pi = parentVertIdx.get(key);
-                if (pi !== undefined) pvHits.push({ ringPos: i, parentPos: pi, key });
-              }
-              if (pvHits.length < 2) continue;
-              // Build set of sibling ring vert-keys for quick membership tests
-              const ringKeys = new Set<string>();
-              for (let i = 0; i < ring.length - 1; i++) {
-                const v = ring[i];
-                ringKeys.add(`${Math.round(v[0] * 1e7)},${Math.round(v[1] * 1e7)}`);
-              }
-              // For each consecutive pair of parent-vert occurrences (cyclic)
-              for (let k = 0; k < pvHits.length; k++) {
-                const A = pvHits[k];
-                const B = pvHits[(k + 1) % pvHits.length];
-                if (A.parentPos === B.parentPos) continue;
-                // Gather parent verts on FWD and REV paths
-                const fwd: number[][] = [];
-                for (
-                  let i = (A.parentPos + 1) % parentLen;
-                  i !== B.parentPos;
-                  i = (i + 1) % parentLen
-                ) {
-                  fwd.push(parentOuterRing[i]);
-                  if (fwd.length > parentLen) break;
-                }
-                const rev: number[][] = [];
-                for (
-                  let i = (A.parentPos - 1 + parentLen) % parentLen;
-                  i !== B.parentPos;
-                  i = (i - 1 + parentLen) % parentLen
-                ) {
-                  rev.push(parentOuterRing[i]);
-                  if (rev.length > parentLen) break;
-                }
-                // Sub-block's between-verts (exclusive of A, B)
-                const subBetweenKeys = new Set<string>();
-                if (A.ringPos < B.ringPos) {
-                  for (let m = A.ringPos + 1; m < B.ringPos; m++) {
-                    const v = ring[m];
-                    subBetweenKeys.add(`${Math.round(v[0] * 1e7)},${Math.round(v[1] * 1e7)}`);
-                  }
-                } else {
-                  for (let m = A.ringPos + 1; m < ring.length - 1; m++) {
-                    const v = ring[m];
-                    subBetweenKeys.add(`${Math.round(v[0] * 1e7)},${Math.round(v[1] * 1e7)}`);
-                  }
-                  for (let m = 0; m < B.ringPos; m++) {
-                    const v = ring[m];
-                    subBetweenKeys.add(`${Math.round(v[0] * 1e7)},${Math.round(v[1] * 1e7)}`);
-                  }
-                }
-                // Determine which parent-ring direction the sibling is
-                // tracing: whichever path has MORE of its verts present in
-                // sub-block's between-range. "Shorter path" is the wrong
-                // heuristic — for sub-blocks that cover most of the parent,
-                // the sibling traces the LONG way, and verts on the short
-                // path legitimately belong to another sibling.
-                const countMatches = (path: number[][]) =>
-                  path.filter(v =>
-                    subBetweenKeys.has(`${Math.round(v[0] * 1e7)},${Math.round(v[1] * 1e7)}`)
-                  ).length;
-                const fwdMatches = countMatches(fwd);
-                const revMatches = countMatches(rev);
-                const actual = fwdMatches >= revMatches ? fwd : rev;
-                // If any parent vert on the actual traversed path is NOT
-                // between A and B in sub-block ring, sub-block skipped it.
-                for (const pv of actual) {
-                  const pkey = `${Math.round(pv[0] * 1e7)},${Math.round(pv[1] * 1e7)}`;
-                  if (!subBetweenKeys.has(pkey)) {
-                    missingOnPath = true;
-                    break outerSib;
+
+          // Cross-sibling vertex unification. snapRing handles verts that match a
+          // parent vertex, but sub-blocks often share GEOS-computed verts (new
+          // intersection points where precinct cuts hit parent boundary) that
+          // aren't parent verts. GEOS can emit 1-ULP-apart floats for the same
+          // geometric point in different faces; if siblings get different floats
+          // for a shared vert, their mutual cut boundary arc won't dedupe in
+          // topojson. Collapse to a single canonical value per 0.1 µm bucket.
+          {
+            const crossSibMap = new Map<string, number[]>();
+            for (const [, bundle] of facesGjByPrecinct) {
+              for (const poly of bundle.polys) {
+                for (const ring of poly) {
+                  for (const v of ring) {
+                    const k = `${Math.round(v[0] * 1e7)},${Math.round(v[1] * 1e7)}`;
+                    if (!crossSibMap.has(k)) crossSibMap.set(k, v);
                   }
                 }
               }
             }
+            for (const [, bundle] of facesGjByPrecinct) {
+              for (const poly of bundle.polys) {
+                for (let ri = 0; ri < poly.length; ri++) {
+                  poly[ri] = poly[ri].map(v => {
+                    const k = `${Math.round(v[0] * 1e7)},${Math.round(v[1] * 1e7)}`;
+                    return crossSibMap.get(k) ?? v;
+                  });
+                }
+              }
+            }
           }
-          if (missingOnPath) {
-            missingParentVertRescues++;
-            rejectedCands.add(splitBi);
+
+          // ── Verify the rescue actually helps the target precinct's topology ──
+          // Count target precinct's current connected components (with splitBi
+          // removed from its own blocks — it's assigned to previousAssignee, not
+          // target — and with prior-rescue sub-blocks included). Then count the
+          // components we'd have after adding the target's proposed sub-block.
+          // A rescue only makes sense if:
+          //  • orphan: always (adds the first piece)
+          //  • fragmented (assigned > vest): after-count < before-count (bridges)
+          //  • lost-pieces (assigned < vest): after-count > before-count (adds)
+          // Otherwise the rescue is just adding complexity — its sub-blocks cause
+          // the kind of topojson arc-dedup artifacts we've been tracking without
+          // improving the topology it was meant to restore.
+          const targetFaceBundle = facesGjByPrecinct.get(targetPi);
+          if (!targetFaceBundle) {
+            // nodeAndSplit didn't emit a face for the target — nothing to verify
+            // or commit; fall through to skip without counting as unnecessary.
+            continue;
+          }
+          // Candidate gate: target's *largest part* must be ≥ threshold. Total
+          // area would be misleading if it's dominated by a big part plus
+          // artifact-prone slivers. Require at least one meaningfully-sized
+          // bridge piece to justify the split.
+          //
+          // Exception for orphan rescues: the target currently has ZERO blocks.
+          // If we reject all candidates, the precinct vanishes entirely from the
+          // output — worse than keeping a sliver-sized sub-block. Orphans bypass
+          // both this gate and the sibling-double-edge check below.
+          const MIN_TARGET_PART_M2 = 100;
+          const isOrphan = rescue.reason === "orphan";
+          let targetLargestPartArea = 0;
+          for (const poly of targetFaceBundle.polys) {
+            const partArea = Math.abs(ringSignedArea(poly[0]));
+            if (partArea > targetLargestPartArea) targetLargestPartArea = partArea;
+          }
+          if (!isOrphan && targetLargestPartArea < MIN_TARGET_PART_M2) {
+            tinyTargetRejections++;
+            rejectedCands.add(splitBi); // deterministic — won't help in later greedy iters
+            continue;
+          }
+          const targetSubGeom: Polygon | MultiPolygon =
+            targetFaceBundle.polys.length === 1
+              ? { type: "Polygon", coordinates: targetFaceBundle.polys[0] }
+              : { type: "MultiPolygon", coordinates: targetFaceBundle.polys };
+          const currentTargetGeoms: (Polygon | MultiPolygon)[] = [];
+          const targetBlockIdxs = blocksByPrecinct.get(targetPi) || [];
+          for (const bi of targetBlockIdxs) {
+            if (bi === splitBi) continue;
+            if (splitParents.has(bi)) continue; // already split by a prior rescue
+            const g = blockFeatures[bi].geometry as Polygon | MultiPolygon | null;
+            if (g) currentTargetGeoms.push(g);
+          }
+          for (const sb of subBlocks) {
+            if (sb.precinctIdx === targetPi) currentTargetGeoms.push(sb.geom);
+          }
+          const compBefore = countComponents(currentTargetGeoms);
+          const compAfter = countComponents([...currentTargetGeoms, targetSubGeom]);
+          const rescueHelps =
+            rescue.reason === "orphan" ||
+            (rescue.reason === "fragmented" && compAfter < compBefore) ||
+            (rescue.reason === "lost-pieces" && compAfter > compBefore);
+          if (!rescueHelps) {
             continue; // try next candidate
           }
-        }
-      }
 
-      let subIdx = 0;
-      for (const [pi, bundle] of facesGjByPrecinct) {
-        subIdx++;
-        const subBlockId = `${splitGeoId}-${subIdx}`;
-        const areaShare = bundle.area / totalSubArea;
-        if (bundle.polys.length === 0) continue;
-        const subGeom: Polygon | MultiPolygon =
-          bundle.polys.length === 1
-            ? { type: "Polygon", coordinates: bundle.polys[0] }
-            : { type: "MultiPolygon", coordinates: bundle.polys };
-        subBlocks.push({
-          parentBlockIdx: splitBi,
-          subBlockId,
-          geom: subGeom,
-          precinctIdx: pi,
-          areaShare
-        });
-        coveredByRescue.add(pi);
-      }
-      // Keep blocksByPrecinct current so subsequent rescues see the
-      // post-commit state: splitBi is no longer whole-assigned to anyone.
-      const prevAssigneeBlocks = blocksByPrecinct.get(previousAssignee);
-      if (prevAssigneeBlocks) {
-        const idx = prevAssigneeBlocks.indexOf(splitBi);
-        if (idx >= 0) prevAssigneeBlocks.splice(idx, 1);
-      }
-      splitParents.add(splitBi);
-      assignment.delete(splitBi);
-      thisRescueSplits.push(splitBi);
-      madeProgress = true;
-      break; // back to greedy while loop for next iteration
-      }
-      if (!madeProgress) break greedy; // no helpful candidate; stop
+          // ── Sibling-double-edge check ──
+          // Siblings legitimately share their mutual precinct-cut boundary (their
+          // interior shared edge, traversed in opposite directions). But they
+          // should NEVER both include a segment of the *parent's outer boundary*
+          // in their rings — when a precinct cut runs near-coincident with a
+          // parent block edge, polygonize can emit both siblings claiming that
+          // edge, which later causes topojson arc-dedup to leave degenerate
+          // spike holes in the dissolved county boundary.
+          //
+          // Detection: collect shared segments across sibling pairs, then filter
+          // to those lying on the parent outer boundary (collinear with a parent
+          // ring segment, strictly between its endpoints — so subdivided parent
+          // edges are caught too). If any shared segment is parent-lying, reject.
+          {
+            const canonSeg = (a: number[], b: number[]): string => {
+              if (a[0] < b[0] || (a[0] === b[0] && a[1] < b[1])) {
+                return `${a[0]},${a[1]}|${b[0]},${b[1]}`;
+              }
+              return `${b[0]},${b[1]}|${a[0]},${a[1]}`;
+            };
+            // Build per-sibling segment sets (each keyed by canonSeg).
+            const siblingSegs: { set: Set<string>; segs: [number[], number[]][] }[] = [];
+            for (const [, bundle] of facesGjByPrecinct) {
+              const set = new Set<string>();
+              const segs: [number[], number[]][] = [];
+              for (const poly of bundle.polys) {
+                for (const ring of poly) {
+                  for (let i = 0; i < ring.length - 1; i++) {
+                    const k = canonSeg(ring[i], ring[i + 1]);
+                    if (!set.has(k)) {
+                      set.add(k);
+                      segs.push([ring[i], ring[i + 1]]);
+                    }
+                  }
+                }
+              }
+              siblingSegs.push({ set, segs });
+            }
+            // Find segments that appear in 2+ siblings.
+            const sharedKeys = new Set<string>();
+            for (let i = 0; i < siblingSegs.length; i++) {
+              for (let j = i + 1; j < siblingSegs.length; j++) {
+                for (const k of siblingSegs[i].set) {
+                  if (siblingSegs[j].set.has(k)) sharedKeys.add(k);
+                }
+              }
+            }
+            // Parent outer-boundary segments (for the collinearity check).
+            const parentSegs: [number[], number[]][] = [];
+            for (const poly of pPolysSnap) {
+              for (const ring of poly) {
+                for (let i = 0; i < ring.length - 1; i++) parentSegs.push([ring[i], ring[i + 1]]);
+              }
+            }
+            // Is point p on (or nearly on) the closed segment a→b? We use
+            // perpendicular-distance tolerance (|cross|/seg_length ≤ 5 mm), not a
+            // fixed cross tolerance, because GEOS's computed intersection points
+            // can drift up to a few mm off the true line — the drift is bigger
+            // on longer parent segments, so we need a per-segment normalized
+            // tolerance. 5 mm is well below TIGER's ~10 cm vertex spacing (no
+            // false positives on distinct legit verts) and comfortably above
+            // GEOS's precision-model drift observed in real data (~2 mm max).
+            const MAX_PERP_M = 0.005;
+            const pointOnParentSeg = (p: number[], a: number[], b: number[]): boolean => {
+              const dx = b[0] - a[0];
+              const dy = b[1] - a[1];
+              const segLenSq = dx * dx + dy * dy;
+              if (segLenSq === 0) return false;
+              const cross = (p[0] - a[0]) * dy - (p[1] - a[1]) * dx;
+              if (cross * cross > MAX_PERP_M * MAX_PERP_M * segLenSq) return false;
+              const t = Math.abs(dx) > Math.abs(dy) ? (p[0] - a[0]) / dx : (p[1] - a[1]) / dy;
+              return t >= -1e-9 && t <= 1 + 1e-9;
+            };
+            // For each shared segment, check if BOTH its endpoints lie on the
+            // parent ring path (any parent segment, not necessarily the same).
+            // The legitimate shared-segment case (precinct cut between siblings)
+            // has interior endpoints not on ∂P; the bug case has both endpoints
+            // on ∂P (one typically at a parent corner, the other at a cut ∩ ∂P
+            // intersection point which sits on a parent segment).
+            // Minor concern: interior cuts that go vertex-to-vertex through the
+            // parent interior would also match (both endpoints are parent corners).
+            // That's rare and, if it does happen, rejecting the rescue and trying
+            // the next candidate is a safe conservative response.
+            const pointOnAnyParentSeg = (pt: number[]): boolean => {
+              for (const [p, q] of parentSegs) {
+                if (pointOnParentSeg(pt, p, q)) return true;
+              }
+              return false;
+            };
+            const checkedKeys = new Set<string>();
+            let doubledParentEdge = false;
+            outer: for (const sib of siblingSegs) {
+              for (const [a, b] of sib.segs) {
+                const key = canonSeg(a, b);
+                if (!sharedKeys.has(key) || checkedKeys.has(key)) continue;
+                checkedKeys.add(key);
+                if (pointOnAnyParentSeg(a) && pointOnAnyParentSeg(b)) {
+                  doubledParentEdge = true;
+                  break outer;
+                }
+              }
+            }
+            // DEBUG: log decision for the specific parents that produced holes
+            // in recent runs — helps verify whether check is firing correctly.
+            const debugBlocks = new Set([
+              "010199557012006",
+              "010330208012007",
+              "010259579022002",
+              "010259579012014"
+            ]);
+            if (debugBlocks.has(splitGeoId)) {
+              this.log(
+                `   DEBUG ${splitGeoId} (target=${targetPi}, cand=${candIdx}): sharedKeys=${sharedKeys.size}, doubledParentEdge=${doubledParentEdge}, parentSegs=${parentSegs.length}`
+              );
+              // Helper: min cross-product magnitude from pt to any parent seg.
+              const minCrossToParent = (pt: number[]): number => {
+                let min = Infinity;
+                for (const [p, q] of parentSegs) {
+                  const cross = (pt[0] - p[0]) * (q[1] - p[1]) - (pt[1] - p[1]) * (q[0] - p[0]);
+                  const abs = Math.abs(cross);
+                  if (abs < min) min = abs;
+                }
+                return min;
+              };
+              const reported = new Set<string>();
+              for (const sib of siblingSegs) {
+                for (const [a, b] of sib.segs) {
+                  const key = canonSeg(a, b);
+                  if (!sharedKeys.has(key) || reported.has(key)) continue;
+                  reported.add(key);
+                  const aOnParent = pointOnAnyParentSeg(a);
+                  const bOnParent = pointOnAnyParentSeg(b);
+                  if (!aOnParent && !bOnParent) continue;
+                  const aCross = minCrossToParent(a);
+                  const bCross = minCrossToParent(b);
+                  this.log(
+                    `     shared seg [${a[0].toFixed(3)},${a[1].toFixed(3)}]→[${b[0].toFixed(3)},${b[1].toFixed(3)}] aOnParent=${aOnParent}(minCross=${aCross.toExponential(2)}) bOnParent=${bOnParent}(minCross=${bCross.toExponential(2)})`
+                  );
+                }
+              }
+            }
+            // Orphans bypass this gate too — see comment on MIN_TARGET_PART_M2.
+            if (doubledParentEdge && !isOrphan) {
+              doubledEdgeRescues++;
+              rejectedCands.add(splitBi); // deterministic rejection; don't retry in greedy
+              continue; // try next candidate
+            }
+          }
+
+          // ── Per-sibling parent-ring-path check ──
+          // For each sibling's outer ring, for each pair of consecutive parent-
+          // vertices in that ring, the parent ring path between them must be
+          // fully represented in the sibling's ring (all intermediate parent
+          // verts present, in order). If sub-block ring has Q → MID → R but
+          // parent ring has Q → P → R, the sub-block skipped P and leaves
+          // triangle Q-P-R unassigned → county-layer artifact hole.
+          //
+          // Direction detection: between two parent verts, there are two
+          // parent-ring paths (forward and reverse around the cyclic ring).
+          // The sub-block follows ONE of them (or takes an interior cut, with
+          // no intermediate parent verts on the path it's actually following).
+          // We pick the direction with FEWER intermediate parent verts as the
+          // hypothesis. If even that shorter path has a parent vert the
+          // sub-block is missing, reject.
+          //
+          // Orphans bypass this check.
+          if (!isOrphan) {
+            const parentOuterRing = pPolysSnap[0]?.[0];
+            if (parentOuterRing && parentOuterRing.length > 3) {
+              // Build index of parent outer ring verts by coord key (0.1 µm)
+              const parentVertIdx = new Map<string, number>();
+              const parentLen = parentOuterRing.length - 1; // exclude closing dup
+              for (let i = 0; i < parentLen; i++) {
+                const v = parentOuterRing[i];
+                const key = `${Math.round(v[0] * 1e7)},${Math.round(v[1] * 1e7)}`;
+                if (!parentVertIdx.has(key)) parentVertIdx.set(key, i);
+              }
+              let missingOnPath = false;
+              outerSib: for (const [, bundle] of facesGjByPrecinct) {
+                for (const poly of bundle.polys) {
+                  const ring = poly[0];
+                  if (!ring || ring.length < 4) continue;
+                  // Sub-block ring verts with parent-ring positions
+                  const pvHits: { ringPos: number; parentPos: number; key: string }[] = [];
+                  for (let i = 0; i < ring.length - 1; i++) {
+                    const v = ring[i];
+                    const key = `${Math.round(v[0] * 1e7)},${Math.round(v[1] * 1e7)}`;
+                    const pi = parentVertIdx.get(key);
+                    if (pi !== undefined) pvHits.push({ ringPos: i, parentPos: pi, key });
+                  }
+                  if (pvHits.length < 2) continue;
+                  // Build set of sibling ring vert-keys for quick membership tests
+                  const ringKeys = new Set<string>();
+                  for (let i = 0; i < ring.length - 1; i++) {
+                    const v = ring[i];
+                    ringKeys.add(`${Math.round(v[0] * 1e7)},${Math.round(v[1] * 1e7)}`);
+                  }
+                  // For each consecutive pair of parent-vert occurrences (cyclic)
+                  for (let k = 0; k < pvHits.length; k++) {
+                    const A = pvHits[k];
+                    const B = pvHits[(k + 1) % pvHits.length];
+                    if (A.parentPos === B.parentPos) continue;
+                    // Gather parent verts on FWD and REV paths
+                    const fwd: number[][] = [];
+                    for (
+                      let i = (A.parentPos + 1) % parentLen;
+                      i !== B.parentPos;
+                      i = (i + 1) % parentLen
+                    ) {
+                      fwd.push(parentOuterRing[i]);
+                      if (fwd.length > parentLen) break;
+                    }
+                    const rev: number[][] = [];
+                    for (
+                      let i = (A.parentPos - 1 + parentLen) % parentLen;
+                      i !== B.parentPos;
+                      i = (i - 1 + parentLen) % parentLen
+                    ) {
+                      rev.push(parentOuterRing[i]);
+                      if (rev.length > parentLen) break;
+                    }
+                    // Sub-block's between-verts (exclusive of A, B)
+                    const subBetweenKeys = new Set<string>();
+                    if (A.ringPos < B.ringPos) {
+                      for (let m = A.ringPos + 1; m < B.ringPos; m++) {
+                        const v = ring[m];
+                        subBetweenKeys.add(`${Math.round(v[0] * 1e7)},${Math.round(v[1] * 1e7)}`);
+                      }
+                    } else {
+                      for (let m = A.ringPos + 1; m < ring.length - 1; m++) {
+                        const v = ring[m];
+                        subBetweenKeys.add(`${Math.round(v[0] * 1e7)},${Math.round(v[1] * 1e7)}`);
+                      }
+                      for (let m = 0; m < B.ringPos; m++) {
+                        const v = ring[m];
+                        subBetweenKeys.add(`${Math.round(v[0] * 1e7)},${Math.round(v[1] * 1e7)}`);
+                      }
+                    }
+                    // Determine which parent-ring direction the sibling is
+                    // tracing: whichever path has MORE of its verts present in
+                    // sub-block's between-range. "Shorter path" is the wrong
+                    // heuristic — for sub-blocks that cover most of the parent,
+                    // the sibling traces the LONG way, and verts on the short
+                    // path legitimately belong to another sibling.
+                    const countMatches = (path: number[][]) =>
+                      path.filter(v =>
+                        subBetweenKeys.has(`${Math.round(v[0] * 1e7)},${Math.round(v[1] * 1e7)}`)
+                      ).length;
+                    const fwdMatches = countMatches(fwd);
+                    const revMatches = countMatches(rev);
+                    const actual = fwdMatches >= revMatches ? fwd : rev;
+                    // If any parent vert on the actual traversed path is NOT
+                    // between A and B in sub-block ring, sub-block skipped it.
+                    for (const pv of actual) {
+                      const pkey = `${Math.round(pv[0] * 1e7)},${Math.round(pv[1] * 1e7)}`;
+                      if (!subBetweenKeys.has(pkey)) {
+                        missingOnPath = true;
+                        break outerSib;
+                      }
+                    }
+                  }
+                }
+              }
+              if (missingOnPath) {
+                missingParentVertRescues++;
+                rejectedCands.add(splitBi);
+                continue; // try next candidate
+              }
+            }
+          }
+
+          let subIdx = 0;
+          for (const [pi, bundle] of facesGjByPrecinct) {
+            subIdx++;
+            const subBlockId = `${splitGeoId}-${subIdx}`;
+            const areaShare = bundle.area / totalSubArea;
+            if (bundle.polys.length === 0) continue;
+            const subGeom: Polygon | MultiPolygon =
+              bundle.polys.length === 1
+                ? { type: "Polygon", coordinates: bundle.polys[0] }
+                : { type: "MultiPolygon", coordinates: bundle.polys };
+            subBlocks.push({
+              parentBlockIdx: splitBi,
+              subBlockId,
+              geom: subGeom,
+              precinctIdx: pi,
+              areaShare
+            });
+            coveredByRescue.add(pi);
+          }
+          // Keep blocksByPrecinct current so subsequent rescues see the
+          // post-commit state: splitBi is no longer whole-assigned to anyone.
+          const prevAssigneeBlocks = blocksByPrecinct.get(previousAssignee);
+          if (prevAssigneeBlocks) {
+            const idx = prevAssigneeBlocks.indexOf(splitBi);
+            if (idx >= 0) prevAssigneeBlocks.splice(idx, 1);
+          }
+          splitParents.add(splitBi);
+          assignment.delete(splitBi);
+          thisRescueSplits.push(splitBi);
+          madeProgress = true;
+          break; // back to greedy while loop for next iteration
+        }
+        if (!madeProgress) break greedy; // no helpful candidate; stop
       }
       if (thisRescueSplits.length === 0) {
         unnecessaryRescues++;
@@ -2175,8 +2176,7 @@ export default class PrepareDevData extends Command {
         }
 
         for (const sb of sibs) {
-          const sbPolys =
-            sb.geom.type === "Polygon" ? [sb.geom.coordinates] : sb.geom.coordinates;
+          const sbPolys = sb.geom.type === "Polygon" ? [sb.geom.coordinates] : sb.geom.coordinates;
           for (const poly of sbPolys) {
             for (const ring of poly) {
               for (const v of ring) {
@@ -2210,9 +2210,7 @@ export default class PrepareDevData extends Command {
                     // ring. Rounded key collapses them to one.
                     const vKey = `${Math.round(v[0] * 1e7)},${Math.round(v[1] * 1e7)}`;
                     if (
-                      !arr.some(
-                        p => `${Math.round(p[0] * 1e7)},${Math.round(p[1] * 1e7)}` === vKey
-                      )
+                      !arr.some(p => `${Math.round(p[0] * 1e7)},${Math.round(p[1] * 1e7)}` === vKey)
                     ) {
                       arr.push(v);
                     }
@@ -2239,9 +2237,7 @@ export default class PrepareDevData extends Command {
             const b = ring[i + 1];
             const extras = byEdge.get(canonEdgeKey(a, b));
             if (extras && extras.length > 0) {
-              const sorted = extras
-                .map(x => ({ x, t: paramT(x, a, b) }))
-                .sort((p, q) => p.t - q.t);
+              const sorted = extras.map(x => ({ x, t: paramT(x, a, b) })).sort((p, q) => p.t - q.t);
               for (const e of sorted) {
                 out.push(e.x);
                 insertedVerts++;

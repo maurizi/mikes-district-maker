@@ -20,6 +20,7 @@ DRY_RUN=false
 MAX_PARALLEL=3
 UPDATE_ONLY=false
 NO_PUBLISH=false
+SKIP_TILES=false
 
 # Largest states (by staging geojson size) — run one-at-a-time in phase 2
 BIG_STATES=(TX CA)
@@ -39,6 +40,7 @@ while [[ $# -gt 0 ]]; do
     --parallel) MAX_PARALLEL="$2"; shift 2 ;;
     --update-only) UPDATE_ONLY=true; shift ;;
     --no-publish) NO_PUBLISH=true; shift ;;
+    --skip-tiles) SKIP_TILES=true; shift ;;
     *) echo "Unknown arg: $1"; exit 1 ;;
   esac
 done
@@ -53,6 +55,7 @@ else
 fi
 export UPDATE_ONLY
 export NO_PUBLISH
+export SKIP_TILES
 
 if $UPDATE_ONLY && $NO_PUBLISH; then
   echo "ERROR: --update-only and --no-publish are mutually exclusive"

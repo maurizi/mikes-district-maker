@@ -6,22 +6,32 @@ import maplibregl from "maplibre-gl";
 import { type ThumbnailGeoJSON } from "../shared/entities";
 import { getDistrictColor } from "./constants/colors";
 
-// Square so the PNG fits our square UI thumbnails without letterboxing and
-// still unfurls cleanly on OG/Twitter `summary`, WhatsApp, iMessage, Slack, etc.
-const THUMBNAIL_WIDTH = 1200;
-const THUMBNAIL_HEIGHT = 1200;
+// Two variants: a square PNG that the in-app mini-maps display without
+// letterboxing, and a 1.91:1 PNG sized for og:image / twitter:card
+// `summary_large_image`. Bluesky/Facebook/LinkedIn/Discord all crop the
+// preview to ~1.91:1, so a square og:image gets its top and bottom
+// clipped — the square form is fine for square-ish states (FL, IA) but
+// loses the panhandle / Keys after the platform crop.
+export type ThumbnailVariant = "square" | "og";
+
+const DIMENSIONS: Record<ThumbnailVariant, { readonly width: number; readonly height: number }> = {
+  square: { width: 1200, height: 1200 },
+  og: { width: 1200, height: 630 }
+};
 const THUMBNAIL_PADDING = 15;
 
 export async function renderThumbnailPng(
   districts: ThumbnailGeoJSON,
-  bounds: readonly [number, number, number, number]
+  bounds: readonly [number, number, number, number],
+  variant: ThumbnailVariant = "square"
 ): Promise<Blob> {
+  const { width, height } = DIMENSIONS[variant];
   const container = document.createElement("div");
   container.style.position = "absolute";
   container.style.left = "-99999px";
   container.style.top = "0";
-  container.style.width = `${THUMBNAIL_WIDTH}px`;
-  container.style.height = `${THUMBNAIL_HEIGHT}px`;
+  container.style.width = `${width}px`;
+  container.style.height = `${height}px`;
   document.body.appendChild(container);
 
   // Bake color into feature properties up front so the fill layer can read it

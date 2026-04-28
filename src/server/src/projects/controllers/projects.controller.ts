@@ -78,8 +78,10 @@ import { ReferenceLayer } from "../../reference-layers/entities/reference-layer.
 
 const THUMBNAIL_UPLOAD_URL_EXPIRES_SECONDS = 5 * 60;
 
-export function thumbnailS3Key(projectId: ProjectId): string {
-  return `${projectId}.png`;
+export type ThumbnailVariant = "square" | "og";
+
+export function thumbnailS3Key(projectId: ProjectId, variant: ThumbnailVariant = "square"): string {
+  return variant === "og" ? `${projectId}-og.png` : `${projectId}.png`;
 }
 
 function validateNumberOfMembers(
@@ -341,7 +343,8 @@ export class ProjectsController implements CrudController<Project> {
   @Post(":id/thumbnail-upload-url")
   async createThumbnailUploadUrl(
     @ParsedRequest() req: CrudRequest,
-    @Param("id") projectId: ProjectId
+    @Param("id") projectId: ProjectId,
+    @Query("variant") variantParam?: string
   ): Promise<{ uploadUrl: string }> {
     // Client rendered a new PNG and needs to PUT it to S3. We re-verify
     // ownership here (getProject via crud respects the auth filter) before
@@ -352,11 +355,12 @@ export class ProjectsController implements CrudController<Project> {
       this.logger.error("THUMBNAILS_BUCKET env var not set");
       throw new InternalServerErrorException();
     }
+    const variant: ThumbnailVariant = variantParam === "og" ? "og" : "square";
     const uploadUrl = await getSignedUrl(
       this.s3,
       new PutObjectCommand({
         Bucket: bucket,
-        Key: thumbnailS3Key(project.id),
+        Key: thumbnailS3Key(project.id, variant),
         ContentType: "image/png",
         CacheControl: "public, max-age=3600"
       }),

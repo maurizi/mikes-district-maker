@@ -565,7 +565,8 @@ const ImportProjectScreen = ({ organization, regionConfigs, user }: StateProps) 
                     ? validatedData.districtsDefinition
                     : undefined;
                 const thumbnailPromise: Promise<{
-                  readonly png?: Blob;
+                  readonly squarePng?: Blob;
+                  readonly ogPng?: Blob;
                   readonly data: Pick<CreateProjectData, "districtProperties">;
                 }> =
                   regionForThumbnail && definitionForThumbnail && numberOfDistricts
@@ -578,9 +579,21 @@ const ImportProjectScreen = ({ organization, regionConfigs, user }: StateProps) 
                             definitionForThumbnail,
                             numberOfDistricts
                           );
-                          const png = await renderThumbnailPng(thumbnail, staticMetadata.bbox);
+                          // Render serially — two MapLibre instances at once
+                          // can blow GPU memory on lower-end devices.
+                          const squarePng = await renderThumbnailPng(
+                            thumbnail,
+                            staticMetadata.bbox,
+                            "square"
+                          );
+                          const ogPng = await renderThumbnailPng(
+                            thumbnail,
+                            staticMetadata.bbox,
+                            "og"
+                          );
                           return {
-                            png,
+                            squarePng,
+                            ogPng,
                             data: {
                               districtProperties: thumbnail.features.map(f => f.properties)
                             }
@@ -590,17 +603,20 @@ const ImportProjectScreen = ({ organization, regionConfigs, user }: StateProps) 
                     : Promise.resolve({ data: {} });
 
                 thumbnailPromise
-                  .then(async ({ png, data }) => {
+                  .then(async ({ squarePng, ogPng, data }) => {
                     const baseData =
                       "name" in validatedForm.regionConfig
                         ? { ...validatedData, name: validatedForm.regionConfig.name }
                         : validatedData;
                     const project = await createProject({ ...baseData, ...data });
                     // Upload is best-effort; a failure shouldn't block the
-                    // project import — the next save regenerates the PNG.
-                    if (png) {
+                    // project import — the next save regenerates the PNGs.
+                    if (squarePng && ogPng) {
                       try {
-                        await uploadProjectThumbnail(project.id, png);
+                        await Promise.all([
+                          uploadProjectThumbnail(project.id, squarePng, "square"),
+                          uploadProjectThumbnail(project.id, ogPng, "og")
+                        ]);
                       } catch (e) {
                         // eslint-disable-next-line no-console
                         console.warn("Thumbnail upload failed:", e);

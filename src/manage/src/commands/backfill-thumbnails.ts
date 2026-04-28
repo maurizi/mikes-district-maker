@@ -462,10 +462,17 @@ function districtColor(id: number): string {
   return id === 0 ? UNASSIGNED_COLOR : DISTRICT_COLORS[id % DISTRICT_COLORS.length];
 }
 
-// Harness page that the client-side renderer runs in. Must match the
-// logic in src/client/thumbnail-render.ts so backfilled images look the
-// same as ones generated live by the editor on save.
-const HARNESS_HTML = `<!DOCTYPE html>
+// Two variants matching src/client/thumbnail-render.ts: a square in-app
+// PNG and a 1.91:1 PNG used as og:image so social link cards don't crop
+// the state's top and bottom away. Backfilled images must match what the
+// editor uploads on save.
+type Variant = "square" | "og";
+const VARIANT_DIMENSIONS: Record<Variant, { readonly width: number; readonly height: number }> = {
+  square: { width: 1200, height: 1200 },
+  og: { width: 1200, height: 630 }
+};
+
+const harnessHtml = (width: number, height: number): string => `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -474,7 +481,7 @@ const HARNESS_HTML = `<!DOCTYPE html>
 <script src="https://unpkg.com/maplibre-gl@5.21.1/dist/maplibre-gl.js"></script>
 <style>
   html, body { margin: 0; padding: 0; background: #fff; }
-  #map { width: 1200px; height: 1200px; background: #fff; }
+  #map { width: ${width}px; height: ${height}px; background: #fff; }
 </style>
 </head>
 <body>
@@ -713,13 +720,15 @@ async function connectBrowser(browserUrl: string): Promise<Browser> {
 async function renderPngInFreshPage(
   getBrowser: () => Promise<Browser>,
   thumbnail: ThumbnailGeoJSON,
-  bbox: readonly [number, number, number, number]
+  bbox: readonly [number, number, number, number],
+  variant: Variant
 ): Promise<Buffer> {
+  const { width, height } = VARIANT_DIMENSIONS[variant];
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
-    await page.setViewport({ width: 1200, height: 1200, deviceScaleFactor: 1 });
-    await page.setContent(HARNESS_HTML, { waitUntil: "networkidle0" });
+    await page.setViewport({ width, height, deviceScaleFactor: 1 });
+    await page.setContent(harnessHtml(width, height), { waitUntil: "networkidle0" });
     return await renderPng(page, thumbnail, bbox);
   } finally {
     try {
@@ -847,32 +856,50 @@ export default class BackfillThumbnails extends Command {
             const districtProperties: readonly DistrictProperties[] = thumbnail.features.map(
               f => f.properties
             );
-            const pngBuffer = !withPng
+            const squarePng = !withPng
               ? null
-              : await renderPngInFreshPage(getBrowser, thumbnail, region.bbox);
+              : await renderPngInFreshPage(getBrowser, thumbnail, region.bbox, "square");
+            const ogPng = !withPng
+              ? null
+              : await renderPngInFreshPage(getBrowser, thumbnail, region.bbox, "og");
             if (dryRun) {
               this.log(
                 `  ${project.name}: would write ${districtProperties.length} properties${
-                  pngBuffer
-                    ? ` and upload ${pngBuffer.length}B PNG to s3://${bucket}/${project.id}.png`
+                  squarePng && ogPng
+                    ? ` and upload ${squarePng.length}B + ${ogPng.length}B PNGs to s3://${bucket}/${project.id}{,-og}.png`
                     : " (no PNG)"
                 }`
               );
             } else {
               await projectRepo.update(project.id, { districtProperties });
-              if (pngBuffer && bucket) {
-                await s3.send(
-                  new PutObjectCommand({
-                    Bucket: bucket,
-                    Key: `${project.id}.png`,
-                    Body: pngBuffer,
-                    ContentType: "image/png",
-                    CacheControl: "public, max-age=3600"
-                  })
-                );
+              if (squarePng && ogPng && bucket) {
+                await Promise.all([
+                  s3.send(
+                    new PutObjectCommand({
+                      Bucket: bucket,
+                      Key: `${project.id}.png`,
+                      Body: squarePng,
+                      ContentType: "image/png",
+                      CacheControl: "public, max-age=3600"
+                    })
+                  ),
+                  s3.send(
+                    new PutObjectCommand({
+                      Bucket: bucket,
+                      Key: `${project.id}-og.png`,
+                      Body: ogPng,
+                      ContentType: "image/png",
+                      CacheControl: "public, max-age=3600"
+                    })
+                  )
+                ]);
               }
               this.log(
-                `  ${project.name}: updated${pngBuffer ? ` (${pngBuffer.length}B PNG uploaded)` : ""}`
+                `  ${project.name}: updated${
+                  squarePng && ogPng
+                    ? ` (${squarePng.length}B + ${ogPng.length}B PNGs uploaded)`
+                    : ""
+                }`
               );
             }
             updated++;

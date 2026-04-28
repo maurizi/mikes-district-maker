@@ -33,9 +33,16 @@ const s3 = new S3Client({});
 const UNASSIGNED_COLOR = "#EDEDED";
 
 // Matches the harness in backfill-thumbnails: a minimal MapLibre page that
-// renders a FeatureCollection into a 1200x1200 PNG. Kept local rather than
-// shared so this command can be reasoned about on its own.
-const HARNESS_HTML = `<!DOCTYPE html>
+// renders a FeatureCollection into a PNG of the requested size. Two variants
+// per region — a square in-app image and a 1.91:1 og:image — kept in sync
+// with src/client/thumbnail-render.ts.
+type Variant = "square" | "og";
+const VARIANT_DIMENSIONS: Record<Variant, { readonly width: number; readonly height: number }> = {
+  square: { width: 1200, height: 1200 },
+  og: { width: 1200, height: 630 }
+};
+
+const harnessHtml = (width: number, height: number): string => `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -44,7 +51,7 @@ const HARNESS_HTML = `<!DOCTYPE html>
 <script src="https://unpkg.com/maplibre-gl@5.21.1/dist/maplibre-gl.js"></script>
 <style>
   html, body { margin: 0; padding: 0; background: #fff; }
-  #map { width: 1200px; height: 1200px; background: #fff; }
+  #map { width: ${width}px; height: ${height}px; background: #fff; }
 </style>
 </head>
 <body>
@@ -207,13 +214,15 @@ async function renderPng(
 async function renderPngInFreshPage(
   getBrowser: () => Promise<Browser>,
   thumbnail: ThumbnailGeoJSON,
-  bbox: readonly [number, number, number, number]
+  bbox: readonly [number, number, number, number],
+  variant: Variant
 ): Promise<Buffer> {
+  const { width, height } = VARIANT_DIMENSIONS[variant];
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
-    await page.setViewport({ width: 1200, height: 1200, deviceScaleFactor: 1 });
-    await page.setContent(HARNESS_HTML, { waitUntil: "networkidle0" });
+    await page.setViewport({ width, height, deviceScaleFactor: 1 });
+    await page.setContent(harnessHtml(width, height), { waitUntil: "networkidle0" });
     return await renderPng(page, thumbnail, bbox);
   } finally {
     try {
@@ -315,10 +324,17 @@ export default class RenderRegionBlanks extends Command {
 
     try {
       for (const region of regions) {
-        const key = `region-${region.id}.png`;
+        const squareKey = `region-${region.id}.png`;
+        const ogKey = `region-${region.id}-og.png`;
         if (!flags.force && bucket && !dryRun) {
-          if (await s3ObjectExists(bucket, key)) {
-            this.log(`${region.regionCode}: skipping (s3://${bucket}/${key} exists)`);
+          const [squareExists, ogExists] = await Promise.all([
+            s3ObjectExists(bucket, squareKey),
+            s3ObjectExists(bucket, ogKey)
+          ]);
+          if (squareExists && ogExists) {
+            this.log(
+              `${region.regionCode}: skipping (s3://${bucket}/${squareKey} and ${ogKey} exist)`
+            );
             skipped++;
             continue;
           }
@@ -326,22 +342,41 @@ export default class RenderRegionBlanks extends Command {
         try {
           const regionData = await loadRegionData(region.keyPrefix);
           const thumbnail = buildBlankThumbnail(regionData);
-          const pngBuffer = await renderPngInFreshPage(getBrowser, thumbnail, regionData.bbox);
+          const squarePng = await renderPngInFreshPage(
+            getBrowser,
+            thumbnail,
+            regionData.bbox,
+            "square"
+          );
+          const ogPng = await renderPngInFreshPage(getBrowser, thumbnail, regionData.bbox, "og");
           if (dryRun) {
             this.log(
-              `${region.regionCode}: would upload ${pngBuffer.length}B to s3://${bucket}/${key}`
+              `${region.regionCode}: would upload ${squarePng.length}B + ${ogPng.length}B to s3://${bucket}/${squareKey} and ${ogKey}`
             );
           } else {
-            await s3.send(
-              new PutObjectCommand({
-                Bucket: bucket!,
-                Key: key,
-                Body: pngBuffer,
-                ContentType: "image/png",
-                CacheControl: "public, max-age=86400"
-              })
+            await Promise.all([
+              s3.send(
+                new PutObjectCommand({
+                  Bucket: bucket!,
+                  Key: squareKey,
+                  Body: squarePng,
+                  ContentType: "image/png",
+                  CacheControl: "public, max-age=86400"
+                })
+              ),
+              s3.send(
+                new PutObjectCommand({
+                  Bucket: bucket!,
+                  Key: ogKey,
+                  Body: ogPng,
+                  ContentType: "image/png",
+                  CacheControl: "public, max-age=86400"
+                })
+              )
+            ]);
+            this.log(
+              `${region.regionCode}: uploaded ${squarePng.length}B to ${squareKey}, ${ogPng.length}B to ${ogKey}`
             );
-            this.log(`${region.regionCode}: uploaded ${pngBuffer.length}B to ${key}`);
           }
           rendered++;
         } catch (e) {

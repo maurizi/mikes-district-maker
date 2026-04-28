@@ -649,13 +649,19 @@ const projectDataReducer = (
               nextState,
               Cmd.run(async () => {
                 const bbox = await fetchMemoizedStateBbox(regionConfig);
-                const thumbnailBlob = await renderThumbnailPng(thumbnail, bbox);
+                // Render variants serially: two concurrent MapLibre instances
+                // can blow GPU memory on lower-end devices.
+                const squareBlob = await renderThumbnailPng(thumbnail, bbox, "square");
+                const ogBlob = await renderThumbnailPng(thumbnail, bbox, "og");
                 const districtProperties = thumbnail.features.map(f => f.properties);
                 // Upload is best-effort: a missing THUMBNAILS_BUCKET in dev or
                 // a transient S3 failure shouldn't block the save. Next save
-                // retries; the mini-map stays blank until one succeeds.
+                // retries; the mini-map / og card stay stale until one succeeds.
                 try {
-                  await uploadProjectThumbnail(project.id, thumbnailBlob);
+                  await Promise.all([
+                    uploadProjectThumbnail(project.id, squareBlob, "square"),
+                    uploadProjectThumbnail(project.id, ogBlob, "og")
+                  ]);
                 } catch (e) {
                   // eslint-disable-next-line no-console
                   console.warn("Thumbnail upload failed:", e);

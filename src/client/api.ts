@@ -271,10 +271,16 @@ export async function patchProject(
 
 // Ask the server for a short-lived presigned S3 PUT URL and upload the PNG
 // directly, bypassing the API Lambda. Called during the save flow after
-// rendering the districts thumbnail.
-export async function uploadProjectThumbnail(projectId: ProjectId, png: Blob): Promise<void> {
+// rendering the districts thumbnail. The `variant` selects between the
+// square in-app PNG and the 1.91:1 PNG used as og:image.
+export async function uploadProjectThumbnail(
+  projectId: ProjectId,
+  png: Blob,
+  variant: "square" | "og" = "square"
+): Promise<void> {
+  const qs = variant === "og" ? "?variant=og" : "";
   const response = await apiAxios.post<{ uploadUrl: string }>(
-    `/api/projects/${projectId}/thumbnail-upload-url`
+    `/api/projects/${projectId}/thumbnail-upload-url${qs}`
   );
   const { uploadUrl } = response.data;
   // The presigned URL encodes Content-Type and Cache-Control; the browser

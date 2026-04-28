@@ -99,6 +99,10 @@ const partisanBreakdown = (
 
 // Belt-and-suspenders: if a human lands here by accident, send them to the
 // SPA. Bots parse the <meta> tags before executing the refresh.
+//
+// imageUrl points at the 1200x630 og variant so Bluesky/Facebook/etc don't
+// crop a square preview down to their 1.91:1 link-card slot — that crop
+// chops the top and bottom off square-ish states (FL, IA, IL).
 const renderOgHtml = ({ title, description, imageUrl, canonicalUrl, spaUrl }: OgFields): string =>
   `<!DOCTYPE html>
 <html lang="en">
@@ -110,9 +114,11 @@ const renderOgHtml = ({ title, description, imageUrl, canonicalUrl, spaUrl }: Og
 <meta property="og:title" content="${escapeHtml(title)}">
 <meta property="og:description" content="${escapeHtml(description)}">
 <meta property="og:image" content="${escapeHtml(imageUrl)}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 <meta property="og:url" content="${escapeHtml(canonicalUrl)}">
 <meta property="og:type" content="article">
-<meta name="twitter:card" content="summary">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${escapeHtml(title)}">
 <meta name="twitter:description" content="${escapeHtml(description)}">
 <meta name="twitter:image" content="${escapeHtml(imageUrl)}">
@@ -190,7 +196,7 @@ export class OgController {
       title: truncate(project.name, 60),
       // Target 110–160 chars for og:description.
       description: describeProject(project),
-      imageUrl: `${baseUrl}${thumbnailUrl(project, isBlank)}`,
+      imageUrl: `${baseUrl}${thumbnailUrl(project, isBlank, "og")}`,
       canonicalUrl: spaUrl,
       spaUrl
     });

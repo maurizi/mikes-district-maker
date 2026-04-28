@@ -30,11 +30,19 @@ type ProjectForThumbnail = Pick<Project, "id" | "updatedDt" | "regionConfigId">;
 // text and can be multiple MB per row for block-level assignments, so list
 // views check blankness via a lightweight second SQL query against just the
 // paginated IDs instead of pulling the full JSON into the main select.
-export function thumbnailUrl(project: ProjectForThumbnail, isBlank: boolean): string {
+//
+// variant === "og" returns the 1.91:1 sibling PNG used for og:image so that
+// social previews aren't cropped — see thumbnail-render.ts.
+export function thumbnailUrl(
+  project: ProjectForThumbnail,
+  isBlank: boolean,
+  variant: "square" | "og" = "square"
+): string {
+  const suffix = variant === "og" ? "-og" : "";
   if (isBlank) {
-    return `/thumbnails/region-${project.regionConfigId}.png`;
+    return `/thumbnails/region-${project.regionConfigId}${suffix}.png`;
   }
-  return `/thumbnails/${project.id}.png?v=${project.updatedDt.getTime()}`;
+  return `/thumbnails/${project.id}${suffix}.png?v=${project.updatedDt.getTime()}`;
 }
 
 function attachThumbnailUrl<T extends ProjectForThumbnail>(p: T, isBlank: boolean): T {

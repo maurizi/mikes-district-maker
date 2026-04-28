@@ -23,6 +23,15 @@ const s3Axios = axios.create();
 // regionConfig.version is appended as a `?v=<timestamp>` cache-buster so a
 // republished region invalidates CloudFront entries even when keyPrefix is
 // reused.
+//
+// In a production build `__REGION_ARTIFACTS_ORIGIN__` is the empty
+// string and we fall through to same-origin CloudFront. In dev Vite
+// injects an absolute origin (CloudFront in front of the dev bucket)
+// so client fetches skip the Node proxy, which is ~14× slower than
+// CloudFront for big Range GETs.
+declare const __REGION_ARTIFACTS_ORIGIN__: string;
+const REGION_ARTIFACTS_ORIGIN = __REGION_ARTIFACTS_ORIGIN__ || self.location.origin;
+
 export function versionParam(version: Date | string | number): string {
   return new Date(version).getTime().toString();
 }
@@ -32,7 +41,7 @@ function staticDataUri(
   fileName: string,
   version: Date | string | number
 ): HttpsURI {
-  const url = new URL(`${keyPrefix}${fileName}`, self.location.origin);
+  const url = new URL(`${keyPrefix}${fileName}`, REGION_ARTIFACTS_ORIGIN);
   url.searchParams.set("v", versionParam(version));
   return url.href;
 }

@@ -23,6 +23,22 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     elif [ "${1:-}" = "--vagrant" ]; then
         vagrant up --provision
     else
+        # Trust the local CA for dev HTTPS (idempotent, prompts for sudo
+        # the first time). vite-plugin-mkcert keeps its own CA in
+        # ~/.vite-plugin-mkcert and signs leaf certs from it, so we point
+        # CAROOT there to install *that* CA into the system + browser
+        # trust stores — otherwise mkcert would trust a different CA than
+        # the one Vite serves with.
+        PLUGIN_CAROOT="${HOME}/.vite-plugin-mkcert"
+        if command -v mkcert >/dev/null 2>&1; then
+            mkdir -p "${PLUGIN_CAROOT}"
+            CAROOT="${PLUGIN_CAROOT}" mkcert -install
+        else
+            echo "WARNING: 'mkcert' not on PATH. Install it (e.g. apt/brew install mkcert)"
+            echo "         then run: CAROOT=~/.vite-plugin-mkcert mkcert -install"
+            echo "         to trust dev HTTPS in your browser."
+        fi
+
         ./scripts/update
     fi
 fi

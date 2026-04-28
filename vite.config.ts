@@ -4,12 +4,29 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import svgr from "vite-plugin-svgr";
+import mkcert from "vite-plugin-mkcert";
 
-export default defineConfig({
-  plugins: [react(), svgr()],
+// Vite's Node proxy is the bottleneck on big Range GETs in dev
+// (curl-measured ~14× slower than direct: 9 s vs 0.6 s warm for a
+// 4 MiB chunk). Hand the client an absolute origin so it skips the
+// proxy. We point at S3 directly rather than CloudFront because the
+// CF distribution returns 403 on OPTIONS preflights (not in its
+// cache behaviors), so cross-origin Range requests that preflight
+// fail. The bucket itself accepts OPTIONS and allows `*` origin /
+// the `range` header. In a production build this is the empty
+// string, the client falls back to self.location.origin, and
+// same-origin CloudFront serves it without preflight needed
+// (commit 6a95132).
+const DEV_REGION_ARTIFACTS_ORIGIN =
+  process.env.REGION_ARTIFACTS_ORIGIN ||
+  "https://districtbuilder-dev-238046523378.s3.amazonaws.com";
+
+export default defineConfig(({ command }) => ({
+  plugins: [react(), svgr(), mkcert()],
   server: {
     port: 3003,
     host: true,
+    https: {},
     proxy: {
       "/api": {
         target: process.env.BASE_URL || "http://server:3005",
@@ -55,7 +72,14 @@ export default defineConfig({
     }
   },
   define: {
-    global: "globalThis"
+    global: "globalThis",
+    // In dev, hand the client an absolute origin for /regions/* and
+    // /basemap/* fetches so they bypass the slow Node proxy. In a
+    // production build this is the empty string and the client falls
+    // back to self.location.origin (same-origin CloudFront).
+    __REGION_ARTIFACTS_ORIGIN__: JSON.stringify(
+      command === "serve" ? DEV_REGION_ARTIFACTS_ORIGIN : ""
+    )
   },
   build: {
     outDir: "build",
@@ -66,4 +90,4 @@ export default defineConfig({
     include: ["src/client/**/*.{test,spec}.{ts,tsx}"],
     setupFiles: ["src/client/test-setup.ts"]
   }
-});
+}));

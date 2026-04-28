@@ -10,9 +10,12 @@ const protocol = new Protocol();
 maplibregl.addProtocol("pmtiles", protocol.tile);
 
 // Self-hosted Protomaps basemap tiles served same-origin: CloudFront in prod
-// fronts the S3 object at /basemap/us.pmtiles; the Vite dev server proxies
-// the same path at localhost:3003.
-const PMTILES_URL = `${window.location.origin}/basemap/us.pmtiles`;
+// fronts the S3 object at /basemap/us.pmtiles. In dev,
+// __REGION_ARTIFACTS_ORIGIN__ (injected by vite.config.ts) points the
+// fetch at CloudFront directly so it bypasses the slow Node proxy.
+declare const __REGION_ARTIFACTS_ORIGIN__: string;
+const PMTILES_BASE = __REGION_ARTIFACTS_ORIGIN__ || window.location.origin;
+const PMTILES_URL = `${PMTILES_BASE}/basemap/us.pmtiles`;
 
 const SPRITE_BASE = "https://protomaps.github.io/basemaps-assets/sprites/v4";
 

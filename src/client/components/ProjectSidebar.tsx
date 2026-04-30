@@ -35,7 +35,7 @@ import {
   calculatePartyVoteShare,
   computeDemographicSplit,
   hasAnyElection,
-  getAvailableElectionYears,
+  getAvailablePresidentialYears,
   parseVotingId,
   isMajorityMinority,
   getMajorityRaceDisplay,
@@ -280,10 +280,9 @@ const ProjectSidebar = ({
   readonly populationKey: GroupTotal;
   readonly onClose?: () => void;
 } & LoadingProps) => {
-  const availableYears = getAvailableElectionYears(staticMetadata);
   // PVI uses the two most recent presidential years when available,
   // otherwise the single year we have.
-  const pviYears = availableYears.slice(-2);
+  const pviYears = getAvailablePresidentialYears(staticMetadata).slice(-2);
   const formatFullYear = (yy: string) => `20${yy}`;
   const polLabel =
     pviYears.length >= 2

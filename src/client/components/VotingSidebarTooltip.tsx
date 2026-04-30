@@ -183,12 +183,14 @@ function getOtherRaces(
   return combos;
 }
 
-// Discover presidential years from voting data keys (keys without an office prefix)
+// Discover presidential years from voting data keys (keys without an office prefix).
+// Filters out midterm years (YY not divisible by 4): bare `democrat18`/
+// `democrat22` can appear when a state has only midterm data for that year.
 function getPresidentialYears(voting: DemographicCounts): readonly string[] {
   const years = new Set<string>();
   for (const key of Object.keys(voting)) {
     const { office, year } = parseVotingId(key);
-    if (office === "" && year) {
+    if (office === "" && year && parseInt(year, 10) % 4 === 0) {
       years.add(year);
     }
   }

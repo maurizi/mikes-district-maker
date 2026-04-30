@@ -245,12 +245,14 @@ export function getDemographicsPercentages(
  * @return {[number | undefined]} pvi
  */
 // Presidential years present in a voting record (keys like `democrat20` with
-// matching `republican20`). Excludes office-prefixed columns (`USS_democrat20`).
+// matching `republican20`). Excludes office-prefixed columns (`USS_democrat20`)
+// and midterm years (YY not divisible by 4) — bare `democrat18`/`democrat22`
+// can appear when a state has only midterm data for that year.
 function getPresidentialYearsInVoting(voting: DemographicCounts): readonly string[] {
   const years = new Set<string>();
   for (const key of Object.keys(voting)) {
     const m = key.match(/^democrat(\d{2})$/);
-    if (m && `republican${m[1]}` in voting) years.add(m[1]);
+    if (m && `republican${m[1]}` in voting && parseInt(m[1], 10) % 4 === 0) years.add(m[1]);
   }
   return Array.from(years).sort();
 }
@@ -328,13 +330,15 @@ export const getAvailableElectionYears = (staticMetadata?: IStaticMetadata): rea
 };
 
 // Years for which presidential voting data exists (office code "").
+// Filters out midterm years (YY not divisible by 4): bare `democrat18`/
+// `democrat22` can appear when a state has only midterm data for that year.
 export const getAvailablePresidentialYears = (
   staticMetadata?: IStaticMetadata
 ): readonly string[] => {
   const years = new Set<string>();
   for (const file of staticMetadata?.voting || []) {
     const { office, year } = parseVotingId(file.id);
-    if (office === "" && year) years.add(year);
+    if (office === "" && year && parseInt(year, 10) % 4 === 0) years.add(year);
   }
   return Array.from(years).sort();
 };

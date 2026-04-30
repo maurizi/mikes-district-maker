@@ -260,6 +260,7 @@ const ProjectSidebar = ({
   isReadOnly,
   pinnedMetrics,
   populationKey,
+  requestedFields,
   onClose
 }: {
   readonly project?: IProject;
@@ -278,6 +279,10 @@ const ProjectSidebar = ({
   readonly isReadOnly: boolean;
   readonly pinnedMetrics?: readonly string[];
   readonly populationKey: GroupTotal;
+  readonly requestedFields: {
+    readonly demographics: readonly string[];
+    readonly voting: readonly string[];
+  };
   readonly onClose?: () => void;
 } & LoadingProps) => {
   // PVI uses the two most recent presidential years when available,
@@ -444,6 +449,18 @@ const ProjectSidebar = ({
                 lockedDistricts={lockedDistricts}
                 isReadOnly={isReadOnly}
                 populationKey={populationKey}
+                requestedFields={requestedFields}
+                votingIsLoading={
+                  // The post-paint all-voting prefetch hasn't landed
+                  // yet when the rendered geojson's voting object is
+                  // strictly smaller than what the region exposes.
+                  // Sample the first non-unassigned feature; all
+                  // features come from the same merge so any one is
+                  // representative.
+                  !!staticMetadata.voting &&
+                  Object.keys(geojson.features[1]?.properties.voting || {}).length <
+                    staticMetadata.voting.length
+                }
               />
             )}
           </tbody>
@@ -525,7 +542,8 @@ const SidebarRow = memo(
     isReadOnly,
     popDeviation,
     popDeviationThreshold,
-    populationKey
+    populationKey,
+    votingIsLoading
   }: {
     readonly district: DistrictGeoJSON;
     readonly pinnedMetricFields: readonly string[];
@@ -545,6 +563,7 @@ const SidebarRow = memo(
     readonly popDeviation: number;
     readonly popDeviationThreshold: number;
     readonly populationKey: GroupTotal;
+    readonly votingIsLoading: boolean;
   }) => {
     const selectedDifference = selectedPopulationDifference || 0;
     const showPopulationChange = selectedDifference !== 0;
@@ -767,7 +786,7 @@ const SidebarRow = memo(
         {extraDemographicMetricFields.map(demographicsDisplay)}
         {hasElectionData && isVisible("pvi") && (
           <td sx={{ ...style.td, ...style.number }}>
-            <PVIDisplay properties={district.properties} />
+            <PVIDisplay properties={district.properties} isLoadingMore={votingIsLoading} />
           </td>
         )}
         {voting &&
@@ -780,7 +799,7 @@ const SidebarRow = memo(
                     placement="top-start"
                     content={
                       demographics.population !== 0 ? (
-                        <VotingSidebarTooltip voting={voting} />
+                        <VotingSidebarTooltip voting={voting} isLoadingMore={votingIsLoading} />
                       ) : (
                         <em>
                           <strong>Empty district.</strong> Add people to this district to view the
@@ -854,6 +873,11 @@ interface SidebarRowsProps {
   readonly hasElectionData: boolean;
   readonly populationKey: GroupTotal;
   readonly isReadOnly: boolean;
+  readonly requestedFields: {
+    readonly demographics: readonly string[];
+    readonly voting: readonly string[];
+  };
+  readonly votingIsLoading: boolean;
 }
 
 const SidebarRows = ({
@@ -870,7 +894,9 @@ const SidebarRows = ({
   lockedDistricts,
   hasElectionData,
   populationKey,
-  isReadOnly
+  isReadOnly,
+  requestedFields,
+  votingIsLoading
 }: SidebarRowsProps) => {
   // Results of the asynchronous demographics calculation. The two calculations have been
   // combined into a single object here, because we want both updates to the state to happen
@@ -894,13 +920,17 @@ const SidebarRows = ({
         staticMetadata,
         project.regionConfig.keyPrefix,
         project.regionConfig.version,
-        combinedSelection
+        combinedSelection,
+        requestedFields.demographics,
+        requestedFields.voting
       );
       // The demographic composition of the selection for each saved district
       const districtTotals = await getSavedDistrictSelectedDemographics(
         project,
         staticMetadata,
-        combinedSelection
+        combinedSelection,
+        requestedFields.demographics,
+        requestedFields.voting
       );
 
       // Don't overwrite current results with outdated ones
@@ -934,7 +964,8 @@ const SidebarRows = ({
     selectedGeounits,
     highlightedGeounits,
     populationKey,
-    cachedPopulationKey
+    cachedPopulationKey,
+    requestedFields
   ]);
 
   const devPopKey = getDeviationPopulationKey(populationKey);
@@ -995,6 +1026,7 @@ const SidebarRows = ({
             popDeviation={project.populationDeviation}
             popDeviationThreshold={popDeviationThreshold}
             populationKey={populationKey}
+            votingIsLoading={votingIsLoading}
           />
         );
       })}

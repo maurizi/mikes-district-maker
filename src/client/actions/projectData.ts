@@ -135,5 +135,10 @@ export const localMergeComplete = createAction("Local merge complete")<{
 }>();
 export const localMergeFailure = createAction("Local merge failure")();
 
+export const setRequestedFields = createAction("Set requested fields")<{
+  readonly demographics: readonly string[];
+  readonly voting: readonly string[];
+}>();
+
 export const projectSubmit = createAction("Project submit")();
 export const projectSubmitSuccess = createAction("Project submit success")<DynamicProjectData>();

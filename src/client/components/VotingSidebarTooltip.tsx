@@ -2,7 +2,7 @@
 // Modifications © 2026 Michael Maurizi Jr.
 
 import { mapValues, sum } from "lodash";
-import { Box, Divider, type ThemeUIStyleObject, Heading } from "theme-ui";
+import { Box, Divider, Flex, Spinner, type ThemeUIStyleObject, Heading } from "theme-ui";
 
 import {
   getPartyColor,
@@ -203,10 +203,17 @@ function getPresidentialYears(voting: DemographicCounts): readonly string[] {
 
 const VotingSidebarTooltip = ({
   voting,
-  excludeOther
+  excludeOther,
+  isLoadingMore
 }: {
   readonly voting: DemographicCounts;
   readonly excludeOther?: boolean;
+  // True when the rendered geojson's voting object is a strict subset
+  // of what the region exposes — i.e. the post-paint all-voting
+  // prefetch is still in flight. The tooltip renders whatever rows it
+  // already has and shows a centered spinner at the bottom so the user
+  // knows more rows are coming.
+  readonly isLoadingMore?: boolean;
 }) => {
   const presYears = getPresidentialYears(voting);
   const otherRaces = getOtherRaces(voting);
@@ -246,6 +253,11 @@ const VotingSidebarTooltip = ({
             );
           })}
         </React.Fragment>
+      )}
+      {isLoadingMore && (
+        <Flex sx={{ justifyContent: "center", alignItems: "center", py: 2, mt: 1 }}>
+          <Spinner variant="styles.spinner.small" />
+        </Flex>
       )}
     </Box>
   );

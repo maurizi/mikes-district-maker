@@ -65,7 +65,9 @@ export const mergeDistricts = memoize(
     keyPrefix: string,
     version: Date | string | number,
     districtsDefinition: DistrictsDefinition,
-    numberOfDistricts: number
+    numberOfDistricts: number,
+    requestedDemographics: readonly string[],
+    requestedVoting: readonly string[]
   ): Promise<{
     readonly districts: DistrictsGeoJSON;
     readonly thumbnail: ThumbnailGeoJSON;
@@ -76,12 +78,17 @@ export const mergeDistricts = memoize(
       keyPrefix,
       version,
       districtsDefinition,
-      numberOfDistricts
+      numberOfDistricts,
+      requestedDemographics,
+      requestedVoting
     );
   },
   {
     normalizer: args =>
-      stringify([args[1], new Date(args[2]).getTime(), args[3]], { replacer }) || "",
+      stringify(
+        [args[1], new Date(args[2]).getTime(), args[3], [...args[5]].sort(), [...args[6]].sort()],
+        { replacer }
+      ) || "",
     primitive: true
   }
 );
@@ -119,18 +126,25 @@ export const getTotalSelectedDemographics = memoize(
     staticMetadata: IStaticMetadata,
     keyPrefix: string,
     version: Date | string | number,
-    selectedGeounits: GeoUnits
+    selectedGeounits: GeoUnits,
+    requestedDemographics: readonly string[],
+    requestedVoting: readonly string[]
   ): Promise<StaticCounts> => {
     return worker.getTotalSelectedDemographics(
       staticMetadata,
       keyPrefix,
       version,
-      selectedGeounits
+      selectedGeounits,
+      requestedDemographics,
+      requestedVoting
     );
   },
   {
     normalizer: args =>
-      stringify([args[1], new Date(args[2]).getTime(), args[3]], { replacer }) || "",
+      stringify(
+        [args[1], new Date(args[2]).getTime(), args[3], [...args[4]].sort(), [...args[5]].sort()],
+        { replacer }
+      ) || "",
     primitive: true
   }
 );
@@ -139,18 +153,23 @@ export const getSavedDistrictSelectedDemographics = memoize(
   async (
     project: IProject,
     staticMetadata: IStaticMetadata,
-    selectedGeounits: GeoUnits
+    selectedGeounits: GeoUnits,
+    requestedDemographics: readonly string[],
+    requestedVoting: readonly string[]
   ): Promise<readonly DemographicCounts[]> => {
     return worker.getSavedDistrictSelectedDemographics(
       project,
       staticMetadata,
       project.regionConfig.keyPrefix,
       project.regionConfig.version,
-      selectedGeounits
+      selectedGeounits,
+      requestedDemographics,
+      requestedVoting
     );
   },
   {
-    normalizer: args => stringify([args[0], args[2]], { replacer }) || "",
+    normalizer: args =>
+      stringify([args[0], args[2], [...args[3]].sort(), [...args[4]].sort()], { replacer }) || "",
     primitive: true
   }
 );

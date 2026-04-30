@@ -22,6 +22,12 @@ import {
   type DemographicsGroup,
   type IProject
 } from "../shared/entities";
+import { CORE_METRIC_FIELDS, DEMOGRAPHIC_FIELDS_ORDER } from "../shared/constants";
+import {
+  getDemographicsGroups,
+  getMetricFieldForDemographicsId,
+  getVotingMetricFields
+} from "../shared/functions";
 import { type State } from "./reducers";
 
 import { type Resource, type WriteResource } from "./resource";
@@ -479,6 +485,134 @@ export function getOfficeYearCombos(
     return a.year.localeCompare(b.year);
   });
   return combos;
+}
+
+// Derive the demographic + voting field id sets the worker should fetch +
+// aggregate. The page-load critical path uses only this subset; everything
+// else is lazy-loaded as inputs change (pinning, drawing-options changes,
+// expanded metrics, evaluate mode, idle voting prefetch). Output ids are
+// always intersected with what the region actually exposes in
+// staticMetadata, so a missing optional field never escapes here.
+export function computeRequestedFields({
+  staticMetadata,
+  pinnedMetricFields,
+  expandedProjectMetrics,
+  evaluateMode,
+  populationKey,
+  chamberDefaultPopulationKey,
+  electionYear,
+  selectedOffice,
+  prefetchedAllVoting
+}: {
+  readonly staticMetadata?: IStaticMetadata;
+  readonly pinnedMetricFields: readonly string[];
+  readonly expandedProjectMetrics: boolean;
+  readonly evaluateMode: boolean;
+  readonly populationKey: GroupTotal;
+  // The project's chamber default — included so the first merge on
+  // page load already has its group's fields, even when ProjectScreen
+  // hasn't yet processed the chamber-default useEffect that flips the
+  // active populationKey to this value. Avoids a NaN flash on the
+  // chart between the first merge and the post-flip second merge.
+  readonly chamberDefaultPopulationKey?: GroupTotal;
+  readonly electionYear: ElectionYear;
+  readonly selectedOffice: string;
+  readonly prefetchedAllVoting: boolean;
+}): { readonly demographics: readonly string[]; readonly voting: readonly string[] } {
+  if (!staticMetadata) return { demographics: [], voting: [] };
+  const allDemoIds = staticMetadata.demographics.map(f => f.id);
+  const allVotingIds = staticMetadata.voting?.map(f => f.id) || [];
+
+  if (expandedProjectMetrics || evaluateMode) {
+    return { demographics: [...allDemoIds].sort(), voting: [...allVotingIds].sort() };
+  }
+
+  const demographics = new Set<string>();
+  const voting = new Set<string>();
+
+  // "population" (and "adj_population" when present) is always read for
+  // the deviation column via getDeviationPopulationKey, regardless of
+  // whichever populationKey the user picked for the chart denominator.
+  if (allDemoIds.includes("population")) demographics.add("population");
+  if (allDemoIds.includes("adj_population")) demographics.add("adj_population");
+
+  // The "core" sidebar rows render demographicsGroups[0].subgroups —
+  // independent of populationKey — using its total as the denominator
+  // (intermediatePopulations[0]). Need both regardless of the active
+  // populationKey.
+  const groups = getDemographicsGroups(staticMetadata);
+  if (groups[0]?.total && allDemoIds.includes(groups[0].total)) {
+    demographics.add(groups[0].total);
+  }
+  for (const id of groups[0]?.subgroups || []) {
+    if (allDemoIds.includes(id)) demographics.add(id);
+  }
+
+  // The chart percentages are computed against the active populationKey's
+  // group: its total + subgroups. Often equals groups[0]; differs when
+  // chamber.defaultPopulationField points at a non-default group (CVAP,
+  // VAP, etc.). Include both the current populationKey and the chamber
+  // default so the first merge survives the chamber-default useEffect
+  // flip without a chart NaN flash.
+  for (const key of [populationKey, chamberDefaultPopulationKey]) {
+    if (key && allDemoIds.includes(key)) demographics.add(key);
+    const g = key ? groups.find(g => g.total === key) : undefined;
+    for (const id of g?.subgroups || []) {
+      if (allDemoIds.includes(id)) demographics.add(id);
+    }
+  }
+  // raceChart + majorityRace render unconditionally — pull whichever race
+  // ids the region actually has.
+  for (const id of DEMOGRAPHIC_FIELDS_ORDER) {
+    if (allDemoIds.includes(id)) demographics.add(id);
+  }
+  // Pinned non-core demographic metrics (e.g. "hispanicPopulation" pinned
+  // → fetch the "hispanic" data file).
+  for (const file of staticMetadata.demographics) {
+    if (CORE_METRIC_FIELDS.includes(file.id)) continue;
+    if (pinnedMetricFields.includes(getMetricFieldForDemographicsId(file.id))) {
+      demographics.add(file.id);
+    }
+  }
+
+  // PVI uses bare democrat/republican columns for the latest two
+  // presidential years. Use getAvailablePresidentialYears so we skip
+  // midterm-year bare files (e.g. governor `democrat18` in states where
+  // governor has no office prefix in midterm years).
+  const pviYears = getAvailablePresidentialYears(staticMetadata).slice(-2);
+  const pviCandidates = new Set<string>();
+  for (const y of pviYears) {
+    pviCandidates.add(`democrat${y}`);
+    pviCandidates.add(`republican${y}`);
+  }
+  for (const id of allVotingIds) {
+    if (pviCandidates.has(id)) voting.add(id);
+  }
+  // Active map-tooltip year × office (drives MapTooltip's
+  // extractYear(extractOffice(...)) read). Office-agnostic matching:
+  // when selectedOffice="" + a midterm electionYear, the bare-id
+  // governor columns parse with office="" and match correctly.
+  for (const id of allVotingIds) {
+    const p = parseVotingId(id);
+    if (p.office === selectedOffice && p.year === electionYear) voting.add(id);
+  }
+  // Pinned voting metrics — reverse-lookup file id via the same parser
+  // getVotingMetricFields uses (only bare presidential columns yield a
+  // metric name, so this only matters for those).
+  const votingMetricFields = getVotingMetricFields(staticMetadata);
+  for (const [fileId, metric] of votingMetricFields) {
+    if (pinnedMetricFields.includes(metric)) voting.add(fileId);
+  }
+  // After initial paint, top up to all voting so the sidebar tooltip's
+  // per-office historical breakdown fills in without a hover-time fetch.
+  if (prefetchedAllVoting) {
+    for (const id of allVotingIds) voting.add(id);
+  }
+
+  return {
+    demographics: Array.from(demographics).sort(),
+    voting: Array.from(voting).sort()
+  };
 }
 
 /*

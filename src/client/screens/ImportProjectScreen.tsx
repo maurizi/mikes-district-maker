@@ -572,12 +572,18 @@ const ImportProjectScreen = ({ organization, regionConfigs, user }: StateProps) 
                   regionForThumbnail && definitionForThumbnail && numberOfDistricts
                     ? fetchStaticMetadata(regionForThumbnail.keyPrefix, regionForThumbnail.version)
                         .then(async staticMetadata => {
+                          // Request full demographic + voting field set: the
+                          // import flow's thumbnail is uploaded with the new
+                          // project and its districtProperties power the
+                          // gallery card / OG description (partisan breakdown).
                           const { thumbnail } = await mergeDistricts(
                             staticMetadata,
                             regionForThumbnail.keyPrefix,
                             regionForThumbnail.version,
                             definitionForThumbnail,
-                            numberOfDistricts
+                            numberOfDistricts,
+                            staticMetadata.demographics.map(f => f.id),
+                            staticMetadata.voting?.map(f => f.id) || []
                           );
                           // Render serially — two MapLibre instances at once
                           // can blow GPU memory on lower-end devices.

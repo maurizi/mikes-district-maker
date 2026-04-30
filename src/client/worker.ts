@@ -25,8 +25,10 @@ import {
   type IStaticMetadata,
   type NestedArray,
   type ThumbnailGeoJSON,
+  type TypedArray,
   type TypedArrays
 } from "../shared/entities";
+import { type CtopoClient } from "../shared/ctopo";
 import { FIPS, MAX_IMPORT_ERRORS } from "../shared/constants";
 import {
   buildSplitBlockMap,
@@ -41,28 +43,22 @@ import {
   getVoting as getVotingBase
 } from "../shared/functions";
 import { allGeoUnitIndices } from "./functions";
-import {
-  fetchSections,
-  fetchBlockIds,
-  fetchGeoUnitHierarchy,
-  getCtopoClient
-} from "./s3";
-import { type WorkerProjectData } from "./types";
+import { fetchSections, fetchBlockIds, fetchGeoUnitHierarchy, getCtopoClient } from "./s3";
 import { buildBlockAssignment, computeDistrictBoundaries } from "../shared/boundary";
 
-// Per-region cache: each piece is its own Promise so callers can
-// await only what they need. mergeDistricts wants geoUnitHierarchy
-// before computing boundaries but doesn't need demographics or voting
-// — the redesign here lets boundary work run in parallel with the
-// demographics fetch, instead of serially behind it.
+// Per-region cache. Each demographic / voting field is its own
+// Promise<TypedArray>, populated on demand by ensureFields(). This
+// lets the page-load critical path fetch only the subset the sidebar
+// will actually render (driven by pinned metrics + active drawing
+// options), and top up lazily when the user pins more, expands the
+// metrics view, switches population/year/office, or opens evaluate.
 interface RegionPromises {
   readonly uri: string;
+  readonly staticMetadata: IStaticMetadata;
   readonly geoUnitHierarchy: Promise<GeoUnitHierarchy>;
-  readonly staticDemographics: Promise<TypedArrays>;
-  readonly staticVotingData: Promise<TypedArrays | undefined>;
-  // Convenience: awaits all three. Callers that genuinely need
-  // every piece can use this to keep call sites concise.
-  readonly all: Promise<WorkerProjectData>;
+  readonly clientPromise: Promise<CtopoClient>;
+  readonly demographicFields: Map<string, Promise<TypedArray>>;
+  readonly votingFields: Map<string, Promise<TypedArray>>;
 }
 
 let regionPromises: RegionPromises | undefined;
@@ -81,42 +77,52 @@ function fetchRegionData(
 ): RegionPromises {
   const key = cacheKey(keyPrefix, version);
   if (regionPromises === undefined || regionPromises.uri !== key) {
-    const geoUnitHierarchy = fetchGeoUnitHierarchy(keyPrefix, version);
-    // The demographics and voting fetches share the worker's ctopo
-    // client — they go through the batched range fetcher and run
-    // independently of geoUnitHierarchy and of each other.
-    const baseLayer = staticMetadata.geoLevelHierarchy[0].id;
-    const clientPromise = getCtopoClient(keyPrefix, version);
-    const staticDemographics = clientPromise.then(c =>
-      fetchSections(
-        c,
-        staticMetadata.demographics.map(d => `${baseLayer}/${d.id}`)
-      )
-    );
-    const staticVotingData = staticMetadata.voting
-      ? clientPromise.then(c =>
-          fetchSections(
-            c,
-            staticMetadata.voting!.map(v => `${baseLayer}/${v.id}`)
-          )
-        )
-      : Promise.resolve(undefined as TypedArrays | undefined);
-    const all = Promise.all([geoUnitHierarchy, staticDemographics, staticVotingData]).then(
-      ([gu, sd, sv]) => ({
-        geoUnitHierarchy: gu,
-        staticDemographics: sd,
-        staticVotingData: sv
-      })
-    );
     regionPromises = {
       uri: key,
-      geoUnitHierarchy,
-      staticDemographics,
-      staticVotingData,
-      all
+      staticMetadata,
+      geoUnitHierarchy: fetchGeoUnitHierarchy(keyPrefix, version),
+      clientPromise: getCtopoClient(keyPrefix, version),
+      demographicFields: new Map(),
+      votingFields: new Map()
     };
   }
   return regionPromises;
+}
+
+// Resolve typed arrays for a subset of demographic / voting fields,
+// fetching any not already in the cache. Issuing all missing
+// property() calls in the same tick lets the ctopo client's
+// microtask-batched range fetcher coalesce them into one Range GET.
+async function ensureFields(
+  region: RegionPromises,
+  kind: "demographics" | "voting",
+  ids: readonly string[]
+): Promise<Record<string, TypedArray>> {
+  const cache = kind === "demographics" ? region.demographicFields : region.votingFields;
+  const files =
+    kind === "demographics" ? region.staticMetadata.demographics : region.staticMetadata.voting;
+  const available: ReadonlySet<string> = new Set((files || []).map(f => f.id));
+  const baseLayer = region.staticMetadata.geoLevelHierarchy[0].id;
+  // Filter to ids that actually exist in the region — silently drop
+  // anything else (caller may not know which optional fields exist).
+  const wanted = ids.filter(id => available.has(id));
+  const missing = wanted.filter(id => !cache.has(id));
+  if (missing.length > 0) {
+    const client = await region.clientPromise;
+    for (const id of missing) {
+      cache.set(
+        id,
+        client.property(`${baseLayer}/${id}`).then(v => v as unknown as TypedArray)
+      );
+    }
+  }
+  const out: Record<string, TypedArray> = {};
+  await Promise.all(
+    wanted.map(async id => {
+      out[id] = await cache.get(id)!;
+    })
+  );
+  return out;
 }
 
 let cachedBlockIds: { uri: string; data: Promise<readonly string[]> } | undefined;
@@ -136,15 +142,23 @@ async function getDemographics(
   baseIndices: readonly number[] | ReadonlySet<number>,
   staticMetadata: IStaticMetadata,
   keyPrefix: string,
-  version: Date | string | number
+  version: Date | string | number,
+  requestedDemographics: readonly string[],
+  requestedVoting: readonly string[]
 ): Promise<StaticCounts> {
-  const data = await fetchRegionData(keyPrefix, version, staticMetadata).all;
-  return data.staticVotingData
+  const region = fetchRegionData(keyPrefix, version, staticMetadata);
+  const [demoMap, voteMap] = await Promise.all([
+    ensureFields(region, "demographics", requestedDemographics),
+    staticMetadata.voting
+      ? ensureFields(region, "voting", requestedVoting)
+      : Promise.resolve(undefined as Record<string, TypedArray> | undefined)
+  ]);
+  return voteMap
     ? {
-        demographics: getDemographicsBase(baseIndices, staticMetadata, data.staticDemographics),
-        voting: getVotingBase(baseIndices, staticMetadata, data.staticVotingData)
+        demographics: getDemographicsBase(baseIndices, demoMap),
+        voting: getVotingBase(baseIndices, voteMap)
       }
-    : { demographics: getDemographicsBase(baseIndices, staticMetadata, data.staticDemographics) };
+    : { demographics: getDemographicsBase(baseIndices, demoMap) };
 }
 
 /*
@@ -337,7 +351,9 @@ const functions = {
     keyPrefix: string,
     version: Date | string | number,
     districtsDefinition: DistrictsDefinition,
-    numberOfDistricts: number
+    numberOfDistricts: number,
+    requestedDemographics: readonly string[],
+    requestedVoting: readonly string[]
   ): Promise<{
     readonly districts: DistrictsGeoJSON;
     readonly thumbnail: ThumbnailGeoJSON;
@@ -349,7 +365,7 @@ const functions = {
     // Three independent network paths run concurrently:
     //   1. ctopo client opens (header+arc_offsets prefix prefetch)
     //   2. geoUnitHierarchy JSON sidecar fetches
-    //   3. demographics + voting sections fetch via the client
+    //   3. requested demographic + voting sections fetch via the client
     // Boundary computation only needs (1) and (2). Demographics +
     // voting are needed to assemble the final FeatureCollection but
     // can run in parallel with boundary work — previously the whole
@@ -358,6 +374,10 @@ const functions = {
     // largest.
     const region = fetchRegionData(keyPrefix, version, staticMetadata);
     const clientPromise = getCtopoClient(keyPrefix, version);
+    const demoMapPromise = ensureFields(region, "demographics", requestedDemographics);
+    const voteMapPromise = staticMetadata.voting
+      ? ensureFields(region, "voting", requestedVoting)
+      : Promise.resolve(undefined as Record<string, TypedArray> | undefined);
 
     const boundariesPromise = (async () => {
       const [client, geoUnitHierarchy] = await Promise.all([
@@ -379,15 +399,12 @@ const functions = {
       return { boundaries, assignment, numBlocks };
     })();
 
-    const [{ boundaries, assignment, numBlocks }, staticDemographics, staticVotingData] =
-      await Promise.all([
-        boundariesPromise,
-        region.staticDemographics,
-        region.staticVotingData
-      ]);
-    perfLog(
-      `[worker] mergeDistricts: all data ready at ${(performance.now() - t0).toFixed(0)}ms`
-    );
+    const [{ boundaries, assignment, numBlocks }, demoMap, voteMap] = await Promise.all([
+      boundariesPromise,
+      demoMapPromise,
+      voteMapPromise
+    ]);
+    perfLog(`[worker] mergeDistricts: all data ready at ${(performance.now() - t0).toFixed(0)}ms`);
 
     // Build per-district block indices for demographics
     const districtBlockIndices: number[][] = Array.from(
@@ -407,14 +424,8 @@ const functions = {
         properties: {
           compactness: b.compactness,
           contiguity: b.contiguity,
-          demographics: getDemographicsBase(
-            districtBlockIndices[i],
-            staticMetadata,
-            staticDemographics
-          ),
-          voting: staticVotingData
-            ? getVotingBase(districtBlockIndices[i], staticMetadata, staticVotingData)
-            : {}
+          demographics: getDemographicsBase(districtBlockIndices[i], demoMap),
+          voting: voteMap ? getVotingBase(districtBlockIndices[i], voteMap) : {}
         }
       }))
     };
@@ -473,7 +484,9 @@ const functions = {
     staticMetadata: IStaticMetadata,
     keyPrefix: string,
     version: Date | string | number,
-    selectedGeounits: GeoUnits
+    selectedGeounits: GeoUnits,
+    requestedDemographics: readonly string[],
+    requestedVoting: readonly string[]
   ): Promise<StaticCounts> => {
     const geoUnitHierarchy = await fetchRegionData(keyPrefix, version, staticMetadata)
       .geoUnitHierarchy;
@@ -485,8 +498,15 @@ const functions = {
         selectedBaseIndices.add(index)
       )
     );
-    // Aggregate all counts for selected blocks
-    return await getDemographics(selectedBaseIndices, staticMetadata, keyPrefix, version);
+    // Aggregate counts for selected blocks across the requested fields
+    return await getDemographics(
+      selectedBaseIndices,
+      staticMetadata,
+      keyPrefix,
+      version,
+      requestedDemographics,
+      requestedVoting
+    );
   },
   // Drill into the district definition and collect the base geounits for
   // every district that's part of the selection
@@ -495,7 +515,9 @@ const functions = {
     staticMetadata: IStaticMetadata,
     keyPrefix: string,
     version: Date | string | number,
-    selectedGeounits: GeoUnits
+    selectedGeounits: GeoUnits,
+    requestedDemographics: readonly string[],
+    requestedVoting: readonly string[]
   ): Promise<readonly DemographicCounts[]> => {
     const geoUnitHierarchy = await fetchRegionData(keyPrefix, version, staticMetadata)
       .geoUnitHierarchy;
@@ -548,7 +570,9 @@ const functions = {
           baseGeounitIdsForDistrict,
           staticMetadata,
           project.regionConfig.keyPrefix,
-          project.regionConfig.version
+          project.regionConfig.version,
+          requestedDemographics,
+          requestedVoting
         ).then(staticCounts => staticCounts.demographics)
       )
     );

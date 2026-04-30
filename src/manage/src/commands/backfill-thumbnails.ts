@@ -643,6 +643,17 @@ async function buildThumbnail(project: Project, region: RegionData): Promise<Thu
   for (let i = 0; i < region.numBlocks; i++) {
     districtBlockIndices[assignment[i]]?.push(i);
   }
+  // Build {id -> TypedArray} for the offline `getVoting` call. Arrays
+  // are loaded in `staticMetadata.voting` order in loadRegionData, so
+  // zip them by id here. Demographics aren't loaded by the thumbnail
+  // path (commented decision below), so the demographics map is empty.
+  const votingMap: Record<string, TypedArray> = {};
+  if (region.staticVoting.length > 0 && region.staticMetadata.voting) {
+    region.staticMetadata.voting.forEach((file, idx) => {
+      const arr = region.staticVoting[idx];
+      if (arr) votingMap[file.id] = arr;
+    });
+  }
   const features: Feature<MultiPolygon, DistrictProperties>[] = boundaries.map((b, i) => ({
     type: "Feature",
     id: i,
@@ -652,9 +663,7 @@ async function buildThumbnail(project: Project, region: RegionData): Promise<Thu
       contiguity: b.contiguity,
       demographics: {},
       voting:
-        region.staticVoting.length > 0
-          ? getVoting(districtBlockIndices[i] ?? [], region.staticMetadata, region.staticVoting)
-          : {}
+        region.staticVoting.length > 0 ? getVoting(districtBlockIndices[i] ?? [], votingMap) : {}
     }
   }));
   const districts: DistrictsGeoJSON = { type: "FeatureCollection", features };

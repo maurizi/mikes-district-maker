@@ -10,7 +10,6 @@ import {
   type IStaticMetadata
 } from "../shared/entities";
 import { type CtopoClient, openContainer } from "../shared/ctopo";
-import { type WorkerProjectData } from "./types";
 
 const s3Axios = axios.create();
 
@@ -133,31 +132,3 @@ export async function fetchBlockIds(
   return Array.from(ids);
 }
 
-export async function fetchWorkerStaticData(
-  keyPrefix: string,
-  version: Date | string | number,
-  staticMetadata: IStaticMetadata
-): Promise<WorkerProjectData> {
-  const [client, geoUnitHierarchy] = await Promise.all([
-    getCtopoClient(keyPrefix, version),
-    fetchGeoUnitHierarchy(keyPrefix, version)
-  ]);
-  const baseLayer = staticMetadata.geoLevelHierarchy[0].id;
-  // Kick off demographics and voting concurrently — both go through
-  // the client's microtask-batched fetcher, so issuing them in the
-  // same tick collapses to a single coalesced Range GET covering both
-  // sets of sections.
-  const [staticDemographics, staticVotingData] = await Promise.all([
-    fetchSections(
-      client,
-      staticMetadata.demographics.map(d => `${baseLayer}/${d.id}`)
-    ),
-    staticMetadata.voting
-      ? fetchSections(
-          client,
-          staticMetadata.voting.map(v => `${baseLayer}/${v.id}`)
-        )
-      : Promise.resolve(undefined)
-  ]);
-  return { geoUnitHierarchy, staticDemographics, staticVotingData };
-}

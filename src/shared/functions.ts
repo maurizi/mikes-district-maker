@@ -7,7 +7,6 @@ import {
   type DistrictsDefinition,
   type GeoUnitCollection,
   type IStaticMetadata,
-  type IStaticFile,
   type MetricsList,
   type VotingMetricsList,
   type VotingMetricField,
@@ -59,43 +58,32 @@ export function getAllBaseIndices(
 
 export function getDemographics(
   baseIndices: readonly number[] | ReadonlySet<number>,
-  staticMetadata: IStaticMetadata,
-  staticDemographics: readonly TypedArray[]
+  fileMap: Record<string, TypedArray>
 ): DemographicCounts {
-  return getAggregatedCounts(
-    baseIndices,
-    staticMetadata,
-    staticDemographics,
-    staticMetadata.demographics
-  );
+  return getAggregatedCounts(baseIndices, fileMap);
 }
 
 export function getVoting(
   baseIndices: readonly number[] | ReadonlySet<number>,
-  staticMetadata: IStaticMetadata,
-  staticVoting: readonly TypedArray[]
+  fileMap: Record<string, TypedArray>
 ): DemographicCounts {
-  return staticMetadata.voting
-    ? getAggregatedCounts(baseIndices, staticMetadata, staticVoting, staticMetadata.voting)
-    : {};
+  return getAggregatedCounts(baseIndices, fileMap);
 }
 
 export function getAggregatedCounts(
   baseIndices: readonly number[] | ReadonlySet<number>,
-  staticMetadata: IStaticMetadata,
-  staticFiles: readonly TypedArray[],
-  fileProperties: readonly IStaticFile[]
+  fileMap: Record<string, TypedArray>
 ): DemographicCounts {
-  // Aggregate numeric data for the IDs
-  return fileProperties.reduce((data, props, ind) => {
-    let count: number = 0;
+  const out: DemographicCounts = {};
+  for (const [id, arr] of Object.entries(fileMap)) {
+    let count = 0;
     baseIndices.forEach((v: number) => {
-      if (!isNaN(staticFiles[ind][v])) {
-        count += staticFiles[ind][v];
-      }
+      const val = arr[v];
+      if (!isNaN(val)) count += val;
     });
-    return { ...data, [props.id]: count };
-  }, {} as DemographicCounts);
+    (out as Record<string, number>)[id] = count;
+  }
+  return out;
 }
 
 export function getDemographicLabel(id: string) {

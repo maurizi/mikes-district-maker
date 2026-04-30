@@ -2,7 +2,7 @@
 // Modifications © 2026 Michael Maurizi Jr.
 
 import type maplibregl from "maplibre-gl";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useBeforeunload } from "react-beforeunload";
 import { connect } from "react-redux";
 import { Navigate, useParams } from "react-router-dom";
@@ -21,7 +21,8 @@ import {
 import {
   clearDuplicationState,
   projectDataFetch,
-  projectReferenceLayersFetch
+  projectReferenceLayersFetch,
+  setRequestedFields
 } from "../actions/projectData";
 import { resetProjectState } from "../actions/root";
 import { setElectionYear, setPopulationKey, setSelectedOffice } from "../actions/projectOptions";
@@ -46,9 +47,10 @@ import SubmitMapModal from "../components/SubmitMapModal";
 import Tour from "../components/Tour";
 import {
   areAnyGeoUnitsSelected,
+  computeRequestedFields,
   destructureResource,
-  getAvailablePresidentialYears,
-  isProjectReadOnly
+  isProjectReadOnly,
+  getAvailablePresidentialYears
 } from "../functions";
 import { isUserLoggedIn } from "../jwt";
 import { type State } from "../reducers";
@@ -205,6 +207,67 @@ const ProjectScreen = ({
     projectId && store.dispatch(projectDataFetch(projectId));
   }, [projectId, isLoggedIn]);
 
+  // After the first merge lands and the spinner has hidden, top up to
+  // all voting fields so the sidebar voting tooltip's per-office
+  // historical breakdown fills in without a hover-time fetch. Gated on
+  // geojson having features — otherwise the idle callback can fire
+  // while the first merge is in flight and queue a second merge that
+  // pushes spinner-hide past the second merge's completion.
+  const [prefetchedAllVoting, setPrefetchedAllVoting] = useState(false);
+  const firstMergeLanded = !!geojson && geojson.features.length > 0;
+  useEffect(() => {
+    if (!staticMetadata || prefetchedAllVoting || !firstMergeLanded) return;
+    const idle = (cb: () => void) =>
+      typeof (window as unknown as { requestIdleCallback?: (cb: () => void) => number })
+        .requestIdleCallback === "function"
+        ? (
+            window as unknown as { requestIdleCallback: (cb: () => void) => number }
+          ).requestIdleCallback(cb)
+        : window.setTimeout(cb, 200);
+    idle(() => setPrefetchedAllVoting(true));
+  }, [staticMetadata, prefetchedAllVoting, firstMergeLanded]);
+
+  // Derive the demographic + voting field ids the worker should fetch
+  // and aggregate. Dispatches setRequestedFields whenever the set
+  // actually changes (string-keyed dep avoids re-dispatch on equal sets).
+  const pinnedMetricFields = presentDrawingState.pinnedMetricFields || [];
+  const chamberDefaultPopulationKey = project?.chamber?.defaultPopulationField;
+  const requestedFields = useMemo(
+    () =>
+      computeRequestedFields({
+        staticMetadata,
+        pinnedMetricFields,
+        expandedProjectMetrics: !!districtDrawing.expandedProjectMetrics,
+        evaluateMode,
+        populationKey: projectOptions.populationKey,
+        chamberDefaultPopulationKey,
+        electionYear: projectOptions.electionYear,
+        selectedOffice: projectOptions.selectedOffice,
+        prefetchedAllVoting
+      }),
+    [
+      staticMetadata,
+      pinnedMetricFields,
+      districtDrawing.expandedProjectMetrics,
+      evaluateMode,
+      projectOptions.populationKey,
+      chamberDefaultPopulationKey,
+      projectOptions.electionYear,
+      projectOptions.selectedOffice,
+      prefetchedAllVoting
+    ]
+  );
+  const requestedFieldsKey = `${requestedFields.demographics.join(",")}|${requestedFields.voting.join(",")}`;
+  useEffect(() => {
+    if (!staticMetadata) return;
+    store.dispatch(
+      setRequestedFields({
+        demographics: requestedFields.demographics,
+        voting: requestedFields.voting
+      })
+    );
+  }, [requestedFieldsKey, staticMetadata]);
+
   useEffect(() => {
     document.title = "Mike's District Maker " + (project ? `| ${project.name}` : "");
   });
@@ -316,6 +379,7 @@ const ProjectScreen = ({
                       populationKey={projectOptions.populationKey}
                       isReadOnly={effectiveReadOnly}
                       pinnedMetrics={districtDrawing.undoHistory.present.state.pinnedMetricFields}
+                      requestedFields={requestedFields}
                       onClose={() => setMobileSidebarOpen(false)}
                     />
                   ) : (
@@ -352,6 +416,7 @@ const ProjectScreen = ({
             populationKey={projectOptions.populationKey}
             isReadOnly={effectiveReadOnly}
             pinnedMetrics={districtDrawing.undoHistory.present.state.pinnedMetricFields}
+            requestedFields={requestedFields}
           />
         ) : (
           <ProjectEvaluateSidebar

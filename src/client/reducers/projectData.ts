@@ -54,7 +54,8 @@ import {
   toggleProjectDetailsModal,
   updateProjectDetailsSuccess,
   projectSubmit,
-  projectSubmitSuccess
+  projectSubmitSuccess,
+  setRequestedFields
 } from "../actions/projectData";
 import {
   clearSelectedGeounits,
@@ -126,10 +127,20 @@ function runLocalMerge(
   keyPrefix: string,
   version: Date | string | number,
   districtsDefinition: DistrictsDefinition,
-  numberOfDistricts: number
+  numberOfDistricts: number,
+  requestedDemographics: readonly string[],
+  requestedVoting: readonly string[]
 ) {
   return () =>
-    mergeDistricts(staticMetadata, keyPrefix, version, districtsDefinition, numberOfDistricts);
+    mergeDistricts(
+      staticMetadata,
+      keyPrefix,
+      version,
+      districtsDefinition,
+      numberOfDistricts,
+      requestedDemographics,
+      requestedVoting
+    );
 }
 
 export function getFindCoords(findTool: FindTool, geojson?: DistrictsGeoJSON) {
@@ -157,6 +168,14 @@ export type ProjectDataState = {
   readonly showProjectDetailsModal: boolean;
   readonly duplicatedProject: IProject | null;
   readonly deleteReferenceLayer?: IReferenceLayer;
+  // Demographic + voting field ids that mergeDistricts and the
+  // selected-aggregate worker calls should fetch + aggregate. Driven
+  // by ProjectScreen's useNeededFields effect; reducer just stores +
+  // re-merges when it changes.
+  readonly requestedFields: {
+    readonly demographics: readonly string[];
+    readonly voting: readonly string[];
+  };
 };
 
 export const initialProjectDataState = {
@@ -171,7 +190,8 @@ export const initialProjectDataState = {
   saving: "unsaved",
   showReferenceLayersModal: false,
   showProjectDetailsModal: false,
-  duplicatedProject: null
+  duplicatedProject: null,
+  requestedFields: { demographics: [], voting: [] }
 } as const;
 
 const projectDataReducer = (
@@ -392,8 +412,18 @@ const projectDataReducer = (
           resource: action.payload
         }
       };
-      // Trigger local merge now that we have both project and static data
-      if ("resource" in newState.projectData) {
+      // Trigger local merge now that project + static data are loaded —
+      // but only once requestedFields has been populated by
+      // ProjectScreen's useNeededFields effect. On a cold page load the
+      // initial requestedFields is empty; the first useful merge fires
+      // through the setRequestedFields handler when ProjectScreen
+      // dispatches the computed set, which avoids a wasted initial merge
+      // that would otherwise produce a geojson with empty per-district
+      // demographics/voting only to be overwritten immediately.
+      const fieldsLoaded =
+        newState.requestedFields.demographics.length > 0 ||
+        newState.requestedFields.voting.length > 0;
+      if ("resource" in newState.projectData && fieldsLoaded) {
         const { project } = newState.projectData.resource;
         return loop(
           newState,
@@ -403,7 +433,9 @@ const projectDataReducer = (
               project.regionConfig.keyPrefix,
               project.regionConfig.version,
               project.districtsDefinition,
-              project.numberOfDistricts
+              project.numberOfDistricts,
+              newState.requestedFields.demographics,
+              newState.requestedFields.voting
             ),
             {
               successActionCreator: localMergeComplete,
@@ -574,7 +606,9 @@ const projectDataReducer = (
               updatedProject.regionConfig.keyPrefix,
               updatedProject.regionConfig.version,
               updatedProject.districtsDefinition,
-              updatedProject.numberOfDistricts
+              updatedProject.numberOfDistricts,
+              state.requestedFields.demographics,
+              state.requestedFields.voting
             ),
             {
               successActionCreator: localMergeComplete,
@@ -925,6 +959,36 @@ const projectDataReducer = (
             ])
           : Cmd.action(clearSelectedGeounits(true))
       );
+    }
+    case getType(setRequestedFields): {
+      const updatedState = { ...state, requestedFields: action.payload };
+      // Re-run merge with the new field set if both project + static
+      // data are loaded. ProjectScreen gates dispatches behind a
+      // string-keyed effect, so we trust the action only fires on real
+      // changes.
+      if ("resource" in updatedState.projectData && "resource" in updatedState.staticData) {
+        const { project } = updatedState.projectData.resource;
+        const { staticMetadata } = updatedState.staticData.resource;
+        return loop(
+          updatedState,
+          Cmd.run(
+            runLocalMerge(
+              staticMetadata,
+              project.regionConfig.keyPrefix,
+              project.regionConfig.version,
+              project.districtsDefinition,
+              project.numberOfDistricts,
+              action.payload.demographics,
+              action.payload.voting
+            ),
+            {
+              successActionCreator: localMergeComplete,
+              failActionCreator: localMergeFailure
+            }
+          )
+        );
+      }
+      return updatedState;
     }
     default:
       return state as never;

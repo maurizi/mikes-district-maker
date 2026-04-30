@@ -20,10 +20,12 @@ export function getPvi(properties: DistrictProperties, year?: ElectionYear) {
 
 const PVIDisplay = ({
   properties,
-  year
+  year,
+  isLoadingMore
 }: {
   readonly properties: DistrictProperties;
   readonly year?: ElectionYear;
+  readonly isLoadingMore?: boolean;
 }) => {
   // The voting object can be present but have no data, we treat this case as if it isn't there
 
@@ -49,7 +51,11 @@ const PVIDisplay = ({
       placement="top-start"
       content={
         pvi !== undefined ? (
-          <VotingSidebarTooltip voting={voting} excludeOther={true} />
+          <VotingSidebarTooltip
+            voting={voting}
+            excludeOther={true}
+            isLoadingMore={isLoadingMore}
+          />
         ) : (
           <em>
             <strong>Empty district.</strong> Add people to this district to view the vote totals

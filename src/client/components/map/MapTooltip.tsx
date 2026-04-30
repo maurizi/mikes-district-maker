@@ -74,7 +74,8 @@ const MapTooltip = ({
   map,
   electionYear,
   selectedOffice,
-  populationKey
+  populationKey,
+  requestedFields
 }: {
   readonly geoLevelIndex: number;
   readonly highlightedGeounits: GeoUnits;
@@ -84,6 +85,10 @@ const MapTooltip = ({
   readonly electionYear: ElectionYear;
   readonly selectedOffice: string;
   readonly populationKey: GroupTotal;
+  readonly requestedFields: {
+    readonly demographics: readonly string[];
+    readonly voting: readonly string[];
+  };
 }) => {
   const [point, setPoint] = useState({ x: 0, y: 0 });
   const [feature, setFeature] = useState<maplibregl.MapGeoJSONFeature | undefined>(undefined);
@@ -163,7 +168,9 @@ const MapTooltip = ({
             staticMetadata,
             project.regionConfig.keyPrefix,
             project.regionConfig.version,
-            selectedGeounits
+            selectedGeounits,
+            requestedFields.demographics,
+            requestedFields.voting
           ));
         const demographics = staticCounts?.demographics;
         const voting = staticCounts?.voting;
@@ -300,7 +307,8 @@ function mapStateToProps(state: State) {
     staticMetadata: destructureResource(state.project.staticData, "staticMetadata"),
     electionYear: state.projectOptions.electionYear,
     selectedOffice: state.projectOptions.selectedOffice,
-    populationKey: state.projectOptions.populationKey
+    populationKey: state.projectOptions.populationKey,
+    requestedFields: state.project.requestedFields
   };
 }
 

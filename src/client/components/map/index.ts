@@ -589,7 +589,20 @@ export function generateMapLayers(
     });
   });
 
-  applyLabelRegionFilter(map, bboxToPolygon(bbox));
+  // Hide the basemap label layers until the dissolved region outline is ready.
+  // Otherwise labels load everywhere first and outside-state ones vanish in a
+  // visible second pass; hiding upfront lets inside-state labels just pop in.
+  hideFilteredLabelLayers(map);
+}
+
+// Set the filtered basemap label layers to invisible. Used on initial layer
+// setup and after a basemap swap that happens before the region outline is
+// ready, so labels don't appear globally before being filtered.
+export function hideFilteredLabelLayers(map: maplibregl.Map) {
+  filteredLabelLayers.forEach(layer => {
+    if (!map.getLayer(layer)) return;
+    map.setLayoutProperty(layer, "visibility", "none");
+  });
 }
 
 export function bboxToPolygon(bbox: readonly [number, number, number, number]): GeoJSON.Polygon {

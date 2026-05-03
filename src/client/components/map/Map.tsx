@@ -55,6 +55,7 @@ import {
   DISTRICTS_SOURCE_ID,
   applyLabelRegionFilter,
   bboxToPolygon,
+  hideFilteredLabelLayers,
   featureStateDistricts,
   generateMapLayers,
   getGeoLevelVisibility,
@@ -390,6 +391,10 @@ const DistrictsMap = ({
   const regionOutlineRef = useRef<GeoJSON.Polygon | GeoJSON.MultiPolygon>(
     bboxToPolygon(staticMetadata.bbox)
   );
+  // Tracks whether the outline (or bbox fallback after outline failure) has
+  // been applied. Until true, basemap label layers stay hidden so we don't
+  // flash labels everywhere before the inside-region filter is in place.
+  const labelsRevealedRef = useRef(false);
   // Bumped after a basemap swap (setStyle + reapply) to force downstream effects
   // that modify map layers to re-run against the fresh style.
   const [styleVersion, setStyleVersion] = useState(0);
@@ -506,10 +511,14 @@ const DistrictsMap = ({
       const merged = mergeBasemap(map.getStyle(), target);
       map.once("style.load", () => {
         // The basemap label layers were replaced with fresh copies from the
-        // new flavor, so they've lost the region-filter wrapper applied on
-        // initial load. Re-apply it with whatever outline we have so far
-        // (bbox at first, dissolved region outline once the worker finishes).
-        applyLabelRegionFilter(map, regionOutlineRef.current);
+        // new flavor, so they've lost any visibility/filter changes we made.
+        // If the outline is ready, re-apply the region filter; otherwise hide
+        // the labels again so they don't pop in before filtering is in place.
+        if (labelsRevealedRef.current) {
+          applyLabelRegionFilter(map, regionOutlineRef.current);
+        } else {
+          hideFilteredLabelLayers(map);
+        }
         // Bump the styleVersion so downstream effects that pin paint/layout
         // on map layers re-assert themselves against the new basemap layers.
         setStyleVersion(v => v + 1);
@@ -530,9 +539,11 @@ const DistrictsMap = ({
     }
   }, [colorMode, map, project, staticMetadata, minZoom, maxZoom, geojson]);
 
-  // Upgrade the basemap label filter from bbox to the dissolved region outline
-  // once the worker returns it. Cheap to compute on the worker, piggybacks on
-  // the adjacency data already fetched for merge/boundary work.
+  // Reveal basemap labels once the dissolved region outline is ready, with the
+  // outline as the `within` filter. Until the worker returns, labels stay
+  // hidden (set in generateMapLayers) so we don't flash labels everywhere.
+  // Cheap to compute on the worker — piggybacks on the adjacency data already
+  // fetched for merge/boundary work.
   useEffect(() => {
     if (!map) return;
     let cancelled = false;
@@ -545,10 +556,14 @@ const DistrictsMap = ({
         if (cancelled) return;
         regionOutlineRef.current = outline;
         applyLabelRegionFilter(map, outline);
+        labelsRevealedRef.current = true;
       })
       .catch(() => {
-        // Keep the bbox filter if outline computation fails — neighboring
+        if (cancelled) return;
+        // Fall back to the bbox filter so labels still appear — neighboring
         // state labels will leak near borders but nothing worse.
+        applyLabelRegionFilter(map, regionOutlineRef.current);
+        labelsRevealedRef.current = true;
       });
     return () => {
       cancelled = true;

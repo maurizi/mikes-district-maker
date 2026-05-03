@@ -118,15 +118,11 @@ const PARTY_ABBREV: Record<string, string> = {
   other: "I"
 };
 
-// Compact single-line representation for a non-presidential race
-// Shows margin between 1st and 2nd place candidates
-const CompactRaceRow = ({
-  label,
-  voting
-}: {
-  readonly label: string;
-  readonly voting: DemographicCounts;
-}) => {
+// Margin between 1st and 2nd place candidates in a single race.
+// Returns null when no votes were cast (uncontested / no data).
+function computeMargin(
+  voting: DemographicCounts
+): { readonly label: string; readonly color: string } | null {
   const parties = [
     { key: "democrat", votes: voting.democrat || 0 },
     { key: "republican", votes: voting.republican || 0 },
@@ -141,22 +137,100 @@ const CompactRaceRow = ({
   const marginPct = Math.round(((first.votes - second.votes) / topTwo) * 100);
   const abbrev = PARTY_ABBREV[first.key] || first.key;
   const color = getPartyColor(first.key === "other" ? "other party" : first.key);
-  const marginLabel = marginPct === 0 ? "Even" : `${abbrev}+${marginPct}`;
+  const label = marginPct === 0 ? "0" : `${abbrev}+${marginPct}`;
+  return { label, color };
+}
+
+// Matrix of non-presidential races: offices on rows, years on columns,
+// each cell shows the winner's margin color-coded by leading party.
+// Returns null when the district has no non-presidential voting data.
+const OtherRacesMatrix = ({ voting }: { readonly voting: DemographicCounts }) => {
+  const otherRaces = getOtherRaces(voting);
+  if (otherRaces.length === 0) return null;
+
+  const yearSet = new Set<string>();
+  const officeSet = new Set<string>();
+  otherRaces.forEach(({ office, year }) => {
+    yearSet.add(year);
+    officeSet.add(office);
+  });
+  const years = Array.from(yearSet).sort();
+  // getOtherRaces sorts by officeName then year, so insertion order on
+  // officeSet is already the office display order we want.
+  const offices = Array.from(officeSet);
+
+  const cellMap = new Map<string, Map<string, DemographicCounts>>();
+  otherRaces.forEach(({ office, year }) => {
+    const officeVoting = extractOffice(extractYear(voting, year), office);
+    const row = cellMap.get(office) || new Map<string, DemographicCounts>();
+    row.set(year, officeVoting);
+    cellMap.set(office, row);
+  });
 
   return (
-    <Box
-      sx={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        color: "muted",
-        fontSize: 0,
-        py: "1px"
-      }}
-    >
-      <span>{label}</span>
-      <span sx={{ color, fontWeight: "bold", ml: 2, whiteSpace: "nowrap" }}>{marginLabel}</span>
-    </Box>
+    <React.Fragment>
+      <Divider sx={{ my: 1, borderColor: "gray.6" }} />
+      <table
+        sx={{
+          margin: 0,
+          width: "100%",
+          fontSize: 0,
+          borderCollapse: "collapse",
+          color: "muted"
+        }}
+      >
+        <thead>
+          <tr>
+            <th sx={{ py: 0, px: 1 }} />
+            {years.map(year => (
+              <th
+                key={year}
+                sx={{
+                  textAlign: "right",
+                  py: 0,
+                  px: 1,
+                  fontWeight: "normal",
+                  fontVariant: "tabular-nums"
+                }}
+              >
+                {`'${year}`}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {offices.map(office => (
+            <tr key={office}>
+              <td
+                sx={{ textAlign: "left", py: "1px", px: 1, fontWeight: "bold" }}
+                title={officeName(office)}
+              >
+                {office}
+              </td>
+              {years.map(year => {
+                const officeVoting = cellMap.get(office)?.get(year);
+                const margin = officeVoting ? computeMargin(officeVoting) : null;
+                return (
+                  <td
+                    key={year}
+                    sx={{
+                      textAlign: "right",
+                      py: "1px",
+                      px: 1,
+                      fontVariant: "tabular-nums",
+                      whiteSpace: "nowrap",
+                      color: margin?.color
+                    }}
+                  >
+                    {margin ? <b>{margin.label}</b> : "—"}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </React.Fragment>
   );
 };
 
@@ -216,7 +290,6 @@ const VotingSidebarTooltip = ({
   readonly isLoadingMore?: boolean;
 }) => {
   const presYears = getPresidentialYears(voting);
-  const otherRaces = getOtherRaces(voting);
 
   return (
     <Box sx={{ width: "100%", minHeight: "100%" }}>
@@ -239,21 +312,7 @@ const VotingSidebarTooltip = ({
           </React.Fragment>
         );
       })}
-      {otherRaces.length > 0 && (
-        <React.Fragment>
-          <Divider sx={{ my: 1, borderColor: "gray.6" }} />
-          {otherRaces.map(({ office, year }) => {
-            const officeVoting = extractOffice(extractYear(voting, year), office);
-            return (
-              <CompactRaceRow
-                key={`${office}-${year}`}
-                label={`${officeName(office)} '${year}`}
-                voting={officeVoting}
-              />
-            );
-          })}
-        </React.Fragment>
-      )}
+      <OtherRacesMatrix voting={voting} />
       {isLoadingMore && (
         <Flex sx={{ justifyContent: "center", alignItems: "center", py: 2, mt: 1 }}>
           <Spinner variant="styles.spinner.small" />

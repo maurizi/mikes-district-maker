@@ -51,11 +51,7 @@ const PVIDisplay = ({
       placement="top-start"
       content={
         pvi !== undefined ? (
-          <VotingSidebarTooltip
-            voting={voting}
-            excludeOther={true}
-            isLoadingMore={isLoadingMore}
-          />
+          <VotingSidebarTooltip voting={voting} excludeOther={true} isLoadingMore={isLoadingMore} />
         ) : (
           <em>
             <strong>Empty district.</strong> Add people to this district to view the vote totals

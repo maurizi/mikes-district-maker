@@ -131,4 +131,3 @@ export async function fetchBlockIds(
   const ids = await client.strings(`${baseLayer}/${baseLayer}`);
   return Array.from(ids);
 }
-

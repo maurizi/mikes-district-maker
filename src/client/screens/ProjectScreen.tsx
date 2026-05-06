@@ -232,6 +232,11 @@ const ProjectScreen = ({
   // actually changes (string-keyed dep avoids re-dispatch on equal sets).
   const pinnedMetricFields = presentDrawingState.pinnedMetricFields || [];
   const chamberDefaultPopulationKey = project?.chamber?.defaultPopulationField;
+  const defaultElectionYear = useMemo(() => {
+    if (!staticMetadata) return undefined;
+    const presYears = getAvailablePresidentialYears(staticMetadata);
+    return presYears.length > 0 ? presYears[presYears.length - 1] : undefined;
+  }, [staticMetadata]);
   const requestedFields = useMemo(
     () =>
       computeRequestedFields({
@@ -242,6 +247,7 @@ const ProjectScreen = ({
         populationKey: projectOptions.populationKey,
         chamberDefaultPopulationKey,
         electionYear: projectOptions.electionYear,
+        defaultElectionYear,
         selectedOffice: projectOptions.selectedOffice,
         prefetchedAllVoting
       }),
@@ -253,6 +259,7 @@ const ProjectScreen = ({
       projectOptions.populationKey,
       chamberDefaultPopulationKey,
       projectOptions.electionYear,
+      defaultElectionYear,
       projectOptions.selectedOffice,
       prefetchedAllVoting
     ]

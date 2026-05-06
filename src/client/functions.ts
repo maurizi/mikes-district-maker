@@ -501,6 +501,7 @@ export function computeRequestedFields({
   populationKey,
   chamberDefaultPopulationKey,
   electionYear,
+  defaultElectionYear,
   selectedOffice,
   prefetchedAllVoting
 }: {
@@ -516,6 +517,11 @@ export function computeRequestedFields({
   // chart between the first merge and the post-flip second merge.
   readonly chamberDefaultPopulationKey?: GroupTotal;
   readonly electionYear: ElectionYear;
+  // Same idea as chamberDefaultPopulationKey: the latest presidential
+  // year derived from staticMetadata. Included so the first render
+  // already requests the right tooltip voting fields even before the
+  // setElectionYear effect fires, avoiding a duplicate merge.
+  readonly defaultElectionYear?: ElectionYear;
   readonly selectedOffice: string;
   readonly prefetchedAllVoting: boolean;
 }): { readonly demographics: readonly string[]; readonly voting: readonly string[] } {
@@ -592,9 +598,15 @@ export function computeRequestedFields({
   // extractYear(extractOffice(...)) read). Office-agnostic matching:
   // when selectedOffice="" + a midterm electionYear, the bare-id
   // governor columns parse with office="" and match correctly.
+  // Use defaultElectionYear when available — on first render
+  // electionYear is still the reducer's stale initial ("16") before
+  // the setElectionYear effect fires, so preferring the default
+  // produces the same field set both before and after the effect,
+  // avoiding a duplicate merge.
+  const effectiveElectionYear = defaultElectionYear ?? electionYear;
   for (const id of allVotingIds) {
     const p = parseVotingId(id);
-    if (p.office === selectedOffice && p.year === electionYear) voting.add(id);
+    if (p.office === selectedOffice && p.year === effectiveElectionYear) voting.add(id);
   }
   // Pinned voting metrics — reverse-lookup file id via the same parser
   // getVotingMetricFields uses (only bare presidential columns yield a

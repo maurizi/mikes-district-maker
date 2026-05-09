@@ -6,20 +6,17 @@ import react from "@vitejs/plugin-react";
 import svgr from "vite-plugin-svgr";
 import mkcert from "vite-plugin-mkcert";
 
-// Vite's Node proxy is the bottleneck on big Range GETs in dev
-// (curl-measured ~14× slower than direct: 9 s vs 0.6 s warm for a
-// 4 MiB chunk). Hand the client an absolute origin so it skips the
-// proxy. We point at S3 directly rather than CloudFront because the
-// CF distribution returns 403 on OPTIONS preflights (not in its
-// cache behaviors), so cross-origin Range requests that preflight
-// fail. The bucket itself accepts OPTIONS and allows `*` origin /
-// the `range` header. In a production build this is the empty
-// string, the client falls back to self.location.origin, and
-// same-origin CloudFront serves it without preflight needed
-// (commit 6a95132).
+// Hand the client an absolute CloudFront origin so it skips the slow
+// Vite Node proxy (~14× slower for big Range GETs). CloudFront also
+// supports multi-range 206 responses from cache, unlike S3 which
+// collapses multi-range to a 200 with the full object. A response
+// headers policy on the distribution adds CORS headers so cross-origin
+// requests from localhost pass preflight. In a production build this
+// is the empty string — the client falls back to self.location.origin
+// and same-origin CloudFront serves it without preflight.
 const DEV_REGION_ARTIFACTS_ORIGIN =
   process.env.REGION_ARTIFACTS_ORIGIN ||
-  "https://districtbuilder-dev-238046523378.s3.amazonaws.com";
+  "https://mikesdistrictmaker.org";
 
 export default defineConfig(({ command }) => ({
   plugins: [react(), svgr(), mkcert()],
@@ -54,19 +51,19 @@ export default defineConfig(({ command }) => ({
         changeOrigin: true,
         rewrite: path => path.replace(/^\/thumbnails/, "")
       },
-      // Per-region static artifacts (TopoJSON, hierarchy, demographic typed
-      // arrays, etc.) and the basemap PMTiles. In prod CloudFront fronts
-      // these at the same origin; in dev we proxy directly to S3.
+      // Per-region static artifacts and the basemap PMTiles. In prod
+      // CloudFront fronts these at the same origin; in dev we proxy to
+      // CloudFront (which supports multi-range 206 from cache).
       "/regions": {
         target:
           process.env.REGION_ARTIFACTS_ORIGIN ||
-          "https://districtbuilder-dev-238046523378.s3.amazonaws.com",
+          "https://mikesdistrictmaker.org",
         changeOrigin: true
       },
       "/basemap": {
         target:
           process.env.REGION_ARTIFACTS_ORIGIN ||
-          "https://districtbuilder-dev-238046523378.s3.amazonaws.com",
+          "https://mikesdistrictmaker.org",
         changeOrigin: true
       }
     }

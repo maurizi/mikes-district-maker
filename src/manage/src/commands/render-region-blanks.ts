@@ -19,7 +19,7 @@ import {
   type IStaticMetadata,
   type ThumbnailGeoJSON
 } from "../../../shared/entities";
-import { CtopoClient, makeRangeFetcher, type RangeFetcher } from "../../../shared/ctopo";
+import { CtopoClient, makeRangeFetcher, type RangeFetcher } from "cloud-topo";
 import { computeDistrictBoundaries } from "../../../shared/boundary";
 import { simplifyForThumbnail } from "../../../shared/thumbnail";
 

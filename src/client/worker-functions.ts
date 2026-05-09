@@ -41,11 +41,26 @@ export async function fetchAllStaticData(
   keyPrefix: string,
   version: Date | string | number
 ): Promise<StaticProjectData> {
-  const [staticMetadata, geoUnitHierarchy] = await Promise.all([
-    fetchStaticMetadata(keyPrefix, version),
-    fetchGeoUnitHierarchy(keyPrefix, version)
+  // Warm the ctopo client in the worker immediately — openContainer
+  // only needs the URL, so its header Range GET flies concurrently
+  // with the (large) hierarchy JSON fetch instead of waiting for it.
+  worker.warmCtopoClient(keyPrefix, version);
+  const staticMetadataP = fetchStaticMetadata(keyPrefix, version);
+  const geoUnitHierarchyP = fetchGeoUnitHierarchy(keyPrefix, version);
+  // As soon as staticMetadata arrives, speculatively prefetch the
+  // base layer's CSR sections (poly_offsets, ring_offsets, arc_refs)
+  // — every merge needs them and the 7.9MB arc_refs is the boundary
+  // critical-path bottleneck. Also kick off fetchStaticGeoLevels
+  // (which only needs staticMetadata, not hierarchy).
+  const staticGeoLevelsP = staticMetadataP.then(sm => {
+    worker.warmCtopoClient(keyPrefix, version, sm);
+    return worker.fetchStaticGeoLevels(keyPrefix, version, sm);
+  });
+  const [staticMetadata, geoUnitHierarchy, staticGeoLevels] = await Promise.all([
+    staticMetadataP,
+    geoUnitHierarchyP,
+    staticGeoLevelsP
   ]);
-  const staticGeoLevels = await worker.fetchStaticGeoLevels(keyPrefix, version, staticMetadata);
   return { staticMetadata, geoUnitHierarchy, staticGeoLevels };
 }
 

@@ -14,8 +14,8 @@ import {
 } from "fs";
 import { join } from "path";
 import { type IStaticFile, type IStaticMetadata } from "../../../shared/entities";
-import { type PropertyOverride } from "../../../shared/ctopo";
-import { rewriteContainer } from "../../../shared/ctopo/encode";
+import { type PropertyOverride } from "cloud-topo";
+import { rewriteContainer } from "cloud-topo/encode";
 import { geojsonPolygonLabels, tileJoin, tippecanoe } from "../lib/cmd";
 import { abbreviateNumber } from "./process-geojson";
 import { abbrev, mkTypedArray } from "../lib/voting-data";

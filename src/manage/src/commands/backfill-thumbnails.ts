@@ -23,7 +23,7 @@ import {
   type RangeFetcher,
   CtopoClient as CtopoClientCtor,
   makeRangeFetcher
-} from "../../../shared/ctopo";
+} from "cloud-topo";
 import { buildBlockAssignment, computeDistrictBoundaries } from "../../../shared/boundary";
 import { getVoting } from "../../../shared/functions";
 import { simplifyForThumbnail } from "../../../shared/thumbnail";

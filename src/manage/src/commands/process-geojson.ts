@@ -39,8 +39,8 @@ import {
   type IStaticMetadata,
   type DemographicsGroup
 } from "../../../shared/entities";
-import { writeContainer } from "../../../shared/ctopo/encode";
-import { CtopoClient, makeRangeFetcher } from "../../../shared/ctopo";
+import { writeContainer } from "cloud-topo/encode";
+import { CtopoClient, makeRangeFetcher } from "cloud-topo";
 import { geojsonPolygonLabels, tileJoin, tippecanoe } from "../lib/cmd";
 import { abbrev } from "../lib/voting-data";
 import _ from "lodash";
@@ -413,8 +413,7 @@ max string length of ~512MB).
       }
     }
     await writeContainer(join(flags.outputDir, "region.ctopo"), topoJsonHierarchy, {
-      compression: "zst",
-      blockCompressArcCoords: true,
+      compression: "zstd",
       frontLoadedSectionNames: frontLoadedIdxSections,
       onProgress: event => {
         if (event.stage === "compress-group") {

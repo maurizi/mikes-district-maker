@@ -12,7 +12,7 @@
 
 import { type MultiPolygon } from "geojson";
 
-import { type CtopoClient, merge, neighbors } from "./ctopo";
+import { type CtopoClient, merge, neighbors } from "cloud-topo";
 import { type Contiguity, type DistrictsDefinition, type GeoUnitHierarchy } from "./entities";
 
 // TEMP perf instrumentation — broadcast to the same channel the

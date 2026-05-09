@@ -14,7 +14,8 @@
       "topojson-specification": ["./node_modules/@types/topojson-specification"],
       "@turf/bbox": ["./node_modules/@turf/bbox"],
       "simplify-geojson": ["./node_modules/simplify-geojson"],
-      "@bokuweb/zstd-wasm": ["./node_modules/@bokuweb/zstd-wasm"]
+      "@bokuweb/zstd-wasm": ["./node_modules/@bokuweb/zstd-wasm"],
+      "cloud-topo": ["./node_modules/cloud-topo"]
     },
     "strict": true,
     "strictPropertyInitialization": false,

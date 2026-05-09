@@ -15,6 +15,36 @@ resource "aws_cloudfront_function" "thumbnails_rewrite" {
   code    = file("${path.module}/cloudfront-functions/thumbnails-rewrite.js")
 }
 
+resource "aws_cloudfront_function" "cors_preflight" {
+  name    = "${var.project}-${var.environment}-cors-preflight"
+  runtime = "cloudfront-js-2.0"
+  publish = true
+  code    = file("${path.module}/cloudfront-functions/cors-preflight.js")
+}
+
+resource "aws_cloudfront_response_headers_policy" "cors_range" {
+  name    = "${var.project}-${var.environment}-cors-range"
+  comment = "CORS for cross-origin Range requests (dev, etc.)"
+
+  cors_config {
+    access_control_allow_origins {
+      items = ["*"]
+    }
+    access_control_allow_methods {
+      items = ["GET", "HEAD", "OPTIONS"]
+    }
+    access_control_allow_headers {
+      items = ["Range", "If-None-Match", "If-Modified-Since"]
+    }
+    access_control_expose_headers {
+      items = ["Content-Range", "Content-Type", "Content-Length", "Accept-Ranges"]
+    }
+    access_control_allow_credentials = false
+    access_control_max_age_sec       = 86400
+    origin_override                  = true
+  }
+}
+
 # CloudFront ACM cert must be in us-east-1.
 resource "aws_acm_certificate" "cloudfront" {
   provider          = aws.us_east_1
@@ -186,8 +216,34 @@ resource "aws_cloudfront_distribution" "main" {
     viewer_protocol_policy = "redirect-to-https"
     allowed_methods        = ["GET", "HEAD", "OPTIONS"]
     cached_methods         = ["GET", "HEAD", "OPTIONS"]
-    compress               = false
-    cache_policy_id        = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+    compress                   = false
+    cache_policy_id            = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.cors_range.id
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.cors_preflight.arn
+    }
+  }
+
+  # *.ctopo → cloud-topo container archives accessed by byte offset.
+  # compress=false: like PMTiles, ctopo is internally compressed and
+  # accessed via multi-range byte-offset requests. Gzipping at the edge
+  # would corrupt offset math.
+  ordered_cache_behavior {
+    path_pattern               = "*.ctopo"
+    target_origin_id           = "s3-region-artifacts"
+    viewer_protocol_policy     = "redirect-to-https"
+    allowed_methods            = ["GET", "HEAD", "OPTIONS"]
+    cached_methods             = ["GET", "HEAD", "OPTIONS"]
+    compress                   = false
+    cache_policy_id            = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.cors_range.id
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.cors_preflight.arn
+    }
   }
 
   # /regions/* → per-region static artifacts (TopoJSON, hierarchy, demographic
@@ -203,8 +259,14 @@ resource "aws_cloudfront_distribution" "main" {
     viewer_protocol_policy = "redirect-to-https"
     allowed_methods        = ["GET", "HEAD", "OPTIONS"]
     cached_methods         = ["GET", "HEAD", "OPTIONS"]
-    compress               = true
-    cache_policy_id        = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+    compress                   = true
+    cache_policy_id            = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.cors_range.id
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.cors_preflight.arn
+    }
   }
 
   viewer_certificate {

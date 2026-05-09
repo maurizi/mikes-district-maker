@@ -28,7 +28,7 @@ import {
   type TypedArray,
   type TypedArrays
 } from "../shared/entities";
-import { type CtopoClient } from "../shared/ctopo";
+import { type CtopoClient } from "cloud-topo";
 import { FIPS, MAX_IMPORT_ERRORS } from "../shared/constants";
 import {
   buildSplitBlockMap,
@@ -320,6 +320,27 @@ function runCsvImport(
 }
 
 const functions = {
+  // Start the ctopo openContainer Range GET immediately so it flies
+  // concurrently with the (large) hierarchy JSON fetch on the main
+  // thread. openContainer only needs the URL, not staticMetadata.
+  //
+  // When staticMetadata is provided, also speculatively prefetch the
+  // base layer's CSR sections (poly_offsets, ring_offsets, arc_refs)
+  // — every merge needs them, and the 7.9MB arc_refs is the boundary
+  // critical-path bottleneck. By the time the merge actually starts
+  // (after the Redux round-trip), these bytes are already in the
+  // ctopo byte-range cache.
+  warmCtopoClient: (
+    keyPrefix: string,
+    version: Date | string | number,
+    staticMetadata?: IStaticMetadata
+  ): void => {
+    const clientP = getCtopoClient(keyPrefix, version);
+    if (staticMetadata) {
+      const baseLayer = staticMetadata.geoLevelHierarchy[0].id;
+      void clientP.then(client => client.layerGeometry(baseLayer));
+    }
+  },
   // Owned by the worker so the ctopo client (and its bootstrap chain)
   // lives in exactly one context. The main thread fetches the JSON
   // sidecars itself and asks the worker for staticGeoLevels via

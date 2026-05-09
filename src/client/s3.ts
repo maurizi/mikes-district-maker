@@ -9,7 +9,7 @@ import {
   type HttpsURI,
   type IStaticMetadata
 } from "../shared/entities";
-import { type CtopoClient, openContainer } from "../shared/ctopo";
+import { type CtopoClient, openContainer } from "cloud-topo";
 
 const s3Axios = axios.create();
 
@@ -100,7 +100,9 @@ export function getCtopoClient(
   let cached = clientCache.get(key);
   if (cached === undefined) {
     cached = openContainer(staticDataUri(keyPrefix, "region.ctopo", version), {
-      frontPrefetchBytes: FRONT_PREFETCH_BYTES
+      frontPrefetchBytes: FRONT_PREFETCH_BYTES,
+      arcCoordsPrefetchBytes: 5 * 1024,
+      maxParallelRanges: 8
     });
     clientCache.set(key, cached);
   }

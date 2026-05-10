@@ -113,6 +113,12 @@ const PublishedMapsListScreen = ({
       "Mike's District Maker | Community Maps " + (regionCode ? `| ${regionCode}` : "");
   });
 
+  // Warm the ProjectScreen chunk (drags maplibre, joyride, visx) so the
+  // editor opens without a Suspense fallback when the user clicks a card.
+  useEffect(() => {
+    void import("./ProjectScreen");
+  }, []);
+
   const regionConfigOptions = regionConfigs
     ? [...regionConfigs]
         .sort((a, b) => a.regionCode.localeCompare(b.regionCode))

@@ -3,7 +3,6 @@
 
 import axios, { type AxiosResponse } from "axios";
 import { saveAs } from "file-saver";
-import * as shpwrite from "@mapbox/shp-write";
 import memoize from "memoizee";
 
 import {
@@ -353,23 +352,28 @@ export async function convertGeoJsonToShapefile(
   // DistrictsGeoJSON at large-state scale can exceed Lambda's ~5MB request
   // body ceiling, and keeping this client-side avoids a network round trip.
   // Flatten nested demographics/voting objects into top-level properties
-  // since shapefile attribute tables are flat.
+  // since shapefile attribute tables are flat. Drop districts with no
+  // assigned blocks — boundary computation emits an empty MultiPolygon
+  // for unused district slots, which trips shp-write's parts() walker.
   const formatted: GeoJSON.FeatureCollection = {
     type: "FeatureCollection",
-    features: geojson.features.map(feature => {
-      const { demographics, voting, ...rest } = feature.properties;
-      return {
-        type: "Feature" as const,
-        geometry: feature.geometry,
-        properties: {
-          ...rest,
-          ...demographics,
-          ...voting,
-          id: feature.id
-        }
-      };
-    })
+    features: geojson.features
+      .filter(feature => feature.geometry.coordinates.length > 0)
+      .map(feature => {
+        const { demographics, voting, ...rest } = feature.properties;
+        return {
+          type: "Feature" as const,
+          geometry: feature.geometry,
+          properties: {
+            ...rest,
+            ...demographics,
+            ...voting,
+            id: feature.id
+          }
+        };
+      })
   };
+  const shpwrite = await import("@mapbox/shp-write");
   const blob = await shpwrite.zip<"blob">(formatted, {
     outputType: "blob",
     compression: "DEFLATE"

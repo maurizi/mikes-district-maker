@@ -47,6 +47,12 @@ const HomeScreen = ({ projects, isSaving, duplicatedProject, user, pagination }:
     document.title = "Mike's District Maker | My Maps";
   });
 
+  // Warm the ProjectScreen chunk (drags maplibre, joyride, visx) so the
+  // editor opens without a Suspense fallback when the user clicks a card.
+  useEffect(() => {
+    void import("./ProjectScreen");
+  }, []);
+
   return isSaving === "saved" && duplicatedProject !== null ? (
     <Navigate to={`/projects/${duplicatedProject.id}`} replace />
   ) : (

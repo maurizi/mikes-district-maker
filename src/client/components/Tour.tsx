@@ -6,7 +6,7 @@ import { Joyride, type EventData, STATUS, type Step } from "react-joyride";
 import { type IProject, type IStaticMetadata, type IUser } from "../../shared/entities";
 import { patchUser } from "../api";
 import { geoLevelLabel, getPopulationPerRepresentative } from "../functions";
-import SalamanderIllustration from "../media/tour-salamander-builder.svg?react";
+import salamanderIllustration from "../media/tour-salamander-builder.svg?url";
 import tourClickingGif from "../media/tour-clicking-counties-sidebar.gif";
 import tourCountiesGif from "../media/tour-counties-blockgroups.gif";
 import { type DistrictsGeoJSON } from "../types";
@@ -54,7 +54,7 @@ class Tour extends Component<Props, State> {
           title: "Welcome to Mike's District Maker!",
           content: (
             <div>
-              <SalamanderIllustration width="200px" height="200px" />
+              <img src={salamanderIllustration} width={200} height={200} alt="" />
               <p>
                 Do you want help building
                 <br />

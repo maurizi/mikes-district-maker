@@ -104,7 +104,6 @@ import {
   mergeDistricts,
   exportCsv as workerExportCsv
 } from "../worker-functions";
-import { renderThumbnailPng } from "../thumbnail-render";
 import { getCurrentUserId } from "../jwt";
 import { isBlankDistrictsDefinition } from "../../shared/functions";
 import { saveAs } from "file-saver";
@@ -686,6 +685,7 @@ const projectDataReducer = (
               nextState,
               Cmd.run(async () => {
                 const bbox = await fetchMemoizedStateBbox(regionConfig);
+                const { renderThumbnailPng } = await import("../thumbnail-render");
                 // Render variants serially: two concurrent MapLibre instances
                 // can blow GPU memory on lower-end devices.
                 const squareBlob = await renderThumbnailPng(thumbnail, bbox, "square");

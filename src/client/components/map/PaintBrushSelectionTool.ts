@@ -14,7 +14,7 @@ import {
 import booleanIntersects from "@turf/boolean-intersects";
 import distance from "@turf/distance";
 import circle from "@turf/circle";
-import { polygon } from "@turf/turf";
+import { polygon } from "@turf/helpers";
 import { editSelectedGeounits, type PaintBrushSize } from "../../actions/districtDrawing";
 import { areAnyGeoUnitsSelected, mergeGeoUnits } from "../../functions";
 import paint from "../../media/paint.png";

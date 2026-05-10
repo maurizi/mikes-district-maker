@@ -9,8 +9,8 @@ import { Box, Button, Flex, Heading, Text, type ThemeUIStyleObject } from "theme
 import SiteHeader from "../components/SiteHeader";
 import Logo from "../media/logos/logo.svg?react";
 import Mark from "../media/logos/mark.svg?react";
-import MakingMapsIllustration from "../media/making-maps.svg?react";
-import FairDistrictsIllustration from "../media/fair-districts.svg?react";
+import makingMapsIllustration from "../media/making-maps.svg?url";
+import fairDistrictsIllustration from "../media/fair-districts.svg?url";
 import shotOverview from "../media/landing/florida-full-size.png";
 import shotBlocks from "../media/landing/block-level-demographics.png";
 import shotCompetitiveness from "../media/landing/competitiveness.png";
@@ -209,7 +209,13 @@ const LandingScreen = ({ user }: StateProps) => {
             </Flex>
           </Box>
           <Box sx={{ flex: "1 1 0", minWidth: 0, maxWidth: "560px" }}>
-            <MakingMapsIllustration sx={{ width: "100%", height: "auto" }} />
+            <img
+              src={makingMapsIllustration}
+              width={721}
+              height={395}
+              alt=""
+              style={{ width: "100%", height: "auto" }}
+            />
           </Box>
         </Flex>
       </Box>
@@ -263,7 +269,13 @@ const LandingScreen = ({ user }: StateProps) => {
           }}
         >
           <Box sx={{ flex: "1 1 0", minWidth: 0, maxWidth: "480px" }}>
-            <FairDistrictsIllustration sx={{ width: "100%", height: "auto" }} />
+            <img
+              src={fairDistrictsIllustration}
+              width={603}
+              height={381}
+              alt=""
+              style={{ width: "100%", height: "auto" }}
+            />
           </Box>
           <Box sx={{ flex: "1 1 0", minWidth: 0, textAlign: ["center", "center", "left"] }}>
             <Heading as="h2" sx={{ ...style.sectionHeading, textAlign: "inherit" }}>

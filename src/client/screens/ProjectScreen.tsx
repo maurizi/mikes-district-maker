@@ -28,7 +28,6 @@ import { resetProjectState } from "../actions/root";
 import { setElectionYear, setPopulationKey, setSelectedOffice } from "../actions/projectOptions";
 import { userFetch } from "../actions/user";
 import "../App.css";
-import AddReferenceLayerModal from "../components/AddReferenceLayerModal";
 import CenteredContent from "../components/CenteredContent";
 import CopyMapModal from "../components/CopyMapModal";
 import DeleteReferenceLayerModal from "../components/DeleteReferenceLayerModal";
@@ -44,7 +43,12 @@ import ProjectHeader from "../components/ProjectHeader";
 import ProjectSidebar from "../components/ProjectSidebar";
 import SiteHeader from "../components/SiteHeader";
 import SubmitMapModal from "../components/SubmitMapModal";
-import Tour from "../components/Tour";
+
+// react-papaparse (the CSV import dep) and react-joyride only matter when
+// the corresponding feature is actually engaged, so split them out of the
+// editor's initial chunk.
+const AddReferenceLayerModal = React.lazy(() => import("../components/AddReferenceLayerModal"));
+const Tour = React.lazy(() => import("../components/Tour"));
 import {
   areAnyGeoUnitsSelected,
   computeRequestedFields,
@@ -466,12 +470,14 @@ const ProjectScreen = ({
             {project && staticMetadata && staticGeoLevels && geojson ? (
               <React.Fragment>
                 {!effectiveReadOnly && "resource" in user && (
-                  <Tour
-                    geojson={geojson}
-                    project={project}
-                    staticMetadata={staticMetadata}
-                    user={user.resource}
-                  />
+                  <React.Suspense fallback={null}>
+                    <Tour
+                      geojson={geojson}
+                      project={project}
+                      staticMetadata={staticMetadata}
+                      user={user.resource}
+                    />
+                  </React.Suspense>
                 )}
                 <Map
                   project={project}
@@ -508,7 +514,9 @@ const ProjectScreen = ({
                   evaluateMode={evaluateMode}
                   staticMetadata={staticMetadata}
                 />
-                <AddReferenceLayerModal project={project} />
+                <React.Suspense fallback={null}>
+                  <AddReferenceLayerModal project={project} />
+                </React.Suspense>
                 <ProjectDetailsModal project={project} geojson={geojson} />
                 <SubmitMapModal project={project} />
                 <DeleteReferenceLayerModal />

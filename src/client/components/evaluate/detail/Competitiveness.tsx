@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Modifications © 2026 Michael Maurizi Jr.
 
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { toast } from "react-toastify";
 import {
   Box,
@@ -31,7 +31,8 @@ import {
 import { getPviSteps } from "../../map/index";
 import PVIDisplay from "../../PVIDisplay";
 import Tooltip from "../../Tooltip";
-import CompetitivenessChart from "./CompetitivenessChart";
+// Pulls 5 @visx/* packages — only load when this metric panel renders.
+const CompetitivenessChart = lazy(() => import("./CompetitivenessChart"));
 
 const style: Record<string, ThemeUIStyleObject> = {
   table: {
@@ -161,7 +162,9 @@ const CompetitivenessMetricDetail = ({
           }
         ) || " N/A"}
       </Heading>
-      <CompetitivenessChart pviBuckets={pviBuckets} />
+      <Suspense fallback={<Spinner sx={{ display: "block", mx: "auto" }} />}>
+        <CompetitivenessChart pviBuckets={pviBuckets} />
+      </Suspense>
       <table sx={style.table}>
         <thead>
           <tr>

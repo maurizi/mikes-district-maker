@@ -87,7 +87,8 @@ resource "aws_s3_bucket_cors_configuration" "thumbnails" {
     allowed_methods = ["PUT"]
     allowed_origins = [
       "https://${var.domain_name}",
-      "http://localhost:3003"
+      "http://localhost:3003",
+      "https://localhost:3003"
     ]
     allowed_headers = ["*"]
     expose_headers  = ["ETag"]

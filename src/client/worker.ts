@@ -4,8 +4,10 @@
 import * as Comlink from "comlink";
 import { type MultiPolygon } from "geojson";
 
-// TEMP perf instrumentation — same channel the ctopo client uses; the
-// main thread mirrors it to the page console. Remove after texas perf.
+// Per-merge perf summary line. Posted via the same BroadcastChannel
+// the ctopo client uses for its (filtered-out) instrumentation; the
+// main thread filters this channel down to `[worker]` lines and
+// mirrors them to the page console.
 const _perfChannel =
   typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel("ctopo-perf");
 function perfLog(msg: string): void {
@@ -44,7 +46,11 @@ import {
 } from "../shared/functions";
 import { allGeoUnitIndices } from "./functions";
 import { fetchSections, fetchBlockIds, fetchGeoUnitHierarchy, getCtopoClient } from "./s3";
-import { buildBlockAssignment, computeDistrictBoundaries } from "../shared/boundary";
+import {
+  type DistrictBoundary,
+  buildBlockAssignment,
+  computeDistrictBoundaries
+} from "../shared/boundary";
 
 // Per-region cache. Each demographic / voting field is its own
 // Promise<TypedArray>, populated on demand by ensureFields(). This
@@ -123,6 +129,33 @@ async function ensureFields(
     })
   );
   return out;
+}
+
+// Per-merge geometry cache. computeDistrictBoundaries + the thumbnail
+// simplify pass depend only on (region, districtsDefinition,
+// numberOfDistricts) — not on which demographics/voting fields the
+// caller asked for. Caching keyed on assignment lets a re-merge with
+// the same definition but a different field set skip the boundary
+// stitching and reuse the simplified thumbnail geometries, which is
+// the case ProjectScreen's prefetchedAllVoting effect hits on every
+// project load.
+interface GeometryCacheEntry {
+  readonly boundaries: readonly DistrictBoundary[];
+  readonly thumbnailGeometries: readonly MultiPolygon[];
+}
+const GEOMETRY_CACHE_MAX = 4;
+const geometryCache = new Map<string, GeometryCacheEntry>();
+
+// FNV-1a 32-bit over the assignment bytes — fast hash with good
+// distribution; assignment is a Uint8Array of length numBlocks (~20K
+// for a state) so this is a few hundred microseconds.
+function hashAssignment(assignment: Uint8Array): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < assignment.length; i++) {
+    h ^= assignment[i];
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
 }
 
 let cachedBlockIds: { uri: string; data: Promise<readonly string[]> } | undefined;
@@ -381,7 +414,6 @@ const functions = {
     readonly isComplete: boolean;
   }> => {
     const t0 = performance.now();
-    perfLog(`[worker] mergeDistricts start`);
 
     // Three independent network paths run concurrently:
     //   1. ctopo client opens (header+arc_offsets prefix prefetch)
@@ -400,32 +432,63 @@ const functions = {
       ? ensureFields(region, "voting", requestedVoting)
       : Promise.resolve(undefined as Record<string, TypedArray> | undefined);
 
-    const boundariesPromise = (async () => {
+    const geometryPromise = (async () => {
       const [client, geoUnitHierarchy] = await Promise.all([
         clientPromise,
         region.geoUnitHierarchy
       ]);
-      perfLog(
-        `[worker] mergeDistricts: client+hierarchy ready at ${(performance.now() - t0).toFixed(0)}ms`
-      );
       const numBlocks = accumulateBaseIndices(geoUnitHierarchy).length;
       const baseLayer = staticMetadata.geoLevelHierarchy[0].id;
       const assignment = buildBlockAssignment(districtsDefinition, geoUnitHierarchy, numBlocks);
+      const geomKey = `${region.uri}|${hashAssignment(assignment).toString(16)}|${numberOfDistricts}`;
+      const cached = geometryCache.get(geomKey);
+      if (cached !== undefined) {
+        // Refresh recency for the LRU cap below.
+        geometryCache.delete(geomKey);
+        geometryCache.set(geomKey, cached);
+        return { entry: cached, assignment, numBlocks, fromCache: true };
+      }
       const boundaries = await computeDistrictBoundaries(
         client,
         baseLayer,
         assignment,
         numberOfDistricts
       );
-      return { boundaries, assignment, numBlocks };
+      // Run the thumbnail simplify pass on geometry-only stub features
+      // — properties don't influence simplification, only the
+      // size-fitting JSON length, and per-district properties are
+      // negligible vs coordinate data.
+      const stubDistricts: DistrictsGeoJSON = {
+        type: "FeatureCollection",
+        features: boundaries.map((b, i) => ({
+          type: "Feature" as const,
+          id: i,
+          geometry: b.geometry,
+          properties: {
+            compactness: b.compactness,
+            contiguity: b.contiguity,
+            demographics: {} as DemographicCounts,
+            voting: {}
+          }
+        }))
+      };
+      const thumbnail = simplifyForThumbnail(stubDistricts);
+      const thumbnailGeometries = thumbnail.features.map(f => f.geometry);
+      const entry: GeometryCacheEntry = { boundaries, thumbnailGeometries };
+      if (geometryCache.size >= GEOMETRY_CACHE_MAX) {
+        const oldest = geometryCache.keys().next().value;
+        if (oldest !== undefined) geometryCache.delete(oldest);
+      }
+      geometryCache.set(geomKey, entry);
+      return { entry, assignment, numBlocks, fromCache: false };
     })();
 
-    const [{ boundaries, assignment, numBlocks }, demoMap, voteMap] = await Promise.all([
-      boundariesPromise,
+    const [{ entry, assignment, numBlocks, fromCache }, demoMap, voteMap] = await Promise.all([
+      geometryPromise,
       demoMapPromise,
       voteMapPromise
     ]);
-    perfLog(`[worker] mergeDistricts: all data ready at ${(performance.now() - t0).toFixed(0)}ms`);
+    const { boundaries, thumbnailGeometries } = entry;
 
     // Build per-district block indices for demographics
     const districtBlockIndices: number[][] = Array.from(
@@ -436,24 +499,43 @@ const functions = {
       districtBlockIndices[assignment[i]].push(i);
     }
 
+    // Compute properties once per district and share them between the
+    // full-resolution districts FC and the thumbnail FC. Both feature
+    // collections always carry identical properties — the thumbnail is
+    // just a simplified-geometry view of the same districts.
+    const propsPerDistrict = boundaries.map((b, i) => ({
+      compactness: b.compactness,
+      contiguity: b.contiguity,
+      demographics: getDemographicsBase(districtBlockIndices[i], demoMap),
+      voting: voteMap ? getVotingBase(districtBlockIndices[i], voteMap) : {}
+    }));
+
     const districts: DistrictsGeoJSON = {
       type: "FeatureCollection",
       features: boundaries.map((b, i) => ({
         type: "Feature" as const,
         id: i,
         geometry: b.geometry,
-        properties: {
-          compactness: b.compactness,
-          contiguity: b.contiguity,
-          demographics: getDemographicsBase(districtBlockIndices[i], demoMap),
-          voting: voteMap ? getVotingBase(districtBlockIndices[i], voteMap) : {}
-        }
+        properties: propsPerDistrict[i]
+      }))
+    };
+    const thumbnail: ThumbnailGeoJSON = {
+      type: "FeatureCollection",
+      features: thumbnailGeometries.map((geom, i) => ({
+        type: "Feature" as const,
+        id: i,
+        geometry: geom,
+        properties: propsPerDistrict[i]
       }))
     };
     // "Complete" means every base geounit is assigned to a real district —
     // i.e. nothing landed in the unassigned district (index 0).
     const isComplete = districtBlockIndices[0].length === 0;
-    return { districts, thumbnail: simplifyForThumbnail(districts), isComplete };
+    perfLog(
+      `[worker] mergeDistricts done in ${(performance.now() - t0).toFixed(0)}ms ` +
+        `(${numberOfDistricts} districts, ${numBlocks} blocks${fromCache ? ", geom cached" : ""})`
+    );
+    return { districts, thumbnail, isComplete };
   },
   // Dissolve the entire region into a single MultiPolygon by assigning every
   // block to district 1 and running the boundary stitcher. Used to build an

@@ -15,9 +15,11 @@ import { type MultiPolygon } from "geojson";
 import { type CtopoClient, merge, neighbors } from "cloud-topo";
 import { type Contiguity, type DistrictsDefinition, type GeoUnitHierarchy } from "./entities";
 
-// TEMP perf instrumentation — broadcast to the same channel the
-// ctopo client uses; main thread mirrors it to the page console.
-// Remove after texas perf investigation.
+// Per-stage boundary timing. Posted to the same BroadcastChannel the
+// ctopo client and worker use; the main-thread listener filters this
+// out by default (only `[worker]` summary lines reach the page
+// console) — relax the filter in worker-functions.ts when you need
+// these timings.
 const _perfChannel =
   typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel("ctopo-perf");
 function perfLog(msg: string): void {

@@ -23,11 +23,16 @@ const worker = Comlink.wrap<WorkerFunctions>(
   new Worker(new URL("./worker.ts", import.meta.url), { type: "module" })
 );
 
-// TEMP perf instrumentation — mirror worker/ctopo BroadcastChannel
-// messages onto the page console. Remove after texas perf.
+// Mirror worker BroadcastChannel summary messages onto the page
+// console (worker `console.log` shows up in a separate dev-tools tab).
+// Per-fetch / per-decompress chatter from cloud-topo and boundary.ts
+// also lands on this channel; drop it here so the console shows just
+// one summary line per merge — relax the filter when you need deeper
+// perf data.
 if (typeof BroadcastChannel !== "undefined") {
   const ch = new BroadcastChannel("ctopo-perf");
   ch.onmessage = (e: MessageEvent<string>) => {
+    if (!e.data.startsWith("[worker]")) return;
     // eslint-disable-next-line no-console
     console.log(e.data);
   };

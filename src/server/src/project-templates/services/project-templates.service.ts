@@ -15,6 +15,7 @@ import {
   ProjectId,
   ProjectTemplateId
 } from "../../../../shared/entities";
+import { decode } from "../../../../shared/compress";
 import { Organization } from "../../organizations/entities/organization.entity";
 import { Project } from "../../projects/entities/project.entity";
 import { thumbnailUrl } from "../../projects/services/projects.service";
@@ -49,10 +50,9 @@ export class ProjectTemplatesService extends TypeOrmCrudService<ProjectTemplate>
     // CSV export. The per-district metrics (contiguity, compactness,
     // demographics, voting) are stored client-computed on projects.districtProperties.
     type Row = Omit<ProjectExportRow, "districtProperties"> & {
-      // simple-json is serialized as text in the database; TypeORM parses it
-      // back into an array when read as an entity, but raw SELECT returns it
-      // unparsed.
-      readonly districtProperties: string | readonly DistrictProperties[] | null;
+      // Raw SELECT returns the column as text; we decode via shared/compress
+      // (handles both gz1:-encoded and legacy raw-JSON values).
+      readonly districtProperties: string | null;
     };
     const builder = this.repo
       .createQueryBuilder("projectTemplate")
@@ -80,13 +80,14 @@ export class ProjectTemplatesService extends TypeOrmCrudService<ProjectTemplate>
       .addSelect("projects.district_properties", "districtProperties")
       .orderBy("projects.name");
     const rows = await builder.getRawMany<Row>();
-    return rows.map(({ districtProperties, ...rest }) => ({
-      ...rest,
-      districtProperties:
-        typeof districtProperties === "string"
-          ? (JSON.parse(districtProperties) as readonly DistrictProperties[])
-          : (districtProperties ?? [])
-    }));
+    return Promise.all(
+      rows.map(async ({ districtProperties, ...rest }) => ({
+        ...rest,
+        districtProperties: districtProperties
+          ? await decode<readonly DistrictProperties[]>(districtProperties)
+          : []
+      }))
+    );
   }
 
   async findAdminOrgProjects(slug: string): Promise<ProjectTemplate[]> {

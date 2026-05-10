@@ -11,6 +11,7 @@ import { Chamber } from "../../../server/src/chambers/entities/chamber.entity";
 import { Project } from "../../../server/src/projects/entities/project.entity";
 import { User } from "../../../server/src/users/entities/user.entity";
 import { type GeoUnitHierarchy } from "../../../shared/entities";
+import { encode } from "../../../shared/compress";
 import {
   buildSplitBlockMap,
   expandBlockToDistrict,
@@ -240,7 +241,7 @@ export default class ImportBefs extends Command {
           project.name = projectName;
           project.numberOfDistricts = maxDistrict;
           project.regionConfig = regionConfig;
-          project.districtsDefinition = districtsDefinition;
+          project.districtsDefinition = await encode(districtsDefinition);
           project.lockedDistricts = new Array(maxDistrict).fill(false);
           project.numberOfMembers = new Array(maxDistrict).fill(1);
           project.populationDeviation = 5;

@@ -10,6 +10,7 @@ import { RegionConfig } from "../../../server/src/region-configs/entities/region
 import { Project } from "../../../server/src/projects/entities/project.entity";
 import { User } from "../../../server/src/users/entities/user.entity";
 import { type GeoUnitHierarchy } from "../../../shared/entities";
+import { encode } from "../../../shared/compress";
 import { getObject, s3Options } from "../../../server/src/common/functions";
 
 const s3 = new S3Client({});
@@ -86,7 +87,7 @@ export default class CreateRandomProjects extends Command {
       project.name = `Project ${i} ${region.regionCode}`;
       project.numberOfDistricts = numberOfDistricts;
       project.regionConfig = region;
-      project.districtsDefinition = districtsDefinition;
+      project.districtsDefinition = await encode(districtsDefinition);
       // Districts GeoJSON will be computed client-side on first open
       project.lockedDistricts = lockedDistricts;
       project.numberOfMembers = numberOfMembers;

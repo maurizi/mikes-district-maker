@@ -11,9 +11,19 @@ import { createProject } from "../api";
 import { type WriteResource } from "../resource";
 import store from "../store";
 
+// Mirrors the server-side cap in CreateProjectDto. Even fully-coherent
+// 1000-district TX maps fit comfortably under DSQL's 1 MiB text cap after
+// gzip+base64 (see src/shared/compress.ts).
+const MAX_NUMBER_OF_DISTRICTS = 1000;
+
 const validate = (form: ProjectForm): ValidForm | InvalidForm => {
   const { numberOfDistricts, regionConfigId, chamberId, name } = form;
-  return name && name.trim() !== "" && !Number.isNaN(numberOfDistricts) && regionConfigId !== null
+  return name &&
+    name.trim() !== "" &&
+    !Number.isNaN(numberOfDistricts) &&
+    numberOfDistricts >= 1 &&
+    numberOfDistricts <= MAX_NUMBER_OF_DISTRICTS &&
+    regionConfigId !== null
     ? {
         name,
         numberOfDistricts,

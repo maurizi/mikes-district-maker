@@ -11,6 +11,7 @@ import { createDataSource } from "../lib/dbUtils";
 import { Project } from "../../../server/src/projects/entities/project.entity";
 import {
   type DistrictProperties,
+  type DistrictsDefinition,
   type DistrictsGeoJSON,
   type GeoUnitHierarchy,
   type IStaticMetadata,
@@ -25,6 +26,7 @@ import {
   makeRangeFetcher
 } from "cloud-topo";
 import { buildBlockAssignment, computeDistrictBoundaries } from "../../../shared/boundary";
+import { decode, encode } from "../../../shared/compress";
 import { getVoting } from "../../../shared/functions";
 import { simplifyForThumbnail } from "../../../shared/thumbnail";
 
@@ -623,8 +625,9 @@ async function loadRegionData(keyPrefix: string): Promise<RegionData> {
 // fresh and overwrites these with full data.
 async function buildThumbnail(project: Project, region: RegionData): Promise<ThumbnailGeoJSON> {
   const baseLayer = region.staticMetadata.geoLevelHierarchy[0].id;
+  const districtsDefinition = await decode<DistrictsDefinition>(project.districtsDefinition);
   const assignment = buildBlockAssignment(
-    project.districtsDefinition,
+    districtsDefinition,
     region.geoUnitHierarchy,
     region.numBlocks
   );
@@ -864,7 +867,9 @@ export default class BackfillThumbnails extends Command {
                 }`
               );
             } else {
-              await projectRepo.update(project.id, { districtProperties });
+              await projectRepo.update(project.id, {
+                districtProperties: await encode(districtProperties)
+              });
               if (squarePng && ogPng && bucket) {
                 await Promise.all([
                   s3.send(

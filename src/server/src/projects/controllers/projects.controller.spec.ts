@@ -50,8 +50,9 @@ describe("ProjectsController", () => {
     planscoreUrl: ""
   };
   /* eslint-disable functional/immutable-data */
-  // @ts-ignore
-  project.districtsDefinition = [0, 1, 2];
+  // Stored as text per Project entity; use raw-JSON form so the
+  // findBlankProjectIds [1-9] regex still recognizes the assignments.
+  project.districtsDefinition = JSON.stringify([0, 1, 2]);
   /* eslint-enable */
 
   beforeEach(async () => {

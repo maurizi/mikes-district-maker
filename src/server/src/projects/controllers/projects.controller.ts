@@ -42,13 +42,13 @@ import {
 } from "../../../../shared/constants";
 import { S3Client } from "@aws-sdk/client-s3";
 import type {
-  DistrictProperties,
   DistrictsDefinition,
   GeoUnitHierarchy,
   IStaticMetadata,
   ProjectId,
   PublicUserProperties
 } from "../../../../shared/entities";
+import { decode } from "../../../../shared/compress";
 import { fetchCachedJson } from "../../common/functions";
 import { ProjectVisibility } from "../../../../shared/constants";
 
@@ -68,7 +68,7 @@ import axios from "axios";
 import {
   getDemographicsMetricFields,
   getVotingMetricFields,
-  isBlankDistrictsDefinition
+  isBlankEncodedDistrictsDefinition
 } from "../../../../shared/functions";
 import { ProjectTemplatesService } from "../../project-templates/services/project-templates.service";
 import { ProjectTemplate } from "../../project-templates/entities/project-template.entity";
@@ -226,14 +226,17 @@ export class ProjectsController implements CrudController<Project> {
     // The duplicate flow feeds a Project entity through this helper, so
     // districtProperties may arrive as null rather than absent.
     dto: Omit<CreateProjectDto, "districtProperties"> & {
-      readonly districtProperties?: readonly DistrictProperties[] | null;
+      readonly districtProperties?: string | null;
     },
     districtsLength: number,
     regionConfig: RegionConfig,
     req: CrudRequest
   ) {
-    // Districts definition is optional. Use it if supplied, otherwise use all-unassigned.
-    const districtsDefinition = dto.districtsDefinition || new Array(districtsLength).fill(0);
+    // Districts definition is optional. Use it if supplied, otherwise use an
+    // all-unassigned default. Stored as raw JSON (not gz1:-encoded) so the
+    // findBlankProjectIds [1-9] regex still classifies it as blank.
+    const districtsDefinition =
+      dto.districtsDefinition || JSON.stringify(new Array(districtsLength).fill(0));
     const lockedDistricts = new Array(dto.numberOfDistricts).fill(false);
     const numberOfMembers = dto.numberOfMembers || new Array(dto.numberOfDistricts).fill(1);
     return {
@@ -289,7 +292,9 @@ export class ProjectsController implements CrudController<Project> {
 
     try {
       const projectCopy = await this.service.save(
-        this.formatCreateProjectDto(dto, dto.districtsDefinition.length, project.regionConfig, req)
+        // districtsLength is unused when dto.districtsDefinition is set, which
+        // it always is here (we just spread an existing project). Pass 0.
+        this.formatCreateProjectDto(dto, 0, project.regionConfig, req)
       );
       await this.copyReferenceLayers(
         projectCopy,
@@ -399,7 +404,8 @@ export class ProjectsController implements CrudController<Project> {
         return walkCsv(subDefn as DistrictsDefinition | number, h);
       });
     }
-    const csvRows = walkCsv(project.districtsDefinition, hierarchy);
+    const districtsDefinition = await decode<DistrictsDefinition>(project.districtsDefinition);
+    const csvRows = walkCsv(districtsDefinition, hierarchy);
 
     return stringify(csvRows, {
       header: true,
@@ -560,7 +566,7 @@ export class ProjectsController implements CrudController<Project> {
   @UseGuards(OptionalJwtAuthGuard)
   async getOne(@Param("id") id: ProjectId, @ParsedRequest() req: CrudRequest): Promise<Project> {
     const project = await this.getProject(req, id);
-    const isBlank = isBlankDistrictsDefinition(project.districtsDefinition);
+    const isBlank = isBlankEncodedDistrictsDefinition(project.districtsDefinition);
     // eslint-disable-next-line functional/immutable-data
     return Object.assign(project, { thumbnailUrl: thumbnailUrl(project, isBlank) });
   }
@@ -618,10 +624,13 @@ export class ProjectsController implements CrudController<Project> {
       }
     }
 
+    // Both are the encoded text-column value. gzip output is deterministic
+    // for the same input, so string-equality correctly identifies "no
+    // change" saves.
     const dataWithDefinitions =
       existingProject &&
       dto.districtsDefinition &&
-      !_.isEqual(dto.districtsDefinition, existingProject.districtsDefinition)
+      dto.districtsDefinition !== existingProject.districtsDefinition
         ? {
             ...dto,
             regionConfigVersion: existingProject.regionConfig.version,
@@ -640,6 +649,8 @@ export class ProjectsController implements CrudController<Project> {
       ? { ...dataWithDefinitions }
       : { ...dataWithDefinitions, updatedDt: new Date() };
 
+    // Cast: dto.districtsDefinition is the encoded text string per
+    // UpdateProjectDto, but Project entity types it as DistrictsDefinition.
     return this.service.updateOne(req, {
       ...data,
       isFeatured: dto.visibility === ProjectVisibility.Private ? false : existingProject?.isFeatured
@@ -705,7 +716,7 @@ export class ProjectsController implements CrudController<Project> {
       districtsDefinition
     });
     // most template fields take precedence, but districtsDefinition should preferentially use the
-    // DTO data, to support imports w/ templates
+    // DTO data, to support imports w/ templates.
     const formdata = template
       ? {
           ...dto,

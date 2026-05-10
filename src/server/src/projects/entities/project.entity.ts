@@ -4,7 +4,6 @@
 import { Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
 
 import { ProjectVisibility } from "../../../../shared/constants";
-import type { DistrictProperties, DistrictsDefinition } from "../../../../shared/entities";
 import { RegionConfig } from "../../region-configs/entities/region-config.entity";
 import { Chamber } from "../../chambers/entities/chamber.entity";
 import { User } from "../../users/entities/user.entity";
@@ -46,23 +45,26 @@ export class Project {
   @Column({ name: "number_of_districts", type: "integer" })
   numberOfDistricts: number;
 
-  // DSQL stores JSON as text; simple-json serializes transparently.
+  // Stored as a compressed gzip+base64 blob with a "gz1:" prefix to fit under
+  // DSQL's 1 MiB text cap. Encode/decode via src/shared/compress.ts. Legacy
+  // rows (raw JSON) decode transparently. Server code that needs the parsed
+  // form decodes ad-hoc; most server flows treat it as opaque. Server-side
+  // defaults for brand-new projects intentionally store raw JSON of all-zeros
+  // so projects.service.findBlankProjectIds' [1-9] regex still works.
   @Column({
-    type: "simple-json",
+    type: "text",
     name: "districts_definition",
     nullable: true
   })
-  districtsDefinition: DistrictsDefinition;
+  districtsDefinition: string;
 
-  // Per-district properties (contiguity, compactness, demographics, voting)
-  // previously kept inside thumbnail.features[*].properties. Extracted so
-  // admin CSV export can read them without parsing geometry.
+  // Same gz1: encoding as districtsDefinition.
   @Column({
-    type: "simple-json",
+    type: "text",
     name: "district_properties",
     nullable: true
   })
-  districtProperties?: readonly DistrictProperties[] | null;
+  districtProperties?: string | null;
 
   // Whether every geounit is assigned to a district (i.e. the unassigned
   // district is empty). Used by the community-maps listing "completed" filter.

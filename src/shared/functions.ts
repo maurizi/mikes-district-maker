@@ -26,6 +26,17 @@ function isZero(node: GeoUnitCollection): boolean {
   return typeof node === "number" ? node === 0 : node.every(isZero);
 }
 
+// String-form blank check: works on both raw-JSON and gz1:-encoded values
+// stored in the project.districts_definition text column. Mirrors the
+// `district_definition !~ '[1-9]'` SQL regex used by findBlankProjectIds:
+// raw JSON of all zeros has no 1-9 digit; encoded values always contain at
+// least the "1" in the "gz1:" prefix; legacy non-blank raw JSON contains
+// district numbers (1+). Avoids decoding a multi-MiB blob just to check
+// blankness on the og/getOne paths.
+export function isBlankEncodedDistrictsDefinition(stored: string): boolean {
+  return !/[1-9]/.test(stored);
+}
+
 // Helper for finding all indices in an array buffer matching a value.
 // Note: mutation is used, because the union type of array buffers proved
 // too difficult to line up types for reduce or map/filter.

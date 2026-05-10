@@ -11,25 +11,25 @@ import {
   IsOptional,
   IsString,
   Max,
+  MaxLength,
   Min
 } from "class-validator";
 
 import { ProjectVisibility } from "../../../../shared/constants";
-import type {
-  DistrictProperties,
-  DistrictsDefinition,
-  UpdateProjectData
-} from "../../../../shared/entities";
+import { ENCODED_BLOB_MAX_LENGTH } from "./create-project.dto";
 
-export class UpdateProjectDto implements UpdateProjectData {
+export class UpdateProjectDto {
   @IsNotEmpty({ message: "Please enter a name for your project" })
   @IsOptional()
   readonly name?: string;
 
-  @IsArray()
-  @ArrayNotEmpty()
+  // Encoded gzip+base64 (or legacy raw JSON) text — see src/shared/compress.ts.
+  @IsString()
+  @MaxLength(ENCODED_BLOB_MAX_LENGTH, {
+    message: "Districts definition is too large to save"
+  })
   @IsOptional()
-  readonly districtsDefinition?: DistrictsDefinition;
+  readonly districtsDefinition?: string;
 
   @IsArray()
   @ArrayNotEmpty()
@@ -68,9 +68,12 @@ export class UpdateProjectDto implements UpdateProjectData {
   @IsOptional()
   readonly isComplete?: boolean;
 
-  @IsArray()
+  @IsString()
+  @MaxLength(ENCODED_BLOB_MAX_LENGTH, {
+    message: "District properties are too large to save"
+  })
   @IsOptional()
-  readonly districtProperties?: readonly DistrictProperties[];
+  readonly districtProperties?: string;
 
   @IsString()
   @IsOptional()

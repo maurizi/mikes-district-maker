@@ -7,7 +7,8 @@ import isUUID from "validator/lib/isUUID";
 
 import { ProjectVisibility } from "../../../../shared/constants";
 import type { DemographicCounts, DistrictProperties, ProjectId } from "../../../../shared/entities";
-import { isBlankDistrictsDefinition } from "../../../../shared/functions";
+import { decode } from "../../../../shared/compress";
+import { isBlankEncodedDistrictsDefinition } from "../../../../shared/functions";
 import { ProjectsService, thumbnailUrl } from "../services/projects.service";
 
 const SITE_NAME = "Mike's District Maker";
@@ -157,6 +158,13 @@ const describeProject = (project: ProjectForDescription): string => {
   return `Proposed ${project.regionConfig.name} map${byLine}: ${parts.join(" / ")} across ${project.numberOfDistricts} districts, based on the ${breakdown.year} presidential vote. Explore and share at ${SITE_NAME}.`;
 };
 
+const decodeDistrictProperties = async (
+  stored: string | null | undefined
+): Promise<readonly DistrictProperties[] | null> => {
+  if (!stored) return null;
+  return decode<readonly DistrictProperties[]>(stored);
+};
+
 @Controller("og/projects")
 export class OgController {
   constructor(private readonly projectsService: ProjectsService) {}
@@ -189,13 +197,14 @@ export class OgController {
       return renderOgHtml(fallbackFields(baseUrl, spaUrl));
     }
 
-    const isBlank = isBlankDistrictsDefinition(project.districtsDefinition);
+    const isBlank = isBlankEncodedDistrictsDefinition(project.districtsDefinition);
+    const districtProperties = await decodeDistrictProperties(project.districtProperties);
     return renderOgHtml({
       // Target 50–60 chars for og:title. Site name is emitted separately via
       // og:site_name so the title itself stays focused on the project.
       title: truncate(project.name, 60),
       // Target 110–160 chars for og:description.
-      description: describeProject(project),
+      description: describeProject({ ...project, districtProperties }),
       imageUrl: `${baseUrl}${thumbnailUrl(project, isBlank, "og")}`,
       canonicalUrl: spaUrl,
       spaUrl

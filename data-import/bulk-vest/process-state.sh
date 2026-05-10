@@ -167,14 +167,28 @@ fi
 S3_BUCKET="districtbuilder-dev-238046523378"
 S3_PREFIX="s3://${S3_BUCKET}/regions/US/${state_abbr}/"
 LATEST_VERSION=$(AWS_PROFILE=district-builder aws s3 ls "$S3_PREFIX" | tail -1 | awk '{print $2}')
+# Sort source is the prefix prod is currently serving (from states.csv,
+# populated from region_config in DSQL) — falling back to the latest S3
+# version if the column is blank (new state not yet published). Without
+# this the `aws s3 ls | tail -1` lookup picks up post-prod test prefixes
+# (e.g. TX has 2026-05-06 test uploads sitting on top of the
+# 2026-04-26 prod prefix), causing block ordering to diverge from
+# prod's geounit-hierarchy.json.
+INPUT_S3_DIR=""
+if [[ -n "${prod_key_prefix:-}" ]]; then
+  INPUT_S3_DIR="s3://${S3_BUCKET}/${prod_key_prefix}"
+elif [[ -n "$LATEST_VERSION" ]]; then
+  INPUT_S3_DIR="${S3_PREFIX}${LATEST_VERSION}"
+fi
 INPUT_S3_DIR_FLAG=""
 # SKIP_INPUT_S3=1 forces a fresh sort instead of reading the previous
 # version's block ordering off S3 — needed when the .ctopo format on
 # S3 is incompatible with the current encoder (e.g. an in-flight
 # format change). Stable arc-id ordering across rebuilds is lost for
 # this run; subsequent rebuilds re-establish it from the new file.
-if [[ -n "$LATEST_VERSION" && "${SKIP_INPUT_S3:-}" != "1" ]]; then
-  INPUT_S3_DIR_FLAG="--inputS3Dir ${S3_PREFIX}${LATEST_VERSION}"
+if [[ -n "$INPUT_S3_DIR" && "${SKIP_INPUT_S3:-}" != "1" ]]; then
+  INPUT_S3_DIR_FLAG="--inputS3Dir ${INPUT_S3_DIR}"
+  echo "  [$state_abbr] Sorting against ${INPUT_S3_DIR}"
 else
   echo "  [$state_abbr] WARNING: No existing S3 version found, proceeding without --inputS3Dir"
 fi
@@ -241,6 +255,33 @@ fi
 
 if [[ "$NO_PUBLISH" == "true" ]]; then
   echo "  [$state_abbr] NO_PUBLISH set, skipping publish/update and CSV status update. Done!"
+  exit 0
+fi
+
+# TODO(ctopo-deploy): one-shot path used to roll the new ctopo format
+# into prod by uploading *only* `region.ctopo` to the row's
+# `prod_key_prefix` from states.csv (i.e. the prefix the production
+# DSQL region_config row currently points at). Skips update-region so
+# the legacy static-metadata.json / geounit-hierarchy.json /
+# tiles.pmtiles already on prod are not overwritten — the new client
+# reads region.ctopo and ignores the legacy sidecars, while any
+# straggler old client tab still sees the original sidecars it
+# expects. Remove this branch once prod has been migrated and we go
+# back to full update-region / publish-region flows.
+if [[ "${CTOPO_ONLY_TO_PROD:-}" == "1" ]]; then
+  if [[ -z "${prod_key_prefix:-}" ]]; then
+    echo "  [$state_abbr] CTOPO_ONLY_TO_PROD: prod_key_prefix is empty in CSV, skipping"
+    exit 0
+  fi
+  CTOPO_LOCAL="dev-data/output/${state_abbr}/region.ctopo"
+  if [[ ! -f "$CTOPO_LOCAL" ]]; then
+    echo "  [$state_abbr] CTOPO_ONLY_TO_PROD: $CTOPO_LOCAL missing, skipping"
+    exit 1
+  fi
+  CTOPO_DEST="s3://${S3_BUCKET}/${prod_key_prefix}region.ctopo"
+  echo "  [$state_abbr] CTOPO_ONLY_TO_PROD: uploading region.ctopo -> ${CTOPO_DEST}"
+  AWS_PROFILE=district-builder aws s3 cp "$CTOPO_LOCAL" "$CTOPO_DEST"
+  echo "  [$state_abbr] Done!"
   exit 0
 fi
 

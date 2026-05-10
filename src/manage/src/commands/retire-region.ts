@@ -11,6 +11,7 @@ import { ProjectTemplate } from "../../../server/src/project-templates/entities/
 import { RegionConfig } from "../../../server/src/region-configs/entities/region-config.entity";
 import { type DistrictsDefinition, type GeoUnitHierarchy } from "../../../shared/entities";
 import { buildSplitBlockMap } from "../../../shared/csv-import";
+import { decode, encode } from "../../../shared/compress";
 
 const s3 = new S3Client({});
 
@@ -336,8 +337,9 @@ export default class RetireRegion extends Command {
 
       for (const project of projects) {
         try {
+          const oldDef = await decode<DistrictsDefinition>(project.districtsDefinition);
           const { newDefinition, missingGeoIds, conflictedNewIds } = migrateDefinition(
-            project.districtsDefinition,
+            oldDef,
             oldRegion,
             newRegion
           );
@@ -371,15 +373,12 @@ export default class RetireRegion extends Command {
               `  ${project.name} (${project.id}): would migrate to target (and clear districtProperties)`
             );
           } else {
-            // Cast to any: TypeORM's QueryDeepPartialEntity recursively maps
-            // every property, which blows up TS instantiation depth on the
-            // recursive DistrictsDefinition type.
             await projectRepo.update(project.id, {
-              districtsDefinition: newDefinition,
+              districtsDefinition: await encode(newDefinition),
               regionConfigId: target.id,
               regionConfigVersion: target.version,
               districtProperties: null
-            } as any);
+            });
             this.log(`  ${project.name} (${project.id}): migrated`);
           }
           migrated++;

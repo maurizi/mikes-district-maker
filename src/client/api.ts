@@ -8,6 +8,8 @@ import memoize from "memoizee";
 
 import {
   type CreateProjectData,
+  type DistrictProperties,
+  type DistrictsDefinition,
   type IOrganization,
   type IProject,
   type IProjectTemplateWithProjects,
@@ -31,6 +33,7 @@ import {
   type UpdateReferenceLayer
 } from "../shared/entities";
 import { PLANSCORE_POLL_MS, PLANSCORE_POLL_MAX_TRIES } from "../shared/constants";
+import { decode, encode } from "../shared/compress";
 import {
   type DistrictsGeoJSON,
   type DynamicProjectData,
@@ -76,12 +79,54 @@ function saveJWT(response: AxiosResponse<JWT>): JWT {
   return jwt;
 }
 
-function formatProject(project: IProject): IProject {
+// Wire shape: districtsDefinition / districtProperties are opaque text
+// (gzip+base64 with a "gz1:" magic, or legacy raw JSON for unmigrated rows;
+// see src/shared/compress.ts). The decoded shape lives on IProject so the
+// rest of the client app sees parsed arrays.
+type RawProject = Omit<IProject, "districtsDefinition" | "districtProperties"> & {
+  readonly districtsDefinition: string;
+  readonly districtProperties?: string;
+};
+
+async function formatProject(raw: RawProject): Promise<IProject> {
+  const districtsDefinition = await decode<DistrictsDefinition>(raw.districtsDefinition);
+  const districtProperties = raw.districtProperties
+    ? await decode<readonly DistrictProperties[]>(raw.districtProperties)
+    : undefined;
   return {
-    ...project,
-    createdDt: new Date(project.createdDt),
-    updatedDt: new Date(project.updatedDt),
-    submittedDt: project.submittedDt ? new Date(project.submittedDt) : undefined
+    ...raw,
+    createdDt: new Date(raw.createdDt),
+    updatedDt: new Date(raw.updatedDt),
+    submittedDt: raw.submittedDt ? new Date(raw.submittedDt) : undefined,
+    districtsDefinition,
+    districtProperties
+  };
+}
+
+// Encodes the two blob fields in-place if present, leaving everything else
+// untouched. Returned object is wire-shape — the two fields become strings.
+async function encodeProjectFields<
+  T extends {
+    readonly districtsDefinition?: DistrictsDefinition;
+    readonly districtProperties?: readonly DistrictProperties[];
+  }
+>(
+  data: T
+): Promise<
+  Omit<T, "districtsDefinition" | "districtProperties"> & {
+    readonly districtsDefinition?: string;
+    readonly districtProperties?: string;
+  }
+> {
+  const { districtsDefinition, districtProperties, ...rest } = data;
+  return {
+    ...rest,
+    ...(districtsDefinition !== undefined
+      ? { districtsDefinition: await encode(districtsDefinition) }
+      : {}),
+    ...(districtProperties !== undefined
+      ? { districtProperties: await encode(districtProperties) }
+      : {})
   };
 }
 
@@ -167,10 +212,11 @@ export async function resetPassword(token: string, password: string): Promise<vo
 }
 
 export async function createProject(data: CreateProjectData): Promise<IProject> {
+  const encoded = await encodeProjectFields(data);
   return new Promise((resolve, reject) => {
     apiAxios
-      .post("/api/projects", data)
-      .then(response => resolve(formatProject(response.data)))
+      .post("/api/projects", encoded)
+      .then(response => formatProject(response.data).then(resolve, reject))
       .catch(error => reject(error.response?.data || error));
   });
 }
@@ -179,7 +225,7 @@ export async function copyProject(id: ProjectId): Promise<IProject> {
   return new Promise((resolve, reject) => {
     apiAxios
       .post(`/api/projects/${id}/duplicate`)
-      .then(response => resolve(formatProject(response.data)))
+      .then(response => formatProject(response.data).then(resolve, reject))
       .catch(error => reject(error.response?.data || error));
   });
 }
@@ -188,7 +234,7 @@ async function fetchProject(id: ProjectId): Promise<IProject> {
   return new Promise((resolve, reject) => {
     apiAxios
       .get(`/api/projects/${id}`)
-      .then(response => resolve(formatProject(response.data)))
+      .then(response => formatProject(response.data).then(resolve, reject))
       .catch(error =>
         reject({ errorMessage: error.response.data, statusCode: error.response.status })
       );
@@ -261,10 +307,11 @@ export async function patchProject(
   id: ProjectId,
   projectData: Partial<UpdateProjectData>
 ): Promise<IProject> {
+  const encoded = await encodeProjectFields(projectData);
   return new Promise((resolve, reject) => {
     apiAxios
-      .patch(`/api/projects/${id}`, projectData)
-      .then(response => resolve(formatProject(response.data)))
+      .patch(`/api/projects/${id}`, encoded)
+      .then(response => formatProject(response.data).then(resolve, reject))
       .catch(error => reject(error.response?.data || error));
   });
 }
@@ -510,7 +557,7 @@ export async function submitProject(projectId: ProjectId): Promise<IProject> {
   return new Promise((resolve, reject) => {
     apiAxios
       .post(`/api/projects/${projectId}/submit`)
-      .then(response => resolve(formatProject(response.data)))
+      .then(response => formatProject(response.data).then(resolve, reject))
       .catch(error => {
         reject(error.message);
       });

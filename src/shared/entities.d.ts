@@ -222,6 +222,13 @@ export type VotingMetricField = `dem${string}` | `rep${string}` | `other${string
 export type MetricsList = readonly (readonly [string, string])[];
 export type VotingMetricsList = readonly (readonly [string, VotingMetricField])[];
 
+// districtsDefinition / districtProperties are stored as opaque text in
+// DSQL (gzip+base64 with a "gz1:" prefix; legacy raw JSON also supported —
+// see src/shared/compress.ts). Server entities and the wire shape use the
+// `string` storage type. The client API decodes at the boundary and the
+// rest of the client (and server code that needs the parsed array) decodes
+// ad-hoc. IProject overrides the field to the decoded app shape because
+// it's the type the client redux store + UI components consume.
 export interface ProjectTemplateFields {
   readonly name: string;
   readonly regionConfig: IRegionConfig;
@@ -230,14 +237,14 @@ export interface ProjectTemplateFields {
   readonly populationDeviation: number;
   readonly pinnedMetricFields: readonly string[];
   readonly numberOfMembers: readonly number[];
-  readonly districtsDefinition: DistrictsDefinition;
+  readonly districtsDefinition: string;
 }
 
 export type ProjectId = string;
 
 export type ReferenceLayerId = string;
 
-export type IProject = ProjectTemplateFields & {
+export type IProject = Omit<ProjectTemplateFields, "districtsDefinition"> & {
   readonly id: ProjectId;
   readonly createdDt: Date;
   readonly updatedDt: Date;
@@ -252,6 +259,10 @@ export type IProject = ProjectTemplateFields & {
   readonly submittedDt?: Date;
   readonly isComplete: boolean;
   readonly thumbnailUrl?: string;
+  // Decoded app shape — formatProject() in src/client/api.ts decodes the
+  // wire string into this on receive. Server entities (which model the
+  // storage shape) still use `string` for both fields.
+  readonly districtsDefinition: DistrictsDefinition;
   readonly districtProperties?: readonly DistrictProperties[];
 };
 

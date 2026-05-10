@@ -3,7 +3,7 @@
 
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 
-import { DistrictsDefinition, IProjectTemplateWithProjects } from "../../../../shared/entities";
+import { IProjectTemplateWithProjects } from "../../../../shared/entities";
 import { Chamber } from "../../chambers/entities/chamber.entity";
 import { Organization } from "../../organizations/entities/organization.entity";
 import { RegionConfig } from "../../region-configs/entities/region-config.entity";
@@ -45,12 +45,14 @@ export class ProjectTemplate implements IProjectTemplateWithProjects {
   @Column({ name: "number_of_districts", type: "integer" })
   numberOfDistricts: number;
 
+  // See Project entity: stored as gz1:-encoded text. Storage shape is
+  // string in both ProjectTemplateFields and the entity.
   @Column({
-    type: "simple-json",
+    type: "text",
     name: "districts_definition",
     nullable: true
   })
-  districtsDefinition: DistrictsDefinition;
+  districtsDefinition: string;
 
   @Column({ type: "character varying" })
   description: string;

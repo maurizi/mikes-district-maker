@@ -1,10 +1,31 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // © 2026 Michael Maurizi Jr.
 
+import { execSync } from "node:child_process";
+
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import svgr from "vite-plugin-svgr";
 import mkcert from "vite-plugin-mkcert";
+
+// Build-time identifier injected into the client so we can `?v=`-bust
+// browser caches for assets that don't already carry their own version
+// in the URL (currently just the basemap PMTiles). BUILD_VERSION env var
+// wins so CI can pin it explicitly; otherwise fall back to the short
+// commit SHA, and finally a timestamp if git isn't available (e.g.
+// building inside a stripped Docker context).
+const BUILD_VERSION = ((): string => {
+  if (process.env.BUILD_VERSION) return process.env.BUILD_VERSION;
+  try {
+    return execSync("git rev-parse --short HEAD", {
+      stdio: ["ignore", "pipe", "ignore"]
+    })
+      .toString()
+      .trim();
+  } catch {
+    return Date.now().toString();
+  }
+})();
 
 // Hand the client an absolute CloudFront origin so it skips the slow
 // Vite Node proxy (~14× slower for big Range GETs). CloudFront also
@@ -76,7 +97,8 @@ export default defineConfig(({ command }) => ({
     // back to self.location.origin (same-origin CloudFront).
     __REGION_ARTIFACTS_ORIGIN__: JSON.stringify(
       command === "serve" ? DEV_REGION_ARTIFACTS_ORIGIN : ""
-    )
+    ),
+    __BUILD_VERSION__: JSON.stringify(BUILD_VERSION)
   },
   build: {
     outDir: "build",

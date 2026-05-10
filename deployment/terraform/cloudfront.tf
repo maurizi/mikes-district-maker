@@ -24,7 +24,7 @@ resource "aws_cloudfront_function" "cors_preflight" {
 
 resource "aws_cloudfront_response_headers_policy" "cors_range" {
   name    = "${var.project}-${var.environment}-cors-range"
-  comment = "CORS for cross-origin Range requests (dev, etc.)"
+  comment = "CORS + long-cache for versioned region artifacts and basemap"
 
   cors_config {
     access_control_allow_origins {
@@ -42,6 +42,20 @@ resource "aws_cloudfront_response_headers_policy" "cors_range" {
     access_control_allow_credentials = false
     access_control_max_age_sec       = 86400
     origin_override                  = true
+  }
+
+  # Every URL routed through this policy is content-addressed: /regions/*
+  # paths embed the regionConfig timestamp, and /basemap/us.pmtiles is fetched
+  # with a ?v=<build-version> cache-buster. Tell the browser these bytes
+  # never change so reloads come out of disk cache instead of re-fetching
+  # ~hundreds of MB of byte-ranges from CloudFront on every page load.
+  # `override` so we beat any future S3 metadata that might set a stale value.
+  custom_headers_config {
+    items {
+      header   = "Cache-Control"
+      value    = "public, max-age=31536000, immutable"
+      override = true
+    }
   }
 }
 
@@ -211,11 +225,11 @@ resource "aws_cloudfront_distribution" "main" {
   # the whole archive at the edge would corrupt range-offset math. Listed
   # first so it wins over /regions/* for tiles.pmtiles fetches.
   ordered_cache_behavior {
-    path_pattern           = "*.pmtiles"
-    target_origin_id       = "s3-region-artifacts"
-    viewer_protocol_policy = "redirect-to-https"
-    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
-    cached_methods         = ["GET", "HEAD", "OPTIONS"]
+    path_pattern               = "*.pmtiles"
+    target_origin_id           = "s3-region-artifacts"
+    viewer_protocol_policy     = "redirect-to-https"
+    allowed_methods            = ["GET", "HEAD", "OPTIONS"]
+    cached_methods             = ["GET", "HEAD", "OPTIONS"]
     compress                   = false
     cache_policy_id            = "658327ea-f89d-4fab-a63d-7e88639e58f6"
     response_headers_policy_id = aws_cloudfront_response_headers_policy.cors_range.id
@@ -254,11 +268,11 @@ resource "aws_cloudfront_distribution" "main" {
   # /regions/.../tiles.pmtiles are picked off by the *.pmtiles behavior above
   # before reaching this one.
   ordered_cache_behavior {
-    path_pattern           = "/regions/*"
-    target_origin_id       = "s3-region-artifacts"
-    viewer_protocol_policy = "redirect-to-https"
-    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
-    cached_methods         = ["GET", "HEAD", "OPTIONS"]
+    path_pattern               = "/regions/*"
+    target_origin_id           = "s3-region-artifacts"
+    viewer_protocol_policy     = "redirect-to-https"
+    allowed_methods            = ["GET", "HEAD", "OPTIONS"]
+    cached_methods             = ["GET", "HEAD", "OPTIONS"]
     compress                   = true
     cache_policy_id            = "658327ea-f89d-4fab-a63d-7e88639e58f6"
     response_headers_policy_id = aws_cloudfront_response_headers_policy.cors_range.id

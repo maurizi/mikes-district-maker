@@ -13,9 +13,15 @@ maplibregl.addProtocol("pmtiles", protocol.tile);
 // fronts the S3 object at /basemap/us.pmtiles. In dev,
 // __REGION_ARTIFACTS_ORIGIN__ (injected by vite.config.ts) points the
 // fetch at CloudFront directly so it bypasses the slow Node proxy.
+//
+// `?v=<build-version>` makes the URL unique per deploy so the browser
+// disk cache stays valid until we ship new code. CloudFront's cache key
+// ignores query strings (CachingOptimized policy), so all builds hit the
+// same edge cache entry for the (very stable) 12.6 GB PMTiles object.
 declare const __REGION_ARTIFACTS_ORIGIN__: string;
+declare const __BUILD_VERSION__: string;
 const PMTILES_BASE = __REGION_ARTIFACTS_ORIGIN__ || window.location.origin;
-const PMTILES_URL = `${PMTILES_BASE}/basemap/us.pmtiles`;
+const PMTILES_URL = `${PMTILES_BASE}/basemap/us.pmtiles?v=${__BUILD_VERSION__}`;
 
 const SPRITE_BASE = "https://protomaps.github.io/basemaps-assets/sprites/v4";
 

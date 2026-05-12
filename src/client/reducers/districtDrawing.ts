@@ -378,14 +378,19 @@ const districtDrawingReducer = (
           );
     }
     case getType(saveDistrictsDefinition):
-      return loop(
-        // Save an effect function which takes the appropriate districts definition so that we can
-        // undo/redo saving of the districts definition with the correct state snapshot.
-        pushEffect(state, (state: UndoableState) =>
-          Cmd.action(updateDistrictsDefinition(state.districtsDefinition))
-        ),
-        Cmd.action(updateDistrictsDefinition(null))
-      );
+      // Drop dispatches while a save is in flight — two concurrent PATCHes
+      // on the same project collide as a DSQL OCC abort (SQLSTATE 40001).
+      // Both the Accept button and the "g" shortcut funnel through here.
+      return state.saving === "saving"
+        ? state
+        : loop(
+            // Save an effect function which takes the appropriate districts definition so that we can
+            // undo/redo saving of the districts definition with the correct state snapshot.
+            pushEffect(state, (state: UndoableState) =>
+              Cmd.action(updateDistrictsDefinition(state.districtsDefinition))
+            ),
+            Cmd.action(updateDistrictsDefinition(null))
+          );
     default:
       return state as never;
   }

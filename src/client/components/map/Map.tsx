@@ -78,6 +78,7 @@ import {
   DISTRICTS_EVALUATE_LABELS_LAYER_ID,
   DISTRICTS_EQUAL_POPULATION_CHOROPLETH_LAYER_ID,
   DISTRICTS_EVALUATE_OUTLINE_LAYER_ID,
+  DISTRICTS_FIND_OUTLINE_LAYER_ID,
   DISTRICTS_HOVER_OUTLINE_LAYER_ID,
   getCompactnessStops,
   getCompactnessLabels,
@@ -399,6 +400,16 @@ const DistrictsMap = ({
   // that modify map layers to re-run against the fresh style.
   const [styleVersion, setStyleVersion] = useState(0);
 
+  // geometryVersion of the geojson last fed to the districts source via
+  // setData. Feeding maplibre a state-sized districts FC costs ~1.2s of
+  // main-thread serialize, and a single project load triggers several
+  // merges that produce identical geometry (notably ProjectScreen's
+  // prefetchedAllVoting re-merge). When the new geojson's geometryVersion
+  // matches this, the districts setData is skipped — the per-feature loop
+  // still refreshes feature-state + redux props, just not the geometry.
+  // Reset to undefined on a style reload (the source is recreated empty).
+  const lastSentGeometryVersionRef = useRef<string | undefined>(undefined);
+
   // While a geolevel has tiles up to the maxZoom level, we want the enable the user to zoom in
   // beyond that zoom level. Using lower zoom tiles at higher zoom levels is called overzoom.
   // The ability to zoom this far in isn't needed in the typical use-case (+4 is fine for that),
@@ -647,28 +658,95 @@ const DistrictsMap = ({
     // Reload handlers when selected district changes
   }, [selectedDistrictId, selectionTool, downHandler]);
 
+  // @ts-ignore
+  const generateLabelsGeojson = (geojson: DistrictsGeoJSON): Labels => {
+    const labels: Label[] = geojson.features
+      .filter((feature: DistrictGeoJSON) => {
+        // @ts-ignore
+        return feature.geometry.coordinates.length > 0 && feature.id !== 0;
+      })
+      .map((feature: DistrictGeoJSON) => {
+        // @ts-ignore
+        return {
+          id: feature.id,
+          coords: feature.geometry.coordinates
+            .flat(1)
+            .reduce((prev: Position[], current: Position[]) => {
+              // If a district contains multiple polygons, label the polygon with the most vertices
+              return prev.length > current.length ? prev : current;
+            })
+        };
+      })
+      .map(({ id, coords }) => {
+        return {
+          type: "Feature",
+          properties: { id },
+          geometry: {
+            type: "Point",
+            coordinates: polylabel([coords], 0.5)
+          }
+        };
+      });
+
+    return {
+      type: "FeatureCollection",
+      features: labels
+    };
+  };
+
+  // A style reload recreates the districts source empty, so the next
+  // districts effect must re-send even when the geometry is unchanged.
+  // This runs before the districts effect below (effect order = source
+  // order), so the invalidation lands before the skip check reads it.
+  useEffect(() => {
+    lastSentGeometryVersionRef.current = undefined;
+  }, [styleVersion]);
+
+  // Scale the district outline layers' width by findMenuOpen (1× open, 2×
+  // closed). The factor is uniform across districts, and maplibre forbids
+  // feature-state inside a zoom curve, so it's a layer-level paint update
+  // rather than per-feature state. Re-applied on styleVersion (a basemap
+  // swap resets paint props on re-added layers).
+  useEffect(() => {
+    if (!map) {
+      return;
+    }
+    const factor = findMenuOpen ? 1 : 2;
+    for (const layerId of [
+      DISTRICTS_FIND_OUTLINE_LAYER_ID,
+      DISTRICTS_HOVER_OUTLINE_LAYER_ID,
+      DISTRICTS_SELECTED_OUTLINE_LAYER_ID
+    ]) {
+      map.getLayer(layerId) &&
+        map.setPaintProperty(layerId, "line-width", [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          6,
+          2 * factor,
+          14,
+          5 * factor
+        ]);
+    }
+  }, [map, findMenuOpen, styleVersion]);
+
   // Update districts source when geojson is fetched or find type is changed
   useEffect(() => {
     const devPopKey = getDeviationPopulationKey(populationKey);
     const popPerRep = getPopulationPerRepresentative(geojson, project.numberOfMembers, devPopKey);
 
     geojson.features.forEach((feature, id) => {
-      // Add a color property to the geojson, so it can be used for styling
-      const districtColor = getDistrictColor(id);
-
       feature.properties.id = id;
 
-      feature.properties.findOutlineColor =
+      const findOutlineColor =
         findMenuOpen &&
         ((findTool === FindTool.Unassigned && id === 0) ||
           (findTool === FindTool.NonContiguous &&
             id !== 0 &&
             feature.geometry.coordinates.length >= 2))
-          ? // Set pink outline to make unassigned/non-contiguous districts stand out
+          ? // Pink outline makes unassigned/non-contiguous districts stand out
             "#F25DFE"
           : "transparent";
-
-      feature.properties.color = districtColor;
 
       // The population goal for the unassigned district is 0,
       // so it's deviation is equal to its population
@@ -732,13 +810,46 @@ const DistrictsMap = ({
             : "ffffff";
       }
 
-      feature.properties.outlineWidthScaleFactor = findMenuOpen ? 1 : 2;
+      // Mirror the map-driving props onto maplibre feature-state. The
+      // district fill, find outline, and evaluate choropleth layers all
+      // read these via ["feature-state", …], so re-applying them here lets
+      // a re-merge that didn't change geometry (find-menu toggle, evaluate
+      // metric switch, prefetchedAllVoting) skip the ~1.2s districts
+      // setData entirely. The feature.properties writes above stay — the
+      // evaluate detail panels and sidebar still read those from redux.
+      // setFeatureState merges keys, so the selected/locked/split state set
+      // by other effects is left intact.
+      map &&
+        map.setFeatureState(featureStateDistricts(id), {
+          color: getDistrictColor(id),
+          findOutlineColor,
+          compactness: feature.properties.compactness,
+          contiguity: feature.properties.contiguity,
+          pvi: feature.properties.pvi,
+          percentDeviation: feature.properties.percentDeviation,
+          majorityRaceFill: feature.properties.majorityRaceFill
+        });
     });
 
     const districtsSource = map && map.getSource(DISTRICTS_SOURCE_ID);
-    districtsSource &&
-      districtsSource.type === "geojson" &&
-      (districtsSource as maplibregl.GeoJSONSource).setData(geojson);
+    if (districtsSource && districtsSource.type === "geojson") {
+      const geometryVersion = geojson.metadata?.geometryVersion;
+      // Skip the ~1.2s maplibre ingest when the geometry is unchanged since
+      // the last setData (find-menu toggle, evaluate metric switch,
+      // ProjectScreen's prefetchedAllVoting re-merge). Everything the map
+      // layers read other than geometry lives on feature-state, which the
+      // per-feature loop above just refreshed — so the skipped setData
+      // leaves nothing stale.
+      if (geometryVersion === undefined || geometryVersion !== lastSentGeometryVersionRef.current) {
+        (districtsSource as maplibregl.GeoJSONSource).setData(geojson);
+        lastSentGeometryVersionRef.current = geometryVersion;
+      }
+    }
+
+    const districtsLabelsSource = map && map.getSource(DISTRICTS_LABELS_SOURCE_ID);
+    districtsLabelsSource &&
+      districtsLabelsSource.type === "geojson" &&
+      (districtsLabelsSource as maplibregl.GeoJSONSource).setData(generateLabelsGeojson(geojson));
   }, [
     map,
     geojson,
@@ -748,7 +859,8 @@ const DistrictsMap = ({
     project.populationDeviation,
     evaluateMetric,
     staticMetadata,
-    populationKey
+    populationKey,
+    styleVersion
   ]);
 
   // Update layer styles when district is selected
@@ -900,54 +1012,6 @@ const DistrictsMap = ({
       }
     });
   }, [map, staticMetadata, project?.districtsDefinition, styleVersion]);
-
-  // @ts-ignore
-  const generateLabelsGeojson = (geojson: DistrictsGeoJSON): Labels => {
-    const labels: Label[] = geojson.features
-      .filter((feature: DistrictGeoJSON) => {
-        // @ts-ignore
-        return feature.geometry.coordinates.length > 0 && feature.id !== 0;
-      })
-      .map((feature: DistrictGeoJSON) => {
-        // @ts-ignore
-        return {
-          id: feature.id,
-          coords: feature.geometry.coordinates
-            .flat(1)
-            .reduce((prev: Position[], current: Position[]) => {
-              // If a district contains multiple polygons, label the polygon with the most vertices
-              return prev.length > current.length ? prev : current;
-            })
-        };
-      })
-      .map(({ id, coords }) => {
-        return {
-          type: "Feature",
-          properties: { id },
-          geometry: {
-            type: "Point",
-            coordinates: polylabel([coords], 0.5)
-          }
-        };
-      });
-
-    return {
-      type: "FeatureCollection",
-      features: labels
-    };
-  };
-  // Update districts source when geojson is fetched
-  useEffect(() => {
-    const districtsSource = map && map.getSource(DISTRICTS_SOURCE_ID);
-    districtsSource &&
-      districtsSource.type === "geojson" &&
-      (districtsSource as maplibregl.GeoJSONSource).setData(geojson);
-
-    const districtsLabelsSource = map && map.getSource(DISTRICTS_LABELS_SOURCE_ID);
-    districtsLabelsSource &&
-      districtsLabelsSource.type === "geojson" &&
-      (districtsLabelsSource as maplibregl.GeoJSONSource).setData(generateLabelsGeojson(geojson));
-  }, [map, geojson, styleVersion]);
 
   // Handle evaluate mode map views
   useEffect(() => {

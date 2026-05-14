@@ -2,19 +2,12 @@
 // Modifications © 2026 Michael Maurizi Jr.
 
 import * as Comlink from "comlink";
-import { type MultiPolygon } from "geojson";
-
-// Per-merge perf summary line. Posted via the same BroadcastChannel
-// the ctopo client uses for its (filtered-out) instrumentation; the
-// main thread filters this channel down to `[worker]` lines and
-// mirrors them to the page console.
-const _perfChannel =
-  typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel("ctopo-perf");
-function perfLog(msg: string): void {
-  if (_perfChannel !== null) _perfChannel.postMessage(msg);
-}
+import { neighbors, openContainer, type CtopoClient } from "cloud-topo";
+import memoize from "memoizee";
+import stringify from "json-stable-stringify";
 
 import {
+  type Contiguity,
   type DemographicCounts,
   type DistrictImportField,
   type DistrictsDefinition,
@@ -26,11 +19,18 @@ import {
   type IProject,
   type IStaticMetadata,
   type NestedArray,
-  type ThumbnailGeoJSON,
   type TypedArray,
   type TypedArrays
 } from "../shared/entities";
-import { type CtopoClient } from "cloud-topo";
+import {
+  type DistrictComponentPlan,
+  type FlatDistrictGeometry,
+  buildBlockAssignment,
+  executeDistrictBoundaries,
+  flattenDistrictGeometries,
+  planDistrictComponents
+} from "../shared/boundary";
+import { simplifyForThumbnail } from "../shared/thumbnail";
 import { FIPS, MAX_IMPORT_ERRORS } from "../shared/constants";
 import {
   buildSplitBlockMap,
@@ -38,19 +38,21 @@ import {
   importCsvToDefinition,
   parseBlockDistrictCsv
 } from "../shared/csv-import";
-import { simplifyForThumbnail } from "../shared/thumbnail";
-import { type StaticCounts, type DistrictsGeoJSON } from "../client/types";
+import { type DistrictsGeoJSON, type StaticCounts } from "../client/types";
 import {
   getDemographics as getDemographicsBase,
   getVoting as getVotingBase
 } from "../shared/functions";
 import { allGeoUnitIndices } from "./functions";
-import { fetchSections, fetchBlockIds, fetchGeoUnitHierarchy, getCtopoClient } from "./s3";
-import {
-  type DistrictBoundary,
-  buildBlockAssignment,
-  computeDistrictBoundaries
-} from "../shared/boundary";
+import { fetchSections, fetchBlockIds, fetchGeoUnitHierarchy } from "./s3";
+
+// Per-region attached client. Populated by `attachCtopoClient` (called
+// once per region from the UI thread, which transfers the
+// `MessagePort` from its own client's `attachPort()`). The worker
+// opens its own `CtopoClient` against the transferred port, which
+// dedupes the underlying `CtopoCore` in cloud-topo's internal worker
+// — both threads' clients share the byte-range cache.
+const attachedClients = new Map<string, Promise<CtopoClient>>();
 
 // Per-region cache. Each demographic / voting field is its own
 // Promise<TypedArray>, populated on demand by ensureFields(). This
@@ -76,6 +78,45 @@ function cacheKey(keyPrefix: string, version: Date | string | number): string {
   return `${keyPrefix}#${new Date(version).getTime()}`;
 }
 
+function getAttachedClient(
+  keyPrefix: string,
+  version: Date | string | number
+): Promise<CtopoClient> {
+  const key = cacheKey(keyPrefix, version);
+  const client = attachedClients.get(key);
+  if (client === undefined) {
+    return Promise.reject(
+      new Error(
+        `worker: no ctopo client attached for ${key} — UI thread must call attachCtopoClient first`
+      )
+    );
+  }
+  return client;
+}
+
+// Base-layer block adjacency is invariant per region build (it depends
+// only on the geometry, not the district assignment), yet every plan —
+// the districts merge, every edit re-merge, and regionOutline — used to
+// recompute it (~0.7–1.5s via neighbors()). Memoize it per region so
+// only the first computation pays. `attachCtopoClient` warms it eagerly
+// so that one computation overlaps the rest of page load instead of
+// sitting on the first merge's critical path.
+const adjacencyCache = new Map<string, Promise<ReadonlyArray<ReadonlyArray<number>>>>();
+
+function getAdjacency(
+  keyPrefix: string,
+  version: Date | string | number,
+  baseLayer: string
+): Promise<ReadonlyArray<ReadonlyArray<number>>> {
+  const key = cacheKey(keyPrefix, version);
+  let adjacency = adjacencyCache.get(key);
+  if (adjacency === undefined) {
+    adjacency = getAttachedClient(keyPrefix, version).then(client => neighbors(client, baseLayer));
+    adjacencyCache.set(key, adjacency);
+  }
+  return adjacency;
+}
+
 function fetchRegionData(
   keyPrefix: string,
   version: Date | string | number,
@@ -87,7 +128,7 @@ function fetchRegionData(
       uri: key,
       staticMetadata,
       geoUnitHierarchy: fetchGeoUnitHierarchy(keyPrefix, version),
-      clientPromise: getCtopoClient(keyPrefix, version),
+      clientPromise: getAttachedClient(keyPrefix, version),
       demographicFields: new Map(),
       votingFields: new Map()
     };
@@ -131,33 +172,6 @@ async function ensureFields(
   return out;
 }
 
-// Per-merge geometry cache. computeDistrictBoundaries + the thumbnail
-// simplify pass depend only on (region, districtsDefinition,
-// numberOfDistricts) — not on which demographics/voting fields the
-// caller asked for. Caching keyed on assignment lets a re-merge with
-// the same definition but a different field set skip the boundary
-// stitching and reuse the simplified thumbnail geometries, which is
-// the case ProjectScreen's prefetchedAllVoting effect hits on every
-// project load.
-interface GeometryCacheEntry {
-  readonly boundaries: readonly DistrictBoundary[];
-  readonly thumbnailGeometries: readonly MultiPolygon[];
-}
-const GEOMETRY_CACHE_MAX = 4;
-const geometryCache = new Map<string, GeometryCacheEntry>();
-
-// FNV-1a 32-bit over the assignment bytes — fast hash with good
-// distribution; assignment is a Uint8Array of length numBlocks (~20K
-// for a state) so this is a few hundred microseconds.
-function hashAssignment(assignment: Uint8Array): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < assignment.length; i++) {
-    h ^= assignment[i];
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
-}
-
 let cachedBlockIds: { uri: string; data: Promise<readonly string[]> } | undefined;
 
 function getBlockIds(
@@ -166,7 +180,10 @@ function getBlockIds(
 ): Promise<readonly string[]> {
   const key = cacheKey(keyPrefix, version);
   if (!cachedBlockIds || cachedBlockIds.uri !== key) {
-    cachedBlockIds = { uri: key, data: fetchBlockIds(keyPrefix, version) };
+    cachedBlockIds = {
+      uri: key,
+      data: getAttachedClient(keyPrefix, version).then(client => fetchBlockIds(client))
+    };
   }
   return cachedBlockIds.data;
 }
@@ -352,30 +369,389 @@ function runCsvImport(
   };
 }
 
-const functions = {
-  // Start the ctopo openContainer Range GET immediately so it flies
-  // concurrently with the (large) hierarchy JSON fetch on the main
-  // thread. openContainer only needs the URL, not staticMetadata.
-  //
-  // When staticMetadata is provided, also speculatively prefetch the
-  // base layer's CSR sections (poly_offsets, ring_offsets, arc_refs)
-  // — every merge needs them, and the 7.9MB arc_refs is the boundary
-  // critical-path bottleneck. By the time the merge actually starts
-  // (after the Redux round-trip), these bytes are already in the
-  // ctopo byte-range cache.
-  warmCtopoClient: (
+// --- Merge (worker-side) ---
+//
+// The whole merge runs in this worker: index-space orchestration
+// (assignment build, adjacency, connected components), the cloud-topo
+// merge calls, Polsby-Popper, demographics aggregation, and the
+// thumbnail simplify pass (which JSON-stringifies a multi-MB FC up to
+// six times to size-fit — far too expensive for the UI thread). Only
+// the final flat→GeoJSON rebuild happens on the UI thread; district
+// geometry crosses the boundary as transferable typed arrays.
+
+// What the UI thread gets back per merge. The two FlatDistrictGeometry
+// payloads are transferred (zero-copy); the UI rebuilds nested GeoJSON.
+// demographics / voting / compactness / contiguity are per-district
+// (index 0..numberOfDistricts, 0 is the unassigned "district").
+export interface WorkerMergeResult {
+  readonly fullRes: FlatDistrictGeometry;
+  readonly thumbnail: FlatDistrictGeometry;
+  readonly compactness: readonly number[];
+  readonly contiguity: readonly Contiguity[];
+  readonly demographics: readonly DemographicCounts[];
+  readonly voting: readonly DemographicCounts[];
+  readonly isComplete: boolean;
+  // Stable identity for the merged geometry — an FNV-1a hash of the
+  // block assignment. District geometry depends only on the assignment,
+  // so two merges with the same geometryVersion produce identical
+  // geometry, letting the UI skip a redundant maplibre setData.
+  readonly geometryVersion: string;
+}
+
+// FNV-1a over the assignment bytes — cheap, runs worker-side. Used as a
+// stable proxy for produceGeometry's memo key (which is itself keyed on
+// the same definition).
+function hashAssignment(assignment: Uint8Array): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < assignment.length; i++) {
+    h ^= assignment[i];
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36);
+}
+
+interface PlannedComponents {
+  readonly plan: DistrictComponentPlan;
+  readonly assignment: Uint8Array;
+  readonly numBlocks: number;
+}
+
+// Memoized on (keyPrefix, version, districtsDefinition, numberOfDistricts).
+// Builds the assignment and runs connected-component analysis over the
+// region adjacency; the json-stable-stringify normalizer runs here in
+// the worker, off the main thread.
+const planComponents = memoize(
+  async (
+    staticMetadata: IStaticMetadata,
     keyPrefix: string,
     version: Date | string | number,
+    districtsDefinition: DistrictsDefinition,
+    numberOfDistricts: number
+  ): Promise<PlannedComponents> => {
+    const region = fetchRegionData(keyPrefix, version, staticMetadata);
+    const [geoUnitHierarchy, client] = await Promise.all([
+      region.geoUnitHierarchy,
+      region.clientPromise
+    ]);
+    const numBlocks = accumulateBaseIndices(geoUnitHierarchy).length;
+    const assignment = buildBlockAssignment(districtsDefinition, geoUnitHierarchy, numBlocks);
+    const baseLayer = staticMetadata.geoLevelHierarchy[0].id;
+    const adjacency = await getAdjacency(keyPrefix, version, baseLayer);
+    const plan = await planDistrictComponents(
+      client,
+      baseLayer,
+      assignment,
+      numberOfDistricts,
+      undefined,
+      adjacency
+    );
+    return { plan, assignment, numBlocks };
+  },
+  {
+    normalizer: args => stringify([args[1], new Date(args[2]).getTime(), args[3], args[4]]) || "",
+    primitive: true
+  }
+);
+
+interface ProducedGeometry {
+  readonly fullRes: FlatDistrictGeometry;
+  readonly thumbnail: FlatDistrictGeometry;
+  readonly compactness: readonly number[];
+  readonly contiguity: readonly Contiguity[];
+}
+
+// Memoized on the same key as planComponents. The merged geometry and
+// simplified thumbnail depend only on the assignment, not on which
+// demographic fields the caller asked for — so a re-merge of the same
+// definition with a different field set (ProjectScreen's
+// prefetchedAllVoting effect) reuses this entirely.
+const produceGeometry = memoize(
+  async (
+    staticMetadata: IStaticMetadata,
+    keyPrefix: string,
+    version: Date | string | number,
+    districtsDefinition: DistrictsDefinition,
+    numberOfDistricts: number
+  ): Promise<ProducedGeometry> => {
+    const { plan } = await planComponents(
+      staticMetadata,
+      keyPrefix,
+      version,
+      districtsDefinition,
+      numberOfDistricts
+    );
+    const region = fetchRegionData(keyPrefix, version, staticMetadata);
+    const client = await region.clientPromise;
+    const baseLayer = staticMetadata.geoLevelHierarchy[0].id;
+    const boundaries = await executeDistrictBoundaries(client, baseLayer, plan);
+    // The thumbnail simplify runs on geometry-only stub features —
+    // properties don't influence simplification, only the size-fitting
+    // JSON length, and per-district properties are negligible vs
+    // coordinate data.
+    const stubDistricts: DistrictsGeoJSON = {
+      type: "FeatureCollection",
+      features: boundaries.map((b, i) => ({
+        type: "Feature" as const,
+        id: i,
+        geometry: b.geometry,
+        properties: {
+          compactness: b.compactness,
+          contiguity: b.contiguity,
+          demographics: {} as DemographicCounts,
+          voting: {}
+        }
+      }))
+    };
+    const thumbnailFC = simplifyForThumbnail(stubDistricts);
+    return {
+      fullRes: flattenDistrictGeometries(boundaries.map(b => b.geometry)),
+      thumbnail: flattenDistrictGeometries(thumbnailFC.features.map(f => f.geometry)),
+      compactness: boundaries.map(b => b.compactness),
+      contiguity: boundaries.map(b => b.contiguity)
+    };
+  },
+  {
+    normalizer: args => stringify([args[1], new Date(args[2]).getTime(), args[3], args[4]]) || "",
+    primitive: true
+  }
+);
+
+// Clone a FlatDistrictGeometry's buffers so the memoized produceGeometry
+// entry survives the Comlink transfer — transfer detaches the buffers,
+// which would corrupt the cached entry for the next caller.
+function cloneFlat(g: FlatDistrictGeometry): FlatDistrictGeometry {
+  return {
+    coords: g.coords.slice(),
+    ringOffsets: g.ringOffsets.slice(),
+    polyRingOffsets: g.polyRingOffsets.slice(),
+    districtPolyOffsets: g.districtPolyOffsets.slice()
+  };
+}
+
+interface AggregatedCounts {
+  readonly demographics: readonly DemographicCounts[];
+  readonly voting: readonly DemographicCounts[];
+  readonly isComplete: boolean;
+}
+
+// Per-district demographic + voting aggregation. Depends only on the block
+// assignment and the requested field set — NOT on geometry — so it's
+// memoized separately from produceGeometry and keyed to include the
+// requested fields. This is what makes a requestedFields-only change (eg.
+// entering evaluate mode) cheap: the geometry is reused untouched and a
+// repeat aggregation for the same definition + field set is a cache hit.
+// Returns plain objects (no transferable buffers), so memoizing is safe —
+// nothing here gets detached by a Comlink transfer.
+const aggregateCounts = memoize(
+  async (
+    staticMetadata: IStaticMetadata,
+    keyPrefix: string,
+    version: Date | string | number,
+    districtsDefinition: DistrictsDefinition,
+    numberOfDistricts: number,
+    requestedDemographics: readonly string[],
+    requestedVoting: readonly string[]
+  ): Promise<AggregatedCounts> => {
+    const { assignment, numBlocks } = await planComponents(
+      staticMetadata,
+      keyPrefix,
+      version,
+      districtsDefinition,
+      numberOfDistricts
+    );
+    const region = fetchRegionData(keyPrefix, version, staticMetadata);
+    const [demoMap, voteMap] = await Promise.all([
+      ensureFields(region, "demographics", requestedDemographics),
+      staticMetadata.voting
+        ? ensureFields(region, "voting", requestedVoting)
+        : Promise.resolve(undefined as Record<string, TypedArray> | undefined)
+    ]);
+
+    // Bucket block indices by district for per-district aggregation.
+    const districtBlockIndices: number[][] = Array.from(
+      { length: numberOfDistricts + 1 },
+      () => []
+    );
+    for (let i = 0; i < numBlocks; i++) {
+      districtBlockIndices[assignment[i]].push(i);
+    }
+    const demographics = districtBlockIndices.map(idx => getDemographicsBase(idx, demoMap));
+    const voting = districtBlockIndices.map(idx =>
+      voteMap ? getVotingBase(idx, voteMap) : ({} as DemographicCounts)
+    );
+    // "Complete" means nothing landed in the unassigned district (0).
+    const isComplete = districtBlockIndices[0].length === 0;
+    return { demographics, voting, isComplete };
+  },
+  {
+    normalizer: args =>
+      stringify([
+        args[1],
+        new Date(args[2]).getTime(),
+        args[3],
+        args[4],
+        [...args[5]].sort(),
+        [...args[6]].sort()
+      ]) || "",
+    primitive: true
+  }
+);
+
+const functions = {
+  // The UI thread opens its own `CtopoClient` first (which spawns the
+  // shared cloud-topo internal worker), then calls `attachPort()` on
+  // it to mint a `MessagePort` and transfers that port here. The
+  // worker opens its `CtopoClient` against the port — cloud-topo sees
+  // the same URL on both clients and dedupes the underlying
+  // `CtopoCore`, so the byte-range cache is shared.
+  //
+  // Re-attaching against the same (keyPrefix, version) is a no-op.
+  // When `staticMetadata` is provided, the base layer's CSR sections
+  // are speculatively prewarmed (poly_offsets / ring_offsets /
+  // arc_refs); every merge needs them and the 7.9 MB arc_refs is the
+  // boundary critical-path bottleneck.
+  attachCtopoClient: (
+    keyPrefix: string,
+    version: Date | string | number,
+    url: string,
+    port: MessagePort,
     staticMetadata?: IStaticMetadata
-  ): void => {
-    const clientP = getCtopoClient(keyPrefix, version);
+  ): Promise<void> => {
+    const key = cacheKey(keyPrefix, version);
+    let clientP = attachedClients.get(key);
+    if (clientP === undefined) {
+      clientP = openContainer(url, { port });
+      attachedClients.set(key, clientP);
+    } else {
+      // Already attached — close the incoming port so we don't leak
+      // a MessageChannel half. The proxy will throw if anyone tries
+      // to use this client.
+      port.close();
+    }
     if (staticMetadata) {
       const baseLayer = staticMetadata.geoLevelHierarchy[0].id;
       void clientP.then(client => client.layerGeometry(baseLayer));
+      // Warm the block adjacency now so its ~1s compute overlaps the rest
+      // of page load rather than landing on the first merge's critical
+      // path. Memoized, so the first merge (and regionOutline) reuse it.
+      void getAdjacency(keyPrefix, version, baseLayer);
     }
+    return clientP.then(() => undefined);
   },
-  // Owned by the worker so the ctopo client (and its bootstrap chain)
-  // lives in exactly one context. The main thread fetches the JSON
+  // Run the whole merge. Index-space planning + the cloud-topo merge
+  // calls + Polsby-Popper + the thumbnail simplify pass all happen in
+  // this worker; only the final flat→GeoJSON rebuild is left for the UI
+  // thread. Geometry crosses the boundary as transferable typed arrays.
+  mergeDistricts: async (
+    staticMetadata: IStaticMetadata,
+    keyPrefix: string,
+    version: Date | string | number,
+    districtsDefinition: DistrictsDefinition,
+    numberOfDistricts: number,
+    requestedDemographics: readonly string[],
+    requestedVoting: readonly string[]
+  ): Promise<WorkerMergeResult> => {
+    const [{ assignment }, geometry, counts] = await Promise.all([
+      planComponents(staticMetadata, keyPrefix, version, districtsDefinition, numberOfDistricts),
+      produceGeometry(staticMetadata, keyPrefix, version, districtsDefinition, numberOfDistricts),
+      aggregateCounts(
+        staticMetadata,
+        keyPrefix,
+        version,
+        districtsDefinition,
+        numberOfDistricts,
+        requestedDemographics,
+        requestedVoting
+      )
+    ]);
+
+    // Clone the geometry buffers out of the memoized produceGeometry
+    // entry before transferring — transfer detaches them.
+    const fullRes = cloneFlat(geometry.fullRes);
+    const thumbnail = cloneFlat(geometry.thumbnail);
+    const result: WorkerMergeResult = {
+      fullRes,
+      thumbnail,
+      compactness: geometry.compactness,
+      contiguity: geometry.contiguity,
+      demographics: counts.demographics,
+      voting: counts.voting,
+      isComplete: counts.isComplete,
+      geometryVersion: hashAssignment(assignment)
+    };
+    return Comlink.transfer(result, [
+      fullRes.coords.buffer,
+      fullRes.ringOffsets.buffer,
+      fullRes.polyRingOffsets.buffer,
+      fullRes.districtPolyOffsets.buffer,
+      thumbnail.coords.buffer,
+      thumbnail.ringOffsets.buffer,
+      thumbnail.polyRingOffsets.buffer,
+      thumbnail.districtPolyOffsets.buffer
+    ]);
+  },
+  // Re-aggregate per-district demographics + voting for a new requested
+  // field set, WITHOUT touching geometry. The UI calls this instead of a
+  // full mergeDistricts when only requestedFields changed (e.g. entering
+  // evaluate mode) — the district boundaries are unchanged, so there's no
+  // reason to re-clone / re-transfer / re-rebuild them. Returns plain
+  // objects (structured-cloned, not transferred).
+  aggregateFields: (
+    staticMetadata: IStaticMetadata,
+    keyPrefix: string,
+    version: Date | string | number,
+    districtsDefinition: DistrictsDefinition,
+    numberOfDistricts: number,
+    requestedDemographics: readonly string[],
+    requestedVoting: readonly string[]
+  ): Promise<AggregatedCounts> =>
+    aggregateCounts(
+      staticMetadata,
+      keyPrefix,
+      version,
+      districtsDefinition,
+      numberOfDistricts,
+      requestedDemographics,
+      requestedVoting
+    ),
+  // Dissolve every block into one district and return the merged
+  // geometry. Used by computeRegionOutline to build the basemap label
+  // `within` filter polygon. The whole dissolve — planning and the
+  // boundary stitch — runs in the worker; geometry crosses the boundary
+  // as transferable typed arrays. No demographics needed.
+  regionOutline: async (
+    staticMetadata: IStaticMetadata,
+    keyPrefix: string,
+    version: Date | string | number
+  ): Promise<FlatDistrictGeometry> => {
+    const region = fetchRegionData(keyPrefix, version, staticMetadata);
+    const [geoUnitHierarchy, client] = await Promise.all([
+      region.geoUnitHierarchy,
+      region.clientPromise
+    ]);
+    const numBlocks = accumulateBaseIndices(geoUnitHierarchy).length;
+    const baseLayer = staticMetadata.geoLevelHierarchy[0].id;
+    const assignment = new Uint8Array(numBlocks).fill(1);
+    const adjacency = await getAdjacency(keyPrefix, version, baseLayer);
+    const plan = await planDistrictComponents(
+      client,
+      baseLayer,
+      assignment,
+      1,
+      undefined,
+      adjacency
+    );
+    const boundaries = await executeDistrictBoundaries(client, baseLayer, plan);
+    const flat = flattenDistrictGeometries(boundaries.map(b => b.geometry));
+    return Comlink.transfer(flat, [
+      flat.coords.buffer,
+      flat.ringOffsets.buffer,
+      flat.polyRingOffsets.buffer,
+      flat.districtPolyOffsets.buffer
+    ]);
+  },
+  // Owned by the worker so the demographic/voting field caches live
+  // in exactly one place per thread. The main thread fetches the JSON
   // sidecars itself and asks the worker for staticGeoLevels via
   // Comlink — see worker-functions.ts fetchAllStaticData.
   fetchStaticGeoLevels: async (
@@ -383,7 +759,7 @@ const functions = {
     version: Date | string | number,
     staticMetadata: IStaticMetadata
   ): Promise<TypedArrays> => {
-    const client = await getCtopoClient(keyPrefix, version);
+    const client = await getAttachedClient(keyPrefix, version);
     const sectionNames = staticMetadata.geoLevels.map((entry, i) => {
       const parentId = entry.id;
       const childId = staticMetadata.geoLevelHierarchy[i].id;
@@ -396,168 +772,8 @@ const functions = {
     // to avoid the copy, but the underlying ArrayBuffers were also
     // referenced by the client's propertyCache and byteRangeCache
     // (typed-array views share their parent buffer); transferring
-    // detached those caches and corrupted every subsequent read,
-    // which produced the runaway-fetch behavior we were chasing.
+    // detached those caches and corrupted every subsequent read.
     return arrays;
-  },
-  mergeDistricts: async (
-    staticMetadata: IStaticMetadata,
-    keyPrefix: string,
-    version: Date | string | number,
-    districtsDefinition: DistrictsDefinition,
-    numberOfDistricts: number,
-    requestedDemographics: readonly string[],
-    requestedVoting: readonly string[]
-  ): Promise<{
-    readonly districts: DistrictsGeoJSON;
-    readonly thumbnail: ThumbnailGeoJSON;
-    readonly isComplete: boolean;
-  }> => {
-    const t0 = performance.now();
-
-    // Three independent network paths run concurrently:
-    //   1. ctopo client opens (header+arc_offsets prefix prefetch)
-    //   2. geoUnitHierarchy JSON sidecar fetches
-    //   3. requested demographic + voting sections fetch via the client
-    // Boundary computation only needs (1) and (2). Demographics +
-    // voting are needed to assemble the final FeatureCollection but
-    // can run in parallel with boundary work — previously the whole
-    // merge was gated on the demographics fetch finishing, which
-    // pinned the critical path to whichever section happened to be
-    // largest.
-    const region = fetchRegionData(keyPrefix, version, staticMetadata);
-    const clientPromise = getCtopoClient(keyPrefix, version);
-    const demoMapPromise = ensureFields(region, "demographics", requestedDemographics);
-    const voteMapPromise = staticMetadata.voting
-      ? ensureFields(region, "voting", requestedVoting)
-      : Promise.resolve(undefined as Record<string, TypedArray> | undefined);
-
-    const geometryPromise = (async () => {
-      const [client, geoUnitHierarchy] = await Promise.all([
-        clientPromise,
-        region.geoUnitHierarchy
-      ]);
-      const numBlocks = accumulateBaseIndices(geoUnitHierarchy).length;
-      const baseLayer = staticMetadata.geoLevelHierarchy[0].id;
-      const assignment = buildBlockAssignment(districtsDefinition, geoUnitHierarchy, numBlocks);
-      const geomKey = `${region.uri}|${hashAssignment(assignment).toString(16)}|${numberOfDistricts}`;
-      const cached = geometryCache.get(geomKey);
-      if (cached !== undefined) {
-        // Refresh recency for the LRU cap below.
-        geometryCache.delete(geomKey);
-        geometryCache.set(geomKey, cached);
-        return { entry: cached, assignment, numBlocks, fromCache: true };
-      }
-      const boundaries = await computeDistrictBoundaries(
-        client,
-        baseLayer,
-        assignment,
-        numberOfDistricts
-      );
-      // Run the thumbnail simplify pass on geometry-only stub features
-      // — properties don't influence simplification, only the
-      // size-fitting JSON length, and per-district properties are
-      // negligible vs coordinate data.
-      const stubDistricts: DistrictsGeoJSON = {
-        type: "FeatureCollection",
-        features: boundaries.map((b, i) => ({
-          type: "Feature" as const,
-          id: i,
-          geometry: b.geometry,
-          properties: {
-            compactness: b.compactness,
-            contiguity: b.contiguity,
-            demographics: {} as DemographicCounts,
-            voting: {}
-          }
-        }))
-      };
-      const thumbnail = simplifyForThumbnail(stubDistricts);
-      const thumbnailGeometries = thumbnail.features.map(f => f.geometry);
-      const entry: GeometryCacheEntry = { boundaries, thumbnailGeometries };
-      if (geometryCache.size >= GEOMETRY_CACHE_MAX) {
-        const oldest = geometryCache.keys().next().value;
-        if (oldest !== undefined) geometryCache.delete(oldest);
-      }
-      geometryCache.set(geomKey, entry);
-      return { entry, assignment, numBlocks, fromCache: false };
-    })();
-
-    const [{ entry, assignment, numBlocks, fromCache }, demoMap, voteMap] = await Promise.all([
-      geometryPromise,
-      demoMapPromise,
-      voteMapPromise
-    ]);
-    const { boundaries, thumbnailGeometries } = entry;
-
-    // Build per-district block indices for demographics
-    const districtBlockIndices: number[][] = Array.from(
-      { length: numberOfDistricts + 1 },
-      () => []
-    );
-    for (let i = 0; i < numBlocks; i++) {
-      districtBlockIndices[assignment[i]].push(i);
-    }
-
-    // Compute properties once per district and share them between the
-    // full-resolution districts FC and the thumbnail FC. Both feature
-    // collections always carry identical properties — the thumbnail is
-    // just a simplified-geometry view of the same districts.
-    const propsPerDistrict = boundaries.map((b, i) => ({
-      compactness: b.compactness,
-      contiguity: b.contiguity,
-      demographics: getDemographicsBase(districtBlockIndices[i], demoMap),
-      voting: voteMap ? getVotingBase(districtBlockIndices[i], voteMap) : {}
-    }));
-
-    const districts: DistrictsGeoJSON = {
-      type: "FeatureCollection",
-      features: boundaries.map((b, i) => ({
-        type: "Feature" as const,
-        id: i,
-        geometry: b.geometry,
-        properties: propsPerDistrict[i]
-      }))
-    };
-    const thumbnail: ThumbnailGeoJSON = {
-      type: "FeatureCollection",
-      features: thumbnailGeometries.map((geom, i) => ({
-        type: "Feature" as const,
-        id: i,
-        geometry: geom,
-        properties: propsPerDistrict[i]
-      }))
-    };
-    // "Complete" means every base geounit is assigned to a real district —
-    // i.e. nothing landed in the unassigned district (index 0).
-    const isComplete = districtBlockIndices[0].length === 0;
-    perfLog(
-      `[worker] mergeDistricts done in ${(performance.now() - t0).toFixed(0)}ms ` +
-        `(${numberOfDistricts} districts, ${numBlocks} blocks${fromCache ? ", geom cached" : ""})`
-    );
-    return { districts, thumbnail, isComplete };
-  },
-  // Dissolve the entire region into a single MultiPolygon by assigning every
-  // block to district 1 and running the boundary stitcher. Used to build an
-  // accurate state outline polygon for the basemap label `within` filter.
-  computeRegionOutline: async (
-    staticMetadata: IStaticMetadata,
-    keyPrefix: string,
-    version: Date | string | number
-  ): Promise<MultiPolygon> => {
-    // Region outline only needs the hierarchy (for numBlocks) and the
-    // ctopo client (for the merge). Demographics + voting are not
-    // needed here, so don't await them.
-    const region = fetchRegionData(keyPrefix, version, staticMetadata);
-    const [client, geoUnitHierarchy] = await Promise.all([
-      getCtopoClient(keyPrefix, version),
-      region.geoUnitHierarchy
-    ]);
-    const numBlocks = accumulateBaseIndices(geoUnitHierarchy).length;
-    const baseLayer = staticMetadata.geoLevelHierarchy[0].id;
-    const assignment = new Uint8Array(numBlocks).fill(1);
-    const boundaries = await computeDistrictBoundaries(client, baseLayer, assignment, 1);
-    return boundaries[1].geometry;
   },
   exportCsv: async (
     staticMetadata: IStaticMetadata,

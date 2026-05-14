@@ -4,6 +4,7 @@
 import { createAction } from "typesafe-actions";
 import { type ProjectVisibility } from "../../shared/constants";
 import {
+  type DemographicCounts,
   type DistrictsDefinition,
   type IProject,
   type IReferenceLayer,
@@ -132,8 +133,18 @@ export const localMergeComplete = createAction("Local merge complete")<{
   readonly districts: DistrictsGeoJSON;
   readonly thumbnail: ThumbnailGeoJSON;
   readonly isComplete: boolean;
+  readonly geometryVersion: string;
 }>();
 export const localMergeFailure = createAction("Local merge failure")();
+
+// Result of re-aggregating demographics/voting for a requestedFields change.
+// Carries no geometry — the reducer patches feature.properties on the
+// existing geojson, leaving the geometry (and geometryVersion) untouched.
+export const localFieldsComplete = createAction("Local fields aggregation complete")<{
+  readonly demographics: readonly DemographicCounts[];
+  readonly voting: readonly DemographicCounts[];
+  readonly isComplete: boolean;
+}>();
 
 export const setRequestedFields = createAction("Set requested fields")<{
   readonly demographics: readonly string[];

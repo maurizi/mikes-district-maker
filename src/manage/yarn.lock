@@ -776,6 +776,20 @@
     "@smithy/types" "^4.14.1"
     tslib "^2.6.2"
 
+"@aws-sdk/s3-request-presigner@3.840.0":
+  version "3.840.0"
+  resolved "https://registry.yarnpkg.com/@aws-sdk/s3-request-presigner/-/s3-request-presigner-3.840.0.tgz#6b92a4c0416dead2b1b227a5e81692f65f3a88e3"
+  integrity sha512-1jcrhVoSZjiAQJGNswI0RGR36/+OG6yTV42wQamHdNHk+/68dn9MGTUVr+58AEFOyEAPE/EvkiYRD6n5WkUjMg==
+  dependencies:
+    "@aws-sdk/signature-v4-multi-region" "3.840.0"
+    "@aws-sdk/types" "3.840.0"
+    "@aws-sdk/util-format-url" "3.840.0"
+    "@smithy/middleware-endpoint" "^4.1.13"
+    "@smithy/protocol-http" "^5.1.2"
+    "@smithy/smithy-client" "^4.4.5"
+    "@smithy/types" "^4.3.1"
+    tslib "^2.6.2"
+
 "@aws-sdk/signature-v4-multi-region@3.840.0":
   version "3.840.0"
   resolved "https://registry.npmjs.org/@aws-sdk/signature-v4-multi-region/-/signature-v4-multi-region-3.840.0.tgz"
@@ -875,6 +889,16 @@
     "@smithy/types" "^4.14.1"
     "@smithy/url-parser" "^4.2.14"
     "@smithy/util-endpoints" "^3.4.2"
+    tslib "^2.6.2"
+
+"@aws-sdk/util-format-url@3.840.0":
+  version "3.840.0"
+  resolved "https://registry.yarnpkg.com/@aws-sdk/util-format-url/-/util-format-url-3.840.0.tgz#386f703f9048f0a297ec2f4e37a9bfbb84a0aa18"
+  integrity sha512-VB1PWyI1TQPiPvg4w7tgUGGQER1xxXPNUqfh3baxUSFi1Oh8wHrDnFywkxLm3NMmgDmnLnSZ5Q326qAoyqKLSg==
+  dependencies:
+    "@aws-sdk/types" "3.840.0"
+    "@smithy/querystring-builder" "^4.0.4"
+    "@smithy/types" "^4.3.1"
     tslib "^2.6.2"
 
 "@aws-sdk/util-format-url@^3.972.10":
@@ -2018,6 +2042,15 @@
     "@smithy/uuid" "^1.1.2"
     tslib "^2.6.2"
 
+"@smithy/core@^3.24.2":
+  version "3.24.2"
+  resolved "https://registry.yarnpkg.com/@smithy/core/-/core-3.24.2.tgz#38ae63b029ac5afa156ebd0bfd203bdc3966dd9f"
+  integrity sha512-IKS7qX59fAGCYBmt5JChcDswQDupZqT2Yn2ZBA3UgTlsjRNNkQzZobbn95xoAAdtTyJmBiJB3Y02qR3rgy3Zog==
+  dependencies:
+    "@aws-crypto/crc32" "5.2.0"
+    "@smithy/types" "^4.14.1"
+    tslib "^2.6.2"
+
 "@smithy/credential-provider-imds@^4.0.6", "@smithy/credential-provider-imds@^4.2.14":
   version "4.2.14"
   resolved "https://registry.npmjs.org/@smithy/credential-provider-imds/-/credential-provider-imds-4.2.14.tgz"
@@ -2236,6 +2269,14 @@
   integrity sha512-dN5F8kHx8RNU0r+pCwNmFZyz6ChjMkzShy/zup6MtkRmmix4vZzJdW+di7x//b1LiynIev88FM18ie+wwPcQtQ==
   dependencies:
     "@smithy/types" "^4.14.1"
+    tslib "^2.6.2"
+
+"@smithy/querystring-builder@^4.0.4":
+  version "4.3.2"
+  resolved "https://registry.yarnpkg.com/@smithy/querystring-builder/-/querystring-builder-4.3.2.tgz#e95b5f46bbc655eed123c7c800573d75cfc39485"
+  integrity sha512-SrH20goaJWw2U3IHjBNxz2uVuIQWi36pDoCgxL0Uu1lu2T2ZPxsp+I0o+CNYSqsci5y6r029ZhOFibA9ZZFpeA==
+  dependencies:
+    "@smithy/core" "^3.24.2"
     tslib "^2.6.2"
 
 "@smithy/querystring-builder@^4.2.14":
@@ -3938,10 +3979,10 @@ clone@2.1.2:
   resolved "https://registry.npmjs.org/clone/-/clone-2.1.2.tgz"
   integrity sha512-3Pe/CF1Nn94hyhIYpjtiLhdCoEoz0DqQ+988E9gmeEdQZlojxnOb74wctFyuwWQHzqyf9X7C7MG8juUpqBJT8w==
 
-cloud-topo@^0.1.0:
-  version "0.1.0"
-  resolved "https://registry.yarnpkg.com/cloud-topo/-/cloud-topo-0.1.0.tgz#795b710164a306de7c9bfd52d8b31c02c21e6557"
-  integrity sha512-PR9AC0jScjNI6jXCdhM+Y8Fai3bzPAof9NXvtyDdI1Eg1P5rP0tTIcfedh1Q2W3FSAXQq/7RZ4VLo+D24mNbhg==
+cloud-topo@^0.2.0:
+  version "0.2.0"
+  resolved "https://registry.yarnpkg.com/cloud-topo/-/cloud-topo-0.2.0.tgz#77966631959cab656068f2d0fc7468e3ce5448a6"
+  integrity sha512-4m/x/o/Dnb6VObWdWzvBGoOxGcIiaCK3m5G+8fAygiEJtnym5CceIjoxLuNtmWCwuZ+AZW0BKrJmF4sANMsumA==
 
 co@^4.6.0:
   version "4.6.0"

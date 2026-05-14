@@ -78,7 +78,20 @@ function findComponents(
   return components;
 }
 
-// --- Main: compute district boundaries ---
+// --- Compute district boundaries: plan / execute split ---
+//
+// Boundary computation is two phases that run on different threads:
+//
+//   planDistrictComponents  — index-space orchestration (adjacency
+//     deserialize, component finding). Runs in our Comlink worker so
+//     the ~668K-block walks don't jank the UI thread.
+//   executeDistrictBoundaries — coordinate-space work (ctopo.merge,
+//     ring assembly, Polsby-Popper). Runs on the UI thread, where its
+//     own ctopo client talks straight to the cloud-topo worker so the
+//     merged GeoJSON is delivered UI-ward and serialized exactly once.
+//
+// The plan crosses the worker→UI boundary as flat transferable typed
+// arrays (zero-copy) rather than nested `number[][][]`.
 
 export interface DistrictBoundary {
   readonly geometry: MultiPolygon;
@@ -86,17 +99,42 @@ export interface DistrictBoundary {
   readonly contiguity: Contiguity;
 }
 
-export async function computeDistrictBoundaries(
+// Per-district connected components, flattened for a zero-copy
+// worker→UI transfer:
+//   componentBlocks          — every block index, concatenated across
+//                              all components of all districts.
+//   componentOffsets         — componentOffsets[c]..componentOffsets[c+1]
+//                              is component c's slice of componentBlocks.
+//   districtComponentOffsets — districtComponentOffsets[d]..[d+1] is
+//                              district d's slice of the component list.
+//                              Length is numberOfDistricts + 2 (districts
+//                              0..numberOfDistricts inclusive, index 0 is
+//                              the unassigned "district").
+export interface DistrictComponentPlan {
+  readonly componentBlocks: Int32Array;
+  readonly componentOffsets: Int32Array;
+  readonly districtComponentOffsets: Int32Array;
+}
+
+export async function planDistrictComponents(
   client: CtopoClient,
   baseLayer: string,
   assignment: Uint8Array,
   numberOfDistricts: number,
-  signal?: AbortSignal
-): Promise<DistrictBoundary[]> {
+  signal?: AbortSignal,
+  // Base-layer adjacency is invariant per region build (it depends only
+  // on the geometry, not the assignment). Callers that run many plans —
+  // every re-merge, plus regionOutline — can compute it once and pass it
+  // in here to skip the ~0.7–1.5s neighbors() recompute each time.
+  precomputedAdjacency?: ReadonlyArray<ReadonlyArray<number>>
+): Promise<DistrictComponentPlan> {
   const t0 = performance.now();
-  perfLog(`[boundary] start (${numberOfDistricts} districts)`);
-  const adjacency = await neighbors(client, baseLayer, signal);
-  perfLog(`[boundary] neighbors ready at ${(performance.now() - t0).toFixed(0)}ms`);
+  perfLog(`[boundary] plan start (${numberOfDistricts} districts)`);
+  const adjacency = precomputedAdjacency ?? (await neighbors(client, baseLayer, signal));
+  perfLog(
+    `[boundary] neighbors ready at ${(performance.now() - t0).toFixed(0)}ms` +
+      (precomputedAdjacency !== undefined ? " (cached)" : "")
+  );
 
   // Bucket blocks by district id (0..numberOfDistricts inclusive —
   // index 0 is the unassigned "district").
@@ -105,47 +143,214 @@ export async function computeDistrictBoundaries(
     districtBlocks[assignment[i]].push(i);
   }
 
+  // findComponents per district, flattened into the transferable
+  // structure. Every block is assigned to exactly one district and
+  // lands in exactly one component, so componentBlocks is exactly
+  // assignment.length long.
+  const componentBlocks = new Int32Array(assignment.length);
+  const districtComponentOffsets = new Int32Array(numberOfDistricts + 2);
+  const componentOffsetsList: number[] = [0];
+  let blockCursor = 0;
+  let componentCount = 0;
+  for (let d = 0; d <= numberOfDistricts; d++) {
+    districtComponentOffsets[d] = componentCount;
+    const blocks = districtBlocks[d];
+    if (blocks.length > 0) {
+      for (const component of findComponents(blocks, adjacency)) {
+        for (const block of component) componentBlocks[blockCursor++] = block;
+        componentOffsetsList.push(blockCursor);
+        componentCount++;
+      }
+    }
+  }
+  districtComponentOffsets[numberOfDistricts + 1] = componentCount;
+
+  perfLog(`[boundary] plan done at ${(performance.now() - t0).toFixed(0)}ms`);
+  return {
+    componentBlocks,
+    componentOffsets: Int32Array.from(componentOffsetsList),
+    districtComponentOffsets
+  };
+}
+
+export async function executeDistrictBoundaries(
+  client: CtopoClient,
+  baseLayer: string,
+  plan: DistrictComponentPlan,
+  signal?: AbortSignal
+): Promise<DistrictBoundary[]> {
+  const t0 = performance.now();
+  perfLog(`[boundary] execute start`);
+  const { componentBlocks, componentOffsets, districtComponentOffsets } = plan;
+  const numberOfDistricts = districtComponentOffsets.length - 2;
+
   // Compute each district in parallel — every merge call goes through
   // the client's range coalescer, which dedupes overlapping arc fetches
   // across districts.
-  const result = await Promise.all(
-    districtBlocks.map(async blocks => {
-      if (blocks.length === 0) {
-        return {
+  const districtPromises: Promise<DistrictBoundary>[] = [];
+  for (let d = 0; d <= numberOfDistricts; d++) {
+    const compStart = districtComponentOffsets[d];
+    const compEnd = districtComponentOffsets[d + 1];
+    if (compStart === compEnd) {
+      districtPromises.push(
+        Promise.resolve({
           geometry: { type: "MultiPolygon" as const, coordinates: [] },
           compactness: 0,
           contiguity: "" as Contiguity
-        };
-      }
-
-      const components = findComponents(blocks, adjacency);
-      // Merge each component independently so each ends up as its own
-      // polygon in the final MultiPolygon. ctopo.merge collapses all
-      // rings of a single call into one polygon (largest ring as
-      // exterior, the rest as holes), which is exactly the per-component
-      // shape we want.
-      const componentPolys = await Promise.all(
-        components.map(async component => {
-          const result = await merge(client, [{ layer: baseLayer, indices: component }], signal);
-          return result.coordinates;
         })
       );
+      continue;
+    }
+    const componentIndices: number[] = [];
+    for (let c = compStart; c < compEnd; c++) componentIndices.push(c);
+    districtPromises.push(
+      (async () => {
+        // Merge each component independently so each ends up as its own
+        // polygon in the final MultiPolygon. ctopo.merge collapses all
+        // rings of a single call into one polygon (largest ring as
+        // exterior, the rest as holes), which is exactly the
+        // per-component shape we want. The index slice is a zero-copy
+        // subarray view; ctopo.merge accepts any Iterable<number>.
+        const componentPolys = await Promise.all(
+          componentIndices.map(async c => {
+            const indices = componentBlocks.subarray(componentOffsets[c], componentOffsets[c + 1]);
+            const result = await merge(client, [{ layer: baseLayer, indices }], signal);
+            return result.coordinates;
+          })
+        );
 
-      const multiPolyCoords: number[][][][] = [];
-      for (const polys of componentPolys) {
-        for (const poly of polys) multiPolyCoords.push(poly);
-      }
+        const multiPolyCoords: number[][][][] = [];
+        for (const polys of componentPolys) {
+          for (const poly of polys) multiPolyCoords.push(poly);
+        }
 
-      const [compactness, contiguity] = calcPolsbyPopper(multiPolyCoords);
-      return {
-        geometry: { type: "MultiPolygon" as const, coordinates: multiPolyCoords },
-        compactness,
-        contiguity
-      };
-    })
-  );
-  perfLog(`[boundary] done at ${(performance.now() - t0).toFixed(0)}ms`);
+        const [compactness, contiguity] = calcPolsbyPopper(multiPolyCoords);
+        return {
+          geometry: { type: "MultiPolygon" as const, coordinates: multiPolyCoords },
+          compactness,
+          contiguity
+        };
+      })()
+    );
+  }
+  const result = await Promise.all(districtPromises);
+  perfLog(`[boundary] execute done at ${(performance.now() - t0).toFixed(0)}ms`);
   return result;
+}
+
+// Convenience composition of the plan + execute phases for single-thread
+// callers — the manage CLI commands run in Node with one ctopo client and
+// no UI thread to keep responsive, so the split buys them nothing. The
+// client app deliberately does NOT use this: it runs the two phases on
+// separate threads.
+export async function computeDistrictBoundaries(
+  client: CtopoClient,
+  baseLayer: string,
+  assignment: Uint8Array,
+  numberOfDistricts: number,
+  signal?: AbortSignal
+): Promise<DistrictBoundary[]> {
+  const plan = await planDistrictComponents(
+    client,
+    baseLayer,
+    assignment,
+    numberOfDistricts,
+    signal
+  );
+  return executeDistrictBoundaries(client, baseLayer, plan, signal);
+}
+
+// --- Flat (transferable) packing for a set of district MultiPolygons ---
+//
+// One CSR structure covering N districts, each a MultiPolygon. The four
+// typed arrays are transferable, so the worker→UI handoff of district
+// geometry is zero-copy; the UI thread rebuilds nested GeoJSON via
+// `rebuildDistrictGeometries` (a tight indexed loop, ~10ms for a
+// state-sized region — far cheaper than structured-cloning the nested
+// FeatureCollection).
+//
+//   coords              — [x0,y0,x1,y1,…] every position, all districts.
+//   ringOffsets         — ring r spans positions ringOffsets[r]..[r+1].
+//   polyRingOffsets     — polygon p spans rings polyRingOffsets[p]..[p+1].
+//   districtPolyOffsets — district d spans polygons
+//                         districtPolyOffsets[d]..[d+1]; length is
+//                         numDistricts + 1.
+export interface FlatDistrictGeometry {
+  readonly coords: Float64Array;
+  readonly ringOffsets: Uint32Array;
+  readonly polyRingOffsets: Uint32Array;
+  readonly districtPolyOffsets: Uint32Array;
+}
+
+export function flattenDistrictGeometries(
+  geometries: ReadonlyArray<MultiPolygon>
+): FlatDistrictGeometry {
+  let nPos = 0;
+  let nRings = 0;
+  let nPolys = 0;
+  for (const g of geometries) {
+    for (const poly of g.coordinates) {
+      nPolys++;
+      for (const ring of poly) {
+        nRings++;
+        nPos += ring.length;
+      }
+    }
+  }
+  const coords = new Float64Array(nPos * 2);
+  const ringOffsets = new Uint32Array(nRings + 1);
+  const polyRingOffsets = new Uint32Array(nPolys + 1);
+  const districtPolyOffsets = new Uint32Array(geometries.length + 1);
+  let posCursor = 0;
+  let ringCursor = 0;
+  let polyCursor = 0;
+  for (let d = 0; d < geometries.length; d++) {
+    districtPolyOffsets[d] = polyCursor;
+    for (const poly of geometries[d].coordinates) {
+      polyRingOffsets[polyCursor++] = ringCursor;
+      for (const ring of poly) {
+        ringOffsets[ringCursor++] = posCursor;
+        for (const pt of ring) {
+          coords[posCursor * 2] = pt[0];
+          coords[posCursor * 2 + 1] = pt[1];
+          posCursor++;
+        }
+      }
+    }
+  }
+  districtPolyOffsets[geometries.length] = polyCursor;
+  polyRingOffsets[nPolys] = ringCursor;
+  ringOffsets[nRings] = posCursor;
+  return { coords, ringOffsets, polyRingOffsets, districtPolyOffsets };
+}
+
+export function rebuildDistrictGeometries(flat: FlatDistrictGeometry): MultiPolygon[] {
+  const { coords, ringOffsets, polyRingOffsets, districtPolyOffsets } = flat;
+  const numDistricts = districtPolyOffsets.length - 1;
+  const out = new Array<MultiPolygon>(numDistricts);
+  for (let d = 0; d < numDistricts; d++) {
+    const pStart = districtPolyOffsets[d];
+    const pEnd = districtPolyOffsets[d + 1];
+    const polygons = new Array<number[][][]>(pEnd - pStart);
+    for (let p = pStart; p < pEnd; p++) {
+      const rStart = polyRingOffsets[p];
+      const rEnd = polyRingOffsets[p + 1];
+      const rings = new Array<number[][]>(rEnd - rStart);
+      for (let r = rStart; r < rEnd; r++) {
+        const posStart = ringOffsets[r];
+        const posEnd = ringOffsets[r + 1];
+        const ring = new Array<number[]>(posEnd - posStart);
+        for (let i = 0; i < ring.length; i++) {
+          const off = (posStart + i) * 2;
+          ring[i] = [coords[off], coords[off + 1]];
+        }
+        rings[r - rStart] = ring;
+      }
+      polygons[p - pStart] = rings;
+    }
+    out[d] = { type: "MultiPolygon", coordinates: polygons };
+  }
+  return out;
 }
 
 // --- Compute Polsby-Popper compactness ---

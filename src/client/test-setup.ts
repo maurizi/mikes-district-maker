@@ -30,8 +30,17 @@ vi.mock("maplibre-gl", () => ({
   removeProtocol: vi.fn()
 }));
 
-// Mock worker-functions which use Web Workers not available in jsdom
+// Mock worker-functions because the module spawns Web Workers (both
+// our Comlink worker and, when merge runs on the UI thread, cloud-
+// topo's internal worker) at import time — jsdom can't construct
+// either, so any test that imports this module needs the surface
+// stubbed.
 vi.mock("./worker-functions", () => ({
+  fetchAllStaticData: vi.fn(),
+  mergeDistricts: vi.fn(),
+  computeRegionOutline: vi.fn(),
+  exportCsv: vi.fn(),
+  importCsv: vi.fn(),
   getTotalSelectedDemographics: vi.fn().mockResolvedValue({ demographics: [] }),
   getSavedDistrictSelectedDemographics: vi.fn().mockResolvedValue([])
 }));

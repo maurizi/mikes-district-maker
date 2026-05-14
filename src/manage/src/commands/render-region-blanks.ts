@@ -19,7 +19,8 @@ import {
   type IStaticMetadata,
   type ThumbnailGeoJSON
 } from "../../../shared/entities";
-import { CtopoClient, makeRangeFetcher, type RangeFetcher } from "cloud-topo";
+import { type CtopoClient, openContainer } from "cloud-topo";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { computeDistrictBoundaries } from "../../../shared/boundary";
 import { simplifyForThumbnail } from "../../../shared/thumbnail";
 
@@ -119,27 +120,24 @@ async function s3GetJson<T>(keyPrefix: string, fileName: string): Promise<T> {
   return JSON.parse(body) as T;
 }
 
-function makeS3Fetcher(keyPrefix: string, fileName: string): RangeFetcher {
-  return makeRangeFetcher(async rangeHeader => {
-    const res = await s3.send(
-      new GetObjectCommand({
-        Bucket: regionArtifactsBucket(),
-        Key: `${keyPrefix}${fileName}`,
-        Range: rangeHeader
-      })
-    );
-    const bytes = (await res.Body?.transformToByteArray()) ?? new Uint8Array();
-    return new Uint8Array(
-      bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
-    );
-  });
+// Presigned GET URL for the region's container, so cloud-topo's
+// internal worker can issue Range fetches against S3 over the wire
+// with the same IAM creds powering the rest of this command. The hour
+// expiry is well over the lifetime of a single command invocation.
+async function regionContainerSignedUrl(keyPrefix: string, fileName: string): Promise<string> {
+  return getSignedUrl(
+    s3,
+    new GetObjectCommand({ Bucket: regionArtifactsBucket(), Key: `${keyPrefix}${fileName}` }),
+    { expiresIn: 3600 }
+  );
 }
 
 async function loadRegionData(keyPrefix: string): Promise<RegionData> {
+  const url = await regionContainerSignedUrl(keyPrefix, "region.ctopo");
   const [geoUnitHierarchy, metadata, client] = await Promise.all([
     s3GetJson<GeoUnitHierarchy>(keyPrefix, "geounit-hierarchy.json"),
     s3GetJson<IStaticMetadata>(keyPrefix, "static-metadata.json"),
-    CtopoClient.openWith(makeS3Fetcher(keyPrefix, "region.ctopo"))
+    openContainer(url)
   ]);
   const stack: (GeoUnitHierarchy | number)[] = [geoUnitHierarchy];
   let numBlocks = 0;

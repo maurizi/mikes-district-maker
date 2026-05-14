@@ -44,6 +44,14 @@ function staticDataUri(
   return url.href;
 }
 
+// Exported so the Comlink worker can compute the same URL the UI
+// thread used to open its `CtopoClient` — when both threads pass the
+// matching URL to cloud-topo, the internal cloud-topo worker dedupes
+// the underlying `CtopoCore` so the byte-range cache is shared.
+export function regionContainerUri(keyPrefix: string, version: Date | string | number): HttpsURI {
+  return staticDataUri(keyPrefix, "region.ctopo", version);
+}
+
 export async function fetchStaticMetadata(
   keyPrefix: string,
   version: Date | string | number
@@ -99,7 +107,7 @@ export function getCtopoClient(
   const key = clientCacheKey(keyPrefix, version);
   let cached = clientCache.get(key);
   if (cached === undefined) {
-    cached = openContainer(staticDataUri(keyPrefix, "region.ctopo", version), {
+    cached = openContainer(regionContainerUri(keyPrefix, version), {
       frontPrefetchBytes: FRONT_PREFETCH_BYTES,
       arcCoordsPrefetchBytes: 5 * 1024,
       maxParallelRanges: 8
@@ -121,11 +129,10 @@ export async function fetchSections(
   return views as unknown as TypedArrays;
 }
 
-export async function fetchBlockIds(
-  keyPrefix: string,
-  version: Date | string | number
-): Promise<readonly string[]> {
-  const client = await getCtopoClient(keyPrefix, version);
+// Takes a pre-opened client so callers (both UI thread and our
+// Comlink worker, which open against the same URL and share one
+// cloud-topo internal worker) don't each re-open or each re-fetch.
+export async function fetchBlockIds(client: CtopoClient): Promise<readonly string[]> {
   const baseLayer = client.meta.layers[0].name;
   // The base-layer id property lives in `{baseLayer}/{baseLayer}` —
   // the producer attaches the GEOID under the layer's own name on each

@@ -637,9 +637,15 @@ const SidebarRow = memo(
       isVisible(metric) && (
         <td key={metric} sx={{ ...style.td, ...style.number, ...{ color: textColor } }}>
           <span>
-            {getTotal(id) !== undefined
-              ? `${computeDemographicSplit(demographics[id], getTotal(id) || 0)}%`
-              : demographics[id].toLocaleString()}
+            {/* Demographic fields are fetched lazily — when the sidebar is
+                expanded the full field set is requested, but the re-aggregation
+                is async, so a field can be missing for a frame. Show the blank
+                placeholder until it lands rather than crashing on undefined. */}
+            {demographics[id] === undefined
+              ? BLANK_VALUE
+              : getTotal(id) !== undefined
+                ? `${computeDemographicSplit(demographics[id], getTotal(id) || 0)}%`
+                : demographics[id].toLocaleString()}
           </span>
         </td>
       );

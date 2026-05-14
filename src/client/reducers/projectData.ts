@@ -104,6 +104,7 @@ import {
   mergeDistricts,
   exportCsv as workerExportCsv
 } from "../worker-functions";
+import { fetchGeoUnitHierarchy } from "../s3";
 import { getCurrentUserId } from "../jwt";
 import { isBlankDistrictsDefinition } from "../../shared/functions";
 import { saveAs } from "file-saver";
@@ -539,49 +540,57 @@ const projectDataReducer = (
         showProjectDetailsModal: false,
         projectData: { resource: action.payload }
       };
-    case getType(updateDistrictsDefinition):
-      return "resource" in state.projectData && "resource" in state.staticData
-        ? loop(
-            {
-              ...state,
-              saving: "saving"
-            },
-            Cmd.list(
-              [
-                Cmd.run(patchProject, {
-                  successActionCreator: updateDistrictsDefinitionSuccess,
-                  failActionCreator: updateProjectFailed,
-                  args: [
-                    state.projectData.resource.project.id,
-                    {
-                      // Districts definition may be optionally specified in the action payload and
-                      // is used if available. This is needed to go back/forward in time for a given
-                      // state snapshot -- as opposed to just using the current districts definition
-                      // -- for undo/redo to work correctly.
-                      districtsDefinition:
-                        action.payload ||
-                        assignGeounitsToDistrict(
-                          state.projectData.resource.project.districtsDefinition,
-                          state.staticData.resource.geoUnitHierarchy,
-                          allGeoUnitIndices(state.undoHistory.present.state.selectedGeounits),
-                          state.selectedDistrictId
-                        )
-                    }
-                  ] as Parameters<typeof patchProject>
-                }),
-                // When updating districts definition after a save, we want to clear the selected
-                // geounits since we're "done". However, when redoing/undoing changes with a
-                // specific districts definition, we want to keep those geounits selected to allow
-                // the user to potentially edit their selection or continuing undoing/redoing their
-                // changes.
-                action.payload
-                  ? Cmd.action(setSavingState("saved"))
-                  : Cmd.action(clearSelectedGeounits(false))
-              ],
-              { sequence: true }
-            )
-          )
-        : state;
+    case getType(updateDistrictsDefinition): {
+      if (!("resource" in state.projectData)) {
+        return state;
+      }
+      const { project } = state.projectData.resource;
+      return loop(
+        {
+          ...state,
+          saving: "saving"
+        },
+        Cmd.list(
+          [
+            Cmd.run(
+              async () => {
+                // Districts definition may be optionally specified in the action payload and
+                // is used if available. This is needed to go back/forward in time for a given
+                // state snapshot -- as opposed to just using the current districts definition
+                // -- for undo/redo to work correctly. Only the selection-save path needs the
+                // geounit hierarchy, so the (memoized) fetch is awaited lazily here rather
+                // than blocking the page load on it.
+                const districtsDefinition =
+                  action.payload ||
+                  assignGeounitsToDistrict(
+                    project.districtsDefinition,
+                    await fetchGeoUnitHierarchy(
+                      project.regionConfig.keyPrefix,
+                      project.regionConfig.version
+                    ),
+                    allGeoUnitIndices(state.undoHistory.present.state.selectedGeounits),
+                    state.selectedDistrictId
+                  );
+                return patchProject(project.id, { districtsDefinition });
+              },
+              {
+                successActionCreator: updateDistrictsDefinitionSuccess,
+                failActionCreator: updateProjectFailed
+              }
+            ),
+            // When updating districts definition after a save, we want to clear the selected
+            // geounits since we're "done". However, when redoing/undoing changes with a
+            // specific districts definition, we want to keep those geounits selected to allow
+            // the user to potentially edit their selection or continuing undoing/redoing their
+            // changes.
+            action.payload
+              ? Cmd.action(setSavingState("saved"))
+              : Cmd.action(clearSelectedGeounits(false))
+          ],
+          { sequence: true }
+        )
+      );
+    }
     case getType(updateDistrictsDefinitionSuccess): {
       // Server returned updated project. Compute GeoJSON locally.
       const updatedProject = action.payload;

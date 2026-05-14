@@ -30,7 +30,6 @@ export interface PaginatedResponse<T> {
 export interface StaticProjectData {
   readonly staticMetadata: IStaticMetadata;
   readonly staticGeoLevels: TypedArrays;
-  readonly geoUnitHierarchy: GeoUnitHierarchy;
 }
 
 export interface WorkerProjectData {

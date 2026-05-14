@@ -8,7 +8,6 @@ import { pickBy, sum } from "lodash";
 import {
   type DemographicCounts,
   type DistrictProperties,
-  type GeoUnitHierarchy,
   type GeoUnits,
   type IProject,
   type IStaticMetadata,
@@ -250,7 +249,6 @@ const ProjectSidebar = ({
   selectedGeounits,
   highlightedGeounits,
   expandedProjectMetrics,
-  geoUnitHierarchy,
   lockedDistricts,
   referenceLayers,
   showReferenceLayers,
@@ -271,7 +269,6 @@ const ProjectSidebar = ({
   readonly expandedProjectMetrics: boolean;
   readonly referenceLayers: Resource<readonly IReferenceLayer[]>;
   readonly showReferenceLayers: ReadonlySet<ReferenceLayerId>;
-  readonly geoUnitHierarchy?: GeoUnitHierarchy;
   readonly lockedDistricts: LockedDistricts;
   readonly hoveredDistrictId: number | null;
   readonly saving: SavingState;
@@ -432,7 +429,7 @@ const ProjectSidebar = ({
             </tr>
           </thead>
           <tbody>
-            {project && geojson && staticMetadata && geoUnitHierarchy && pinnedMetrics && (
+            {project && geojson && staticMetadata && pinnedMetrics && (
               <SidebarRows
                 project={project}
                 geojson={geojson}

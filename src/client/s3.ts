@@ -56,16 +56,30 @@ export async function fetchStaticMetadata(
   });
 }
 
-export async function fetchGeoUnitHierarchy(
+// One in-flight/resolved hierarchy fetch per (keyPrefix, version), shared
+// by every caller. The hierarchy is only needed once the user saves a
+// geounit selection, but it's large, so callers warm this cache during
+// page load and `await` the same promise later — keeping it off the
+// merge / first-paint critical path while still being ready by save time.
+const hierarchyCache = new Map<string, Promise<GeoUnitHierarchy>>();
+
+export function fetchGeoUnitHierarchy(
   keyPrefix: string,
   version: Date | string | number
 ): Promise<GeoUnitHierarchy> {
-  return new Promise((resolve, reject) => {
-    s3Axios
+  const key = clientCacheKey(keyPrefix, version);
+  let cached = hierarchyCache.get(key);
+  if (cached === undefined) {
+    cached = s3Axios
       .get(staticDataUri(keyPrefix, "geounit-hierarchy.json", version))
-      .then(response => resolve(response.data))
-      .catch(error => reject(error.message));
-  });
+      .then(response => response.data as GeoUnitHierarchy)
+      .catch(error => {
+        hierarchyCache.delete(key);
+        return Promise.reject(error.message);
+      });
+    hierarchyCache.set(key, cached);
+  }
+  return cached;
 }
 
 // One CtopoClient per (keyPrefix, version) tuple, shared by every caller

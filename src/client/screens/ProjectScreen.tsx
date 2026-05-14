@@ -10,7 +10,6 @@ import { toast } from "react-toastify";
 import { Box, Button, Flex, Spinner, type ThemeUIStyleObject } from "theme-ui";
 
 import {
-  type GeoUnitHierarchy,
   type IProject,
   type IReferenceLayer,
   type IStaticMetadata,
@@ -76,7 +75,6 @@ interface StateProps {
   readonly findMenuOpen: boolean;
   readonly evaluateMode: boolean;
   readonly evaluateMetric: EvaluateMetricWithValue | undefined;
-  readonly geoUnitHierarchy?: GeoUnitHierarchy;
   readonly expandedProjectMetrics?: boolean;
   readonly districtDrawing: DistrictDrawingState;
   readonly isLoading: boolean;
@@ -112,7 +110,6 @@ const ProjectScreen = ({
   evaluateMetric,
   projectNotFound,
   findMenuOpen,
-  geoUnitHierarchy,
   districtDrawing,
   mapLabel,
   isLoading,
@@ -381,7 +378,6 @@ const ProjectScreen = ({
                       selectedGeounits={presentDrawingState.selectedGeounits}
                       highlightedGeounits={districtDrawing.highlightedGeounits}
                       expandedProjectMetrics={districtDrawing.expandedProjectMetrics}
-                      geoUnitHierarchy={geoUnitHierarchy}
                       referenceLayers={referenceLayers}
                       showReferenceLayers={districtDrawing.showReferenceLayers}
                       lockedDistricts={presentDrawingState.lockedDistricts}
@@ -418,7 +414,6 @@ const ProjectScreen = ({
             selectedGeounits={presentDrawingState.selectedGeounits}
             highlightedGeounits={districtDrawing.highlightedGeounits}
             expandedProjectMetrics={districtDrawing.expandedProjectMetrics}
-            geoUnitHierarchy={geoUnitHierarchy}
             referenceLayers={referenceLayers}
             showReferenceLayers={districtDrawing.showReferenceLayers}
             lockedDistricts={presentDrawingState.lockedDistricts}
@@ -537,7 +532,6 @@ function mapStateToProps(state: State): StateProps {
     geojson: destructureResource(state.project.projectData, "geojson"),
     staticMetadata: destructureResource(state.project.staticData, "staticMetadata"),
     staticGeoLevels: destructureResource(state.project.staticData, "staticGeoLevels"),
-    geoUnitHierarchy: destructureResource(state.project.staticData, "geoUnitHierarchy"),
     evaluateMode: state.project.evaluateMode,
     evaluateMetric: state.project.evaluateMetric,
     findMenuOpen: state.project.findMenuOpen,

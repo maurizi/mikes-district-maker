@@ -17,6 +17,7 @@ import {
   getPopulationPerRepresentative,
   getDeviationPopulationKey
 } from "../../functions";
+import { getDemographicsGroups } from "../../../shared/functions";
 import ProjectEvaluateMetricDetail from "./ProjectEvaluateMetricDetail";
 import ProjectEvaluateSummary from "./ProjectEvaluateSummary";
 import { useState, useEffect } from "react";
@@ -76,6 +77,8 @@ const ProjectEvaluateSidebar = ({
 
   const geoLevel =
     staticMetadata?.geoLevelHierarchy[staticMetadata.geoLevelHierarchy.length - 1].id;
+
+  const demographicsGroups = staticMetadata ? getDemographicsGroups(staticMetadata) : [];
 
   const devPopKey = getDeviationPopulationKey(populationKey);
   const populationPerRepresentative =
@@ -235,7 +238,9 @@ const ProjectEvaluateSidebar = ({
         'A majority-minority district is a district in which a racial minority group or groups comprise a majority of the district\'s total population. The display indicates districts where a minority race has a simple majority (Black, Hispanic, etc.), or where the sum of multiple minority races combine to a majority (called "Coalition" districts).',
       showInSummary: true,
       total: geojson?.features.filter(f => f.id !== 0).length || 0,
-      value: geojson?.features.filter(f => isMajorityMinority(f)).length || 0
+      value:
+        geojson?.features.filter(f => isMajorityMinority(f, demographicsGroups, populationKey))
+          .length || 0
     },
     {
       key: "countySplits",

@@ -37,8 +37,7 @@ import {
   hasAnyElection,
   getAvailablePresidentialYears,
   parseVotingId,
-  isMajorityMinority,
-  getMajorityRaceDisplay,
+  getMajorityRace,
   capitalizeFirstLetter,
   getPopulationPerRepresentative,
   getDeviationPopulationKey
@@ -583,6 +582,14 @@ const SidebarRow = memo(
         ? "0"
         : `${intermediateDeviation > 0 ? "+" : ""}${intermediateDeviation.toLocaleString()}`;
 
+    // Derived here rather than read from district.properties.majorityRace:
+    // that property is mutated in place by Map.tsx's geojson effect, which
+    // doesn't re-render this memoized row, so the read would be stale until
+    // an unrelated re-render (e.g. hover) happened to refresh it.
+    const majorityRace = getMajorityRace(demographics, demographicsGroups, populationKey);
+    const isMajorityMinorityDistrict =
+      !!majorityRace && majorityRace.race !== "white" && districtId !== 0;
+
     const compactnessDisplay =
       districtId === 0 ? (
         <span sx={style.blankValue}>{BLANK_VALUE}</span>
@@ -751,7 +758,7 @@ const SidebarRow = memo(
                 demographics.population !== 0 ? (
                   <DemographicsTooltip
                     demographics={demographics}
-                    isMajorityMinority={isMajorityMinority(district)}
+                    isMajorityMinority={isMajorityMinorityDistrict}
                     demographicsGroups={demographicsGroups}
                     populationKey={populationKey}
                   />
@@ -767,7 +774,7 @@ const SidebarRow = memo(
                 <span
                   sx={{
                     borderLeft: "1px dashed",
-                    borderColor: isMajorityMinority(district) ? "gray.8" : "transparent",
+                    borderColor: isMajorityMinorityDistrict ? "gray.8" : "transparent",
                     pl: "1px",
                     position: "relative",
                     left: "-2px"
@@ -786,7 +793,7 @@ const SidebarRow = memo(
         {coreDemographicMetricFields.map(demographicsDisplay)}
         {isVisible("majorityRace") && (
           <td sx={{ ...style.td, ...style.number, ...{ color: textColor } }}>
-            <span>{getMajorityRaceDisplay(district)}</span>
+            <span>{majorityRace && capitalizeFirstLetter(majorityRace.race)}</span>
           </td>
         )}
         {extraDemographicMetricFields.map(demographicsDisplay)}

@@ -4,7 +4,7 @@
 import { isThisYear, isToday } from "date-fns";
 import format from "date-fns/format";
 import { type FeatureCollection, type Feature, type Point } from "geojson";
-import { cloneDeep, mapKeys, mapValues, pick, pickBy } from "lodash";
+import { cloneDeep, mapKeys, mapValues, maxBy, pick, pickBy } from "lodash";
 import { toast } from "react-toastify";
 
 import {
@@ -93,8 +93,31 @@ export const getPartyTextColor = (party: string, mode: "dark" | "light") => {
   return party === "republican" ? "#E19AA9" : party === "democrat" ? "#9EA3E0" : "#FFD166";
 };
 
-export const getMajorityRaceDisplay = (feature: DistrictGeoJSON) =>
-  feature.properties.majorityRace && capitalizeFirstLetter(feature.properties.majorityRace);
+// Derives the majority race + split directly from a district's demographics.
+// Kept pure (rather than reading feature.properties.majorityRace) so consumers
+// like the sidebar don't depend on Map.tsx's in-place geojson mutation having
+// run — that mutation doesn't trigger a re-render, so the property reads stale.
+export function getMajorityRace(
+  demographics: DemographicCounts,
+  demographicsGroups: readonly DemographicsGroup[],
+  populationKey: GroupTotal
+): { readonly race: string; readonly split: number } | undefined {
+  if (demographics.population === 0) {
+    return undefined;
+  }
+  const percents = Object.entries(
+    getDemographicsPercentages(demographics, demographicsGroups, populationKey)
+  );
+  const majority = maxBy(
+    percents.filter(([, val]) => val > 50),
+    ([, val]) => val
+  );
+  if (!majority) {
+    const whiteSplit = demographics.white / demographics.population;
+    return { race: "minority coalition", split: (1 - whiteSplit) * 100 };
+  }
+  return { race: majority[0], split: majority[1] };
+}
 
 /* Creates array of party-labelled pvi bucket counts as strings */
 export function formatPviByDistrict(
@@ -196,10 +219,16 @@ export function computeDemographicSplit(demographic: number, total: number): str
   return percent ? percent.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "0";
 }
 
-export function isMajorityMinority(f: DistrictGeoJSON): boolean {
-  return (
-    (f.properties.majorityRace && f.properties.majorityRace !== "white" && f.id !== 0) || false
-  );
+// Derives from demographics rather than reading f.properties.majorityRace:
+// that property is mutated in place by Map.tsx's geojson effect and reads
+// stale in React consumers until an unrelated re-render refreshes them.
+export function isMajorityMinority(
+  f: DistrictGeoJSON,
+  demographicsGroups: readonly DemographicsGroup[],
+  populationKey: GroupTotal
+): boolean {
+  const majorityRace = getMajorityRace(f.properties.demographics, demographicsGroups, populationKey);
+  return !!majorityRace && majorityRace.race !== "white" && f.id !== 0;
 }
 
 /** The population key to use for deviation calculations.

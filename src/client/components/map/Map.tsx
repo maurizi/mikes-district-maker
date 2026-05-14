@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Modifications © 2026 Michael Maurizi Jr.
 
-import { maxBy } from "lodash";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Box, Flex, Text, useColorMode, type ThemeUIStyleObject } from "theme-ui";
 import bbox from "@turf/bbox";
@@ -48,7 +47,7 @@ import {
   calculatePVI,
   getPopulationPerRepresentative,
   getDeviationPopulationKey,
-  getDemographicsPercentages
+  getMajorityRace
 } from "../../functions";
 import {
   GEOLEVELS_SOURCE_ID,
@@ -700,28 +699,13 @@ const DistrictsMap = ({
       feature.properties.populationDeviation = populationDeviation;
       if (feature.properties.demographics.population !== 0) {
         const demographicsGroups = getDemographicsGroups(staticMetadata);
-        const percents = Object.entries(
-          getDemographicsPercentages(
-            feature.properties.demographics,
-            demographicsGroups,
-            populationKey
-          )
+        const majorityRace = getMajorityRace(
+          feature.properties.demographics,
+          demographicsGroups,
+          populationKey
         );
-        const majorityRace = maxBy(
-          percents.filter(([, val]) => val > 50),
-          ([, val]) => val
-        );
-        if (!majorityRace) {
-          feature.properties.majorityRace = "minority coalition";
-          const whiteSplit =
-            feature.properties.demographics.white / feature.properties.demographics.population;
-
-          feature.properties.majorityRaceSplit = (1 - whiteSplit) * 100;
-        } else {
-          feature.properties.majorityRace = majorityRace[0];
-
-          feature.properties.majorityRaceSplit = majorityRace[1];
-        }
+        feature.properties.majorityRace = majorityRace?.race;
+        feature.properties.majorityRaceSplit = majorityRace?.split;
 
         feature.properties.majorityRaceFill =
           feature.properties.majorityRace && feature.properties.majorityRaceSplit

@@ -6,13 +6,14 @@ import { Box, Flex, Heading, type ThemeUIStyleObject } from "theme-ui";
 
 import { type GroupTotal, type IStaticMetadata } from "../../../../shared/entities";
 
-import { getMajorityRaceDisplay, isMajorityMinority } from "../../../functions";
+import { capitalizeFirstLetter, getMajorityRace, isMajorityMinority } from "../../../functions";
 import { type State } from "../../../reducers";
 import { type DistrictsGeoJSON, type EvaluateMetricWithValue } from "../../../types";
 
 import DemographicsChart from "../../DemographicsChart";
 import DemographicsTooltip from "../../DemographicsTooltip";
 import Tooltip from "../../Tooltip";
+import { getMajorityRaceSplitFill } from "../../map";
 import { getDemographicsGroups } from "../../../../shared/functions";
 
 const style: Record<string, ThemeUIStyleObject> = {
@@ -99,43 +100,56 @@ const MajorityRaceMetricDetail = ({
         </thead>
         <tbody>
           {metadata &&
-            geojson?.features.map(
-              (feature, id) =>
-                id > 0 && (
-                  <tr key={id}>
-                    <td sx={{ ...style.td, ...style.colFirst }}>{id}</td>
+            geojson?.features.map((feature, id) => {
+              if (id <= 0) {
+                return null;
+              }
+              const majorityRace = getMajorityRace(
+                feature.properties.demographics,
+                demographicsGroups,
+                populationKey
+              );
+              return (
+                <tr key={id}>
+                  <td sx={{ ...style.td, ...style.colFirst }}>{id}</td>
 
-                    <td sx={style.td}>
-                      {feature.properties.majorityRace !== undefined ? (
-                        <Flex sx={{ alignItems: "center" }}>
-                          <div
-                            sx={{
-                              mr: 2,
-                              width: "15px",
-                              height: "15px",
-                              borderRadius: "small",
-                              bg: feature.properties.majorityRaceFill
-                            }}
-                          ></div>
-                          <Box>{getMajorityRaceDisplay(feature)}</Box>
-                        </Flex>
-                      ) : (
-                        <Box sx={style.blankValue}>-</Box>
-                      )}
-                    </td>
+                  <td sx={style.td}>
+                    {majorityRace !== undefined ? (
+                      <Flex sx={{ alignItems: "center" }}>
+                        <div
+                          sx={{
+                            mr: 2,
+                            width: "15px",
+                            height: "15px",
+                            borderRadius: "small",
+                            bg: majorityRace.split
+                              ? getMajorityRaceSplitFill(majorityRace.race, majorityRace.split)
+                              : "#ffffff"
+                          }}
+                        ></div>
+                        <Box>{capitalizeFirstLetter(majorityRace.race)}</Box>
+                      </Flex>
+                    ) : (
+                      <Box sx={style.blankValue}>-</Box>
+                    )}
+                  </td>
 
-                    <td sx={{ ...style.td, ...style.colLast }}>
-                      <Tooltip
-                        placement="top-start"
-                        content={
-                          feature.properties.demographics.population !== 0 ? (
-                            <DemographicsTooltip
-                              demographics={feature.properties.demographics}
-                              isMajorityMinority={isMajorityMinority(feature)}
-                              demographicsGroups={demographicsGroups}
-                              populationKey={populationKey}
-                            />
-                          ) : (
+                  <td sx={{ ...style.td, ...style.colLast }}>
+                    <Tooltip
+                      placement="top-start"
+                      content={
+                        feature.properties.demographics.population !== 0 ? (
+                          <DemographicsTooltip
+                            demographics={feature.properties.demographics}
+                            isMajorityMinority={isMajorityMinority(
+                              feature,
+                              demographicsGroups,
+                              populationKey
+                            )}
+                            demographicsGroups={demographicsGroups}
+                            populationKey={populationKey}
+                          />
+                        ) : (
                             <em>
                               <strong>Empty district.</strong> Add people to this district to view
                               the race chart
@@ -155,8 +169,8 @@ const MajorityRaceMetricDetail = ({
                       </Tooltip>
                     </td>
                   </tr>
-                )
-            )}
+              );
+            })}
         </tbody>
       </table>
     </Box>

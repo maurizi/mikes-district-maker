@@ -227,7 +227,11 @@ export function isMajorityMinority(
   demographicsGroups: readonly DemographicsGroup[],
   populationKey: GroupTotal
 ): boolean {
-  const majorityRace = getMajorityRace(f.properties.demographics, demographicsGroups, populationKey);
+  const majorityRace = getMajorityRace(
+    f.properties.demographics,
+    demographicsGroups,
+    populationKey
+  );
   return !!majorityRace && majorityRace.race !== "white" && f.id !== 0;
 }
 

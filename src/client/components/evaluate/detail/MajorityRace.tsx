@@ -150,25 +150,25 @@ const MajorityRaceMetricDetail = ({
                             populationKey={populationKey}
                           />
                         ) : (
-                            <em>
-                              <strong>Empty district.</strong> Add people to this district to view
-                              the race chart
-                            </em>
-                          )
-                        }
-                      >
-                        <span sx={{ display: "inline-block" }}>
-                          <span sx={style.chart}>
-                            <DemographicsChart
-                              demographics={feature.properties.demographics}
-                              demographicsGroups={demographicsGroups}
-                              populationKey={populationKey}
-                            />
-                          </span>
+                          <em>
+                            <strong>Empty district.</strong> Add people to this district to view the
+                            race chart
+                          </em>
+                        )
+                      }
+                    >
+                      <span sx={{ display: "inline-block" }}>
+                        <span sx={style.chart}>
+                          <DemographicsChart
+                            demographics={feature.properties.demographics}
+                            demographicsGroups={demographicsGroups}
+                            populationKey={populationKey}
+                          />
                         </span>
-                      </Tooltip>
-                    </td>
-                  </tr>
+                      </span>
+                    </Tooltip>
+                  </td>
+                </tr>
               );
             })}
         </tbody>

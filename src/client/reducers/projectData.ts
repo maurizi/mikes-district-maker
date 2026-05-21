@@ -12,6 +12,7 @@ import {
   exportGeoJsonFailure,
   exportShp,
   exportShpFailure,
+  localFieldsComplete,
   localMergeComplete,
   localMergeFailure,
   projectDataFetch,
@@ -100,6 +101,7 @@ import {
   uploadProjectThumbnail
 } from "../api";
 import {
+  aggregateFields,
   fetchAllStaticData,
   mergeDistricts,
   exportCsv as workerExportCsv
@@ -143,6 +145,44 @@ function runLocalMerge(
     );
 }
 
+// Lighter than runLocalMerge: re-aggregates demographics/voting only, with
+// no geometry work. Used when requestedFields changes but the district
+// definition (and therefore the geometry) hasn't.
+function runAggregateFields(
+  staticMetadata: IStaticMetadata,
+  keyPrefix: string,
+  version: Date | string | number,
+  districtsDefinition: DistrictsDefinition,
+  numberOfDistricts: number,
+  requestedDemographics: readonly string[],
+  requestedVoting: readonly string[]
+) {
+  return () =>
+    aggregateFields(
+      staticMetadata,
+      keyPrefix,
+      version,
+      districtsDefinition,
+      numberOfDistricts,
+      requestedDemographics,
+      requestedVoting
+    );
+}
+
+type RequestedFields = {
+  readonly demographics: readonly string[];
+  readonly voting: readonly string[];
+};
+
+// Whether two requested-field sets are equivalent. ProjectScreen computes
+// them deterministically, so order is stable — a positional join is enough.
+function sameFields(a: RequestedFields, b: RequestedFields): boolean {
+  return (
+    a.demographics.join(",") === b.demographics.join(",") &&
+    a.voting.join(",") === b.voting.join(",")
+  );
+}
+
 export function getFindCoords(findTool: FindTool, geojson?: DistrictsGeoJSON) {
   const areAllUnassigned =
     geojson &&
@@ -176,6 +216,17 @@ export type ProjectDataState = {
     readonly demographics: readonly string[];
     readonly voting: readonly string[];
   };
+  // While a full geometry merge (mergeDistricts) is in flight, holds the
+  // requestedFields snapshot it was launched with; null when none is running.
+  // Prevents a redundant second full merge when requestedFields changes mid-
+  // flight (e.g. ProjectScreen's prefetchedAllVoting effect firing before the
+  // first merge's geometry lands): the change is recorded and reconciled with
+  // a cheap aggregateFields once the merge completes, instead of re-running
+  // the whole geometry merge. See setRequestedFields / localMergeComplete.
+  readonly mergeInFlightFields: {
+    readonly demographics: readonly string[];
+    readonly voting: readonly string[];
+  } | null;
 };
 
 export const initialProjectDataState = {
@@ -191,7 +242,8 @@ export const initialProjectDataState = {
   showReferenceLayersModal: false,
   showProjectDetailsModal: false,
   duplicatedProject: null,
-  requestedFields: { demographics: [], voting: [] }
+  requestedFields: { demographics: [], voting: [] },
+  mergeInFlightFields: null
 } as const;
 
 const projectDataReducer = (
@@ -423,10 +475,16 @@ const projectDataReducer = (
       const fieldsLoaded =
         newState.requestedFields.demographics.length > 0 ||
         newState.requestedFields.voting.length > 0;
-      if ("resource" in newState.projectData && fieldsLoaded) {
+      // Don't bootstrap a second merge if setRequestedFields already started
+      // one (mergeInFlightFields set) — that path handles reconciliation.
+      if (
+        "resource" in newState.projectData &&
+        fieldsLoaded &&
+        newState.mergeInFlightFields === null
+      ) {
         const { project } = newState.projectData.resource;
         return loop(
-          newState,
+          { ...newState, mergeInFlightFields: newState.requestedFields },
           Cmd.run(
             runLocalMerge(
               action.payload.staticMetadata,
@@ -598,6 +656,7 @@ const projectDataReducer = (
         return loop(
           {
             ...state,
+            mergeInFlightFields: state.requestedFields,
             projectData: {
               resource: {
                 project: updatedProject,
@@ -629,11 +688,12 @@ const projectDataReducer = (
     }
     case getType(localMergeComplete): {
       if ("resource" in state.projectData) {
-        const { districts, thumbnail, isComplete } = action.payload;
+        const { districts, thumbnail, isComplete, geometryVersion } = action.payload;
         const { project } = state.projectData.resource;
         // Stamp metadata onto the in-memory districts. Not persisted — only
         // exists so exported .geojson files keep the shape downstream
-        // consumers rely on.
+        // consumers rely on. geometryVersion is the exception: it's read by
+        // the map to skip redundant maplibre setData calls.
         const geojson: DistrictsGeoJSON = {
           ...districts,
           metadata: {
@@ -646,7 +706,8 @@ const projectDataReducer = (
               regionCode: project.regionConfig.regionCode,
               keyPrefix: project.regionConfig.keyPrefix
             },
-            chamber: project.chamber
+            chamber: project.chamber,
+            geometryVersion
           }
         };
         const findCoords = getFindCoords(state.findTool, geojson);
@@ -677,6 +738,8 @@ const projectDataReducer = (
           {
             ...state,
             saving: "saved",
+            // This merge has landed — clear the in-flight marker.
+            mergeInFlightFields: null,
             projectData: {
               resource: { project: { ...project, isComplete }, geojson }
             },
@@ -689,10 +752,9 @@ const projectDataReducer = (
             districtsDefinition: project.districtsDefinition
           }
         );
-        return wasTriggeredBySave || needsInitialThumbnail || needsCompletenessUpdate
-          ? loop(
-              nextState,
-              Cmd.run(async () => {
+        const thumbnailCmd =
+          wasTriggeredBySave || needsInitialThumbnail || needsCompletenessUpdate
+            ? Cmd.run(async () => {
                 const bbox = await fetchMemoizedStateBbox(regionConfig);
                 const { renderThumbnailPng } = await import("../thumbnail-render");
                 // Render variants serially: two concurrent MapLibre instances
@@ -714,13 +776,83 @@ const projectDataReducer = (
                 }
                 return patchProject(project.id, { districtProperties, isComplete });
               })
-            )
-          : nextState;
+            : null;
+        // If requestedFields changed while this merge was in flight (a
+        // prefetchedAllVoting setRequestedFields landed mid-merge and was
+        // recorded rather than re-merged — see setRequestedFields), the geojson
+        // now carries stale per-district field data. Catch up with a cheap
+        // aggregateFields instead of having re-run the whole geometry merge.
+        const reconcileCmd =
+          state.mergeInFlightFields !== null &&
+          "resource" in state.staticData &&
+          !sameFields(state.mergeInFlightFields, state.requestedFields)
+            ? Cmd.run(
+                runAggregateFields(
+                  state.staticData.resource.staticMetadata,
+                  project.regionConfig.keyPrefix,
+                  project.regionConfig.version,
+                  project.districtsDefinition,
+                  project.numberOfDistricts,
+                  state.requestedFields.demographics,
+                  state.requestedFields.voting
+                ),
+                {
+                  successActionCreator: localFieldsComplete,
+                  failActionCreator: localMergeFailure
+                }
+              )
+            : null;
+        if (thumbnailCmd && reconcileCmd)
+          return loop(nextState, Cmd.list([thumbnailCmd, reconcileCmd], { batch: true }));
+        if (thumbnailCmd) return loop(nextState, thumbnailCmd);
+        if (reconcileCmd) return loop(nextState, reconcileCmd);
+        return nextState;
+      }
+      return state;
+    }
+    case getType(localFieldsComplete): {
+      if ("resource" in state.projectData) {
+        const { demographics, voting, isComplete } = action.payload;
+        const { project, geojson } = state.projectData.resource;
+        // Patch the refreshed per-district demographics/voting onto the
+        // existing geojson, reusing every feature's geometry reference
+        // untouched. New feature/properties objects give React-reading
+        // consumers (evaluate panels, sidebar) a fresh identity to
+        // re-render on; the geometry — and crucially metadata.geometryVersion
+        // — is unchanged, so the map skips its setData and only re-applies
+        // feature-state. isComplete depends on the assignment, not the field
+        // set, so it should already match — patched for consistency.
+        const features = geojson.features.map((feature, i) => ({
+          ...feature,
+          properties: {
+            ...feature.properties,
+            demographics: demographics[i],
+            voting: voting[i]
+          }
+        }));
+        const nextGeojson: DistrictsGeoJSON = {
+          ...geojson,
+          features,
+          metadata: geojson.metadata
+            ? { ...geojson.metadata, completed: isComplete }
+            : geojson.metadata
+        };
+        return {
+          ...state,
+          projectData: {
+            resource: { project: { ...project, isComplete }, geojson: nextGeojson }
+          }
+        };
       }
       return state;
     }
     case getType(localMergeFailure):
-      return loop({ ...state, saving: "failed" }, Cmd.run(showActionFailedToast));
+      // Clear the in-flight marker so a later setRequestedFields can retry the
+      // bootstrap merge instead of being stuck waiting on a merge that failed.
+      return loop(
+        { ...state, saving: "failed", mergeInFlightFields: null },
+        Cmd.run(showActionFailedToast)
+      );
     case getType(updateProjectFailed):
       return loop(
         {
@@ -971,15 +1103,46 @@ const projectDataReducer = (
     }
     case getType(setRequestedFields): {
       const updatedState = { ...state, requestedFields: action.payload };
-      // Re-run merge with the new field set if both project + static
-      // data are loaded. ProjectScreen gates dispatches behind a
-      // string-keyed effect, so we trust the action only fires on real
-      // changes.
+      // Re-run with the new field set if both project + static data are
+      // loaded. ProjectScreen gates dispatches behind a string-keyed effect,
+      // so we trust the action only fires on real changes.
       if ("resource" in updatedState.projectData && "resource" in updatedState.staticData) {
-        const { project } = updatedState.projectData.resource;
+        const { project, geojson } = updatedState.projectData.resource;
         const { staticMetadata } = updatedState.staticData.resource;
+        // If the geometry already exists (a merge has completed), a field-set
+        // change only needs re-aggregation — the district boundaries are
+        // unchanged, so skip the geometry path entirely via aggregateFields.
+        const hasGeometry = geojson.features.length > 0;
+        if (hasGeometry) {
+          return loop(
+            updatedState,
+            Cmd.run(
+              runAggregateFields(
+                staticMetadata,
+                project.regionConfig.keyPrefix,
+                project.regionConfig.version,
+                project.districtsDefinition,
+                project.numberOfDistricts,
+                action.payload.demographics,
+                action.payload.voting
+              ),
+              {
+                successActionCreator: localFieldsComplete,
+                failActionCreator: localMergeFailure
+              }
+            )
+          );
+        }
+        // No geometry yet. If a full merge is already in flight, don't start a
+        // second one — record the new fields and let localMergeComplete
+        // reconcile them with a cheap aggregateFields once geometry lands.
+        // Otherwise this is the bootstrap merge: kick it off and remember the
+        // fields it's computing with.
+        if (updatedState.mergeInFlightFields !== null) {
+          return updatedState;
+        }
         return loop(
-          updatedState,
+          { ...updatedState, mergeInFlightFields: action.payload },
           Cmd.run(
             runLocalMerge(
               staticMetadata,

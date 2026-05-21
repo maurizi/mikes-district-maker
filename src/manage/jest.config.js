@@ -16,20 +16,10 @@ module.exports = {
   },
   transform: {
     "^.+\\.tsx?$": "ts-jest",
-    // cloud-topo ships as ESM; transpile its .js to CommonJS so ts-jest's CJS
-    // test runtime can require() it.
-    "cloud-topo/.+\\.js$": [
-      "ts-jest",
-      {
-        tsconfig: {
-          allowJs: true,
-          module: "commonjs",
-          target: "es2022",
-          esModuleInterop: true,
-          isolatedModules: true
-        }
-      }
-    ]
+    // cloud-topo ships as ESM and (>= 0.2.0) references `import.meta`; this
+    // transpiles its .js to CommonJS and neutralizes the leftover import.meta
+    // so ts-jest's CJS test runtime can require() it. See the transformer file.
+    "cloud-topo/.+\\.js$": require.resolve("./cloud-topo-jest-transform.js")
   },
   transformIgnorePatterns: ["/node_modules/(?!cloud-topo/)"]
 };

@@ -19,12 +19,8 @@ import {
   type TypedArray,
   type TypedArrays
 } from "../../../shared/entities";
-import {
-  type CtopoClient,
-  type RangeFetcher,
-  CtopoClient as CtopoClientCtor,
-  makeRangeFetcher
-} from "cloud-topo";
+import { type CtopoClient, openContainer } from "cloud-topo";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { buildBlockAssignment, computeDistrictBoundaries } from "../../../shared/boundary";
 import { decode, encode } from "../../../shared/compress";
 import { getVoting } from "../../../shared/functions";
@@ -559,32 +555,24 @@ async function s3GetJson<T>(keyPrefix: string, fileName: string): Promise<T> {
   return JSON.parse(body) as T;
 }
 
-// Wrap the AWS SDK's GetObjectCommand in a RangeFetcher so the ctopo
-// client can issue Range GETs against the bucket using the same
-// implicit credentials the rest of this command uses.
-function makeS3Fetcher(keyPrefix: string, fileName: string): RangeFetcher {
-  return makeRangeFetcher(async rangeHeader => {
-    const res = await s3.send(
-      new GetObjectCommand({
-        Bucket: regionArtifactsBucket(),
-        Key: `${keyPrefix}${fileName}`,
-        Range: rangeHeader
-      })
-    );
-    const bytes = (await res.Body?.transformToByteArray()) ?? new Uint8Array();
-    // Slice to exact bounds — Node Buffers may share an oversized
-    // backing ArrayBuffer that would corrupt typed-array views.
-    return new Uint8Array(
-      bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
-    );
-  });
+// Presign a GET so cloud-topo's internal worker can issue Range
+// fetches against the same bucket with the same IAM creds powering
+// the rest of this command. The hour expiry is well over the lifetime
+// of a single command invocation.
+async function regionContainerSignedUrl(keyPrefix: string, fileName: string): Promise<string> {
+  return getSignedUrl(
+    s3,
+    new GetObjectCommand({ Bucket: regionArtifactsBucket(), Key: `${keyPrefix}${fileName}` }),
+    { expiresIn: 3600 }
+  );
 }
 
 async function loadRegionData(keyPrefix: string): Promise<RegionData> {
+  const url = await regionContainerSignedUrl(keyPrefix, "region.ctopo");
   const [geoUnitHierarchy, metadata, client] = await Promise.all([
     s3GetJson<GeoUnitHierarchy>(keyPrefix, "geounit-hierarchy.json"),
     s3GetJson<IStaticMetadata>(keyPrefix, "static-metadata.json"),
-    CtopoClientCtor.openWith(makeS3Fetcher(keyPrefix, "region.ctopo"))
+    openContainer(url)
   ]);
   // Count base-level leaves in the hierarchy (== block count).
   const stack: (GeoUnitHierarchy | number)[] = [geoUnitHierarchy];

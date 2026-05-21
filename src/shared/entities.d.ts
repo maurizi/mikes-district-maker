@@ -116,6 +116,10 @@ export interface ProjectProperties {
     "id" | "name" | "countryCode" | "regionCode" | "keyPrefix"
   >;
   readonly chamber?: IChamber;
+  // Stable identity for the merged district geometry (FNV-1a hash of the
+  // block assignment, computed in the worker). Lets the map skip a
+  // redundant maplibre setData when a re-merge produces identical geometry.
+  readonly geometryVersion?: string;
 }
 
 export type DistrictGeoJSON = Feature<MultiPolygon, DistrictProperties>;

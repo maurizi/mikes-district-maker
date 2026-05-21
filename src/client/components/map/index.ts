@@ -3,7 +3,7 @@
 
 import { type MapGeoJSONFeature } from "maplibre-gl";
 import type maplibregl from "maplibre-gl";
-import { convertFilter } from "@maplibre/maplibre-gl-style-spec";
+import { convertFilter, type ExpressionSpecification } from "@maplibre/maplibre-gl-style-spec";
 import { cloneDeep } from "lodash";
 import {
   type GeoUnitCollection,
@@ -26,6 +26,9 @@ import { type ChoroplethSteps, type PviBucket, type DistrictsGeoJSON } from "../
 
 // Vector tiles with geolevel data for this geography
 export const GEOLEVELS_SOURCE_ID = "db";
+// Always-on transparent layer that keeps the GEOLEVELS_SOURCE_ID tiles from
+// being evicted while every real geolevel layer is hidden (evaluate mode).
+export const GEOLEVELS_KEEPWARM_LAYER_ID = "db-keepwarm";
 // GeoJSON district data for district as currently drawn
 export const DISTRICTS_SOURCE_ID = "districts";
 // GeoJSON district label data for district as currently drawn
@@ -76,6 +79,23 @@ export const filteredLabelLayers = [
   "places_locality_circle",
   "pois"
 ];
+
+// Build a maplibre "step" expression from legacy interval stops, reading the
+// district value from feature-state. The first stop's color is the base
+// bucket (values below the first real threshold); each later [threshold,
+// color] pair becomes a step boundary. Mirrors the old { type: "interval" }
+// data-driven function. The ["number", …, 0] guard keeps districts whose
+// value is unset (e.g. percentDeviation on the unassigned district) from
+// throwing an expression error — step requires a numeric input.
+function choroplethStep(prop: string, stops: ChoroplethSteps): ExpressionSpecification {
+  const boundaries = stops.slice(1).flatMap(([threshold, color]) => [threshold, color]);
+  return [
+    "step",
+    ["number", ["feature-state", prop], 0],
+    stops[0][1],
+    ...boundaries
+  ] as ExpressionSpecification;
+}
 
 export function getCompactnessStops(): ChoroplethSteps {
   return [
@@ -252,6 +272,22 @@ export function generateMapLayers(
     }
   });
 
+  // Keep-warm layer: maplibre evicts a vector source's cached tiles once no
+  // visible layer consumes it. Evaluate mode hides every geolevel layer, so
+  // returning to edit mode would re-download all `db` tiles. This always-on,
+  // fully transparent line layer keeps the source's tiles loaded without
+  // rendering anything. It must never be set to visibility:none.
+  map.addLayer(
+    {
+      id: GEOLEVELS_KEEPWARM_LAYER_ID,
+      type: "line",
+      source: GEOLEVELS_SOURCE_ID,
+      "source-layer": geoLevels[0].id,
+      paint: { "line-opacity": 0 }
+    },
+    beforeLabelId
+  );
+
   map.addLayer(
     {
       id: DISTRICTS_LAYER_ID,
@@ -259,7 +295,12 @@ export function generateMapLayers(
       source: DISTRICTS_SOURCE_ID,
       layout: {},
       paint: {
-        "fill-color": { type: "identity", property: "color" },
+        // coalesce fallback: maplibre's worker evaluates paint expressions
+        // at tile-populate time with empty feature-state, so a bare
+        // ["feature-state", …] yields null and fails color parsing. The
+        // real per-district color is applied at render time from the
+        // feature-state the Map.tsx per-feature loop sets.
+        "fill-color": ["coalesce", ["feature-state", "color"], "transparent"],
         "fill-opacity": ["interpolate", ["linear"], ["zoom"], 6, 0.66, 14, 0.45],
         "fill-antialias": false
       }
@@ -275,11 +316,7 @@ export function generateMapLayers(
       layout: { visibility: "none" },
       filter: ["match", ["get", "color"], ["transparent"], false, true],
       paint: {
-        "fill-color": {
-          property: "compactness",
-          type: "interval",
-          stops: getCompactnessStops()
-        },
+        "fill-color": choroplethStep("compactness", getCompactnessStops()),
         "fill-outline-color": "gray",
         "fill-opacity": 0.9
       }
@@ -295,11 +332,7 @@ export function generateMapLayers(
       layout: { visibility: "none" },
       filter: ["match", ["get", "color"], ["transparent"], false, true],
       paint: {
-        "fill-color": {
-          property: "pvi",
-          type: "interval",
-          stops: getPviSteps()
-        },
+        "fill-color": choroplethStep("pvi", getPviSteps()),
         "fill-outline-color": "gray",
         "fill-opacity": 0.9
       }
@@ -315,7 +348,8 @@ export function generateMapLayers(
       layout: { visibility: "none" },
       filter: ["match", ["get", "color"], ["transparent"], false, true],
       paint: {
-        "fill-color": { type: "identity", property: "majorityRaceFill" },
+        // coalesce fallback — see DISTRICTS_LAYER_ID fill-color.
+        "fill-color": ["coalesce", ["feature-state", "majorityRaceFill"], "transparent"],
         "fill-outline-color": "gray",
         "fill-opacity": 0.9
       }
@@ -331,11 +365,10 @@ export function generateMapLayers(
       layout: { visibility: "none" },
       filter: ["match", ["get", "color"], ["transparent"], false, true],
       paint: {
-        "fill-color": {
-          property: "percentDeviation",
-          type: "interval",
-          stops: getEqualPopulationStops(populationDeviation)
-        },
+        "fill-color": choroplethStep(
+          "percentDeviation",
+          getEqualPopulationStops(populationDeviation)
+        ),
         "fill-outline-color": "gray",
         "fill-opacity": 0.9
       }
@@ -349,18 +382,16 @@ export function generateMapLayers(
       type: "line",
       source: DISTRICTS_SOURCE_ID,
       paint: {
-        "line-color": { type: "identity", property: "findOutlineColor" },
+        // coalesce fallback — see DISTRICTS_LAYER_ID fill-color.
+        "line-color": ["coalesce", ["feature-state", "findOutlineColor"], "transparent"],
         "line-opacity": 1,
         "line-dasharray": [5, 5],
-        "line-width": [
-          "interpolate",
-          ["linear"],
-          ["zoom"],
-          6,
-          ["*", ["get", "outlineWidthScaleFactor"], 2],
-          14,
-          ["*", ["get", "outlineWidthScaleFactor"], 5]
-        ]
+        // Width is scaled by findMenuOpen (1× when the find menu is open,
+        // 2× otherwise). That factor is uniform across all districts, and
+        // maplibre forbids feature-state inside a zoom curve, so Map.tsx
+        // drives it with setPaintProperty instead. The baked-in values are
+        // the menu-closed (2×) state.
+        "line-width": ["interpolate", ["linear"], ["zoom"], 6, 4, 14, 10]
       }
     },
     beforeLabelId
@@ -388,15 +419,12 @@ export function generateMapLayers(
       paint: {
         "line-color": "transparent",
         "line-opacity": 1,
-        "line-width": [
-          "interpolate",
-          ["linear"],
-          ["zoom"],
-          6,
-          ["*", ["get", "outlineWidthScaleFactor"], 2],
-          14,
-          ["*", ["get", "outlineWidthScaleFactor"], 5]
-        ]
+        // Width is scaled by findMenuOpen (1× when the find menu is open,
+        // 2× otherwise). That factor is uniform across all districts, and
+        // maplibre forbids feature-state inside a zoom curve, so Map.tsx
+        // drives it with setPaintProperty instead. The baked-in values are
+        // the menu-closed (2×) state.
+        "line-width": ["interpolate", ["linear"], ["zoom"], 6, 4, 14, 10]
       }
     },
     DISTRICTS_FIND_OUTLINE_LAYER_ID
@@ -410,15 +438,12 @@ export function generateMapLayers(
       paint: {
         "line-color": "transparent",
         "line-opacity": 1,
-        "line-width": [
-          "interpolate",
-          ["linear"],
-          ["zoom"],
-          6,
-          ["*", ["get", "outlineWidthScaleFactor"], 2],
-          14,
-          ["*", ["get", "outlineWidthScaleFactor"], 5]
-        ]
+        // Width is scaled by findMenuOpen (1× when the find menu is open,
+        // 2× otherwise). That factor is uniform across all districts, and
+        // maplibre forbids feature-state inside a zoom curve, so Map.tsx
+        // drives it with setPaintProperty instead. The baked-in values are
+        // the menu-closed (2×) state.
+        "line-width": ["interpolate", ["linear"], ["zoom"], 6, 4, 14, 10]
       }
     },
     DISTRICTS_HOVER_OUTLINE_LAYER_ID
@@ -499,7 +524,7 @@ export function generateMapLayers(
       paint: {
         "fill-color": [
           "match",
-          ["get", "contiguity"],
+          ["feature-state", "contiguity"],
           "contiguous",
           CONTIGUITY_FILL_COLOR,
           "non-contiguous",

@@ -22,6 +22,39 @@ resource "aws_cloudfront_function" "cors_preflight" {
   code    = file("${path.module}/cloudfront-functions/cors-preflight.js")
 }
 
+# Cross-origin isolation for the app document. With both headers present the
+# page becomes `crossOriginIsolated`, which unlocks SharedArrayBuffer — cloud-topo
+# uses it to run zstd decode in parallel sub-workers (the fast path); without it
+# the client falls back to an in-process "plain" decoder (correct but slower,
+# see cloud-topo core/zstd-wasm/plain-decoder.ts).
+#
+# COEP is `credentialless`, not `require-corp`: the basemap loads glyphs/sprites
+# from protomaps.github.io and fonts from use.typekit.net cross-origin. Typekit
+# sends CORP but GitHub Pages does not, so `require-corp` would block the map.
+# `credentialless` fetches those public no-cors resources without credentials and
+# doesn't require CORP, so nothing breaks. Browser caveat: Safari doesn't support
+# `credentialless`, so Safari isn't isolated and uses the plain-decoder fallback —
+# acceptable graceful degradation. Same-origin subresources (JS, wasm, workers,
+# /regions, /basemap, /thumbnails, /api — all served from this domain) are
+# unaffected either way.
+resource "aws_cloudfront_response_headers_policy" "cross_origin_isolation" {
+  name    = "${var.project}-${var.environment}-cross-origin-isolation"
+  comment = "COOP+COEP on the app document → crossOriginIsolated (SharedArrayBuffer fast path)"
+
+  custom_headers_config {
+    items {
+      header   = "Cross-Origin-Opener-Policy"
+      value    = "same-origin"
+      override = true
+    }
+    items {
+      header   = "Cross-Origin-Embedder-Policy"
+      value    = "credentialless"
+      override = true
+    }
+  }
+}
+
 resource "aws_cloudfront_response_headers_policy" "cors_range" {
   name    = "${var.project}-${var.environment}-cors-range"
   comment = "CORS + long-cache for versioned region artifacts and basemap"
@@ -147,6 +180,9 @@ resource "aws_cloudfront_distribution" "main" {
     compress               = true
     # Managed cache policy "CachingOptimized" — long TTL with compression.
     cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+    # COOP+COEP so the app document (and same-origin JS/wasm/workers it serves)
+    # is cross-origin isolated, unlocking the SharedArrayBuffer fast path.
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.cross_origin_isolation.id
 
     # Rewrite SPA routes (e.g. /projects/abc) to /index.html so page refresh
     # and back/forward land on the app shell instead of a 403 from S3.

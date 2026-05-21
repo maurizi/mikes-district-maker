@@ -40,7 +40,8 @@ import {
   type DemographicsGroup
 } from "../../../shared/entities";
 import { writeContainer } from "cloud-topo/encode";
-import { CtopoClient, makeRangeFetcher } from "cloud-topo";
+import { openContainer } from "cloud-topo";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { geojsonPolygonLabels, tileJoin, tippecanoe } from "../lib/cmd";
 import { abbrev } from "../lib/voting-data";
 import _ from "lodash";
@@ -735,23 +736,16 @@ max string length of ~512MB).
     keyPrefix: string,
     geoLevelIds: readonly string[]
   ): Promise<Record<string, Record<string, unknown>[]>> {
-    const fetcher = makeRangeFetcher(async rangeHeader => {
-      const res = await s3Client.send(
-        new GetObjectCommand({
-          Bucket: bucket,
-          Key: `${keyPrefix}region.ctopo`,
-          Range: rangeHeader
-        })
-      );
-      const bytes = (await res.Body?.transformToByteArray()) ?? new Uint8Array();
-      // Slice to exact bounds — Node Buffers may share an oversized backing
-      // ArrayBuffer that would corrupt typed-array views.
-      return new Uint8Array(
-        bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
-      );
-    });
+    // Presign a GET so cloud-topo's internal worker can Range-fetch
+    // with the same IAM creds powering this command. One-hour expiry
+    // is comfortably over the lifetime of this single read.
+    const url = await getSignedUrl(
+      s3Client,
+      new GetObjectCommand({ Bucket: bucket, Key: `${keyPrefix}region.ctopo` }),
+      { expiresIn: 3600 }
+    );
 
-    const client = await CtopoClient.openWith(fetcher);
+    const client = await openContainer(url);
     try {
       const result: Record<string, Record<string, unknown>[]> = {};
       for (const level of geoLevelIds) {
@@ -789,7 +783,7 @@ max string length of ~512MB).
       }
       return result;
     } finally {
-      client.close();
+      await client.close();
     }
   }
 

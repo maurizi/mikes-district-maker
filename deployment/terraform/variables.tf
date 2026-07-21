@@ -110,6 +110,18 @@ variable "plan_score_api_token" {
   default     = ""
 }
 
+variable "waf_auth_rate_limit" {
+  description = "Max requests per 5-minute window, per source IP, to /api/auth/* before WAF blocks. These endpoints send SES mail; keep tight. WAF auto-clears the block once the IP's rate drops."
+  type        = number
+  default     = 100
+}
+
+variable "waf_api_rate_limit" {
+  description = "Max requests per 5-minute window, per source IP, to /api/* (blanket safety net). Set well above a legit map/project session so only a runaway flood trips it."
+  type        = number
+  default     = 2000
+}
+
 variable "enable_production_safeguards" {
   description = "When true, enables DSQL deletion protection and disables S3 force_destroy. Keep false during initial bring-up; flip to true after verification."
   type        = bool

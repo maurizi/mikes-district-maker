@@ -110,6 +110,9 @@ resource "aws_cloudfront_distribution" "main" {
   comment             = "${var.project} ${var.environment}"
   default_root_object = "index.html"
 
+  # Per-IP edge rate limits — see waf.tf. WAFv2 takes the web ACL ARN here.
+  web_acl_id = aws_wafv2_web_acl.main.arn
+
   # Static assets from S3 (default origin — everything not matched below).
   origin {
     origin_id                = "s3-static"

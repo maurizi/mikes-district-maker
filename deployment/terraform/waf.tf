@@ -23,7 +23,8 @@
 resource "aws_wafv2_web_acl" "main" {
   provider    = aws.us_east_1
   name        = "${var.project}-${var.environment}-edge"
-  description = "Per-IP edge rate limits for the API (auth flood / SES-quota protection)"
+  # WAFv2 description rejects parentheses and a few other punctuation chars.
+  description = "Per-IP edge rate limits for the API - auth flood / SES-quota protection"
   scope       = "CLOUDFRONT"
 
   default_action {

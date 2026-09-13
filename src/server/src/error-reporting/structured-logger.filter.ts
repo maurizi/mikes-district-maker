@@ -5,18 +5,31 @@ import { ArgumentsHost, Catch, HttpException } from "@nestjs/common";
 import { Request } from "express";
 import { BaseExceptionFilter } from "@nestjs/core";
 
+import { UpstreamServiceException } from "./upstream-service.exception";
+
 export interface IGetUserAuthInfoRequest extends Request {
   user?: {
     id: number;
   };
 }
 
-function isServerError(exception: unknown): boolean {
+type Severity = "error" | "warn";
+
+// Returns the level to log at, or undefined for exceptions we don't log at all
+// (4xx client errors). Only "error" matches the CloudWatch metric filter behind
+// the api-errors alarm.
+function severity(exception: unknown): Severity | undefined {
+  // A third-party API being down isn't a bug on our side and isn't actionable
+  // by whoever reads the alarm, so it's logged for visibility but kept below
+  // the alarm threshold. Checked before HttpException, which it extends.
+  if (exception instanceof UpstreamServiceException) {
+    return "warn";
+  }
   if (exception instanceof HttpException) {
-    return exception.getStatus() >= 500;
+    return exception.getStatus() >= 500 ? "error" : undefined;
   }
   // Non-HttpException errors (unhandled throws, crashes) are always server errors
-  return exception instanceof Error;
+  return exception instanceof Error ? "error" : undefined;
 }
 
 function parseIp(req: IGetUserAuthInfoRequest): string | undefined {
@@ -34,7 +47,8 @@ function parseIp(req: IGetUserAuthInfoRequest): string | undefined {
 @Catch()
 export class StructuredLoggerExceptionFilter extends BaseExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
-    if (isServerError(exception)) {
+    const level = severity(exception);
+    if (level) {
       const ctx = host.switchToHttp();
       const request = ctx.getRequest<IGetUserAuthInfoRequest>();
       const err = exception as Error;
@@ -44,13 +58,18 @@ export class StructuredLoggerExceptionFilter extends BaseExceptionFilter {
       // filters can't parse with `{ $.level = "error" }`. Writing raw to
       // stdout preserves structure so the filter matches.
       const payload = JSON.stringify({
-        level: "error",
+        level,
         message: err.message,
         stack: err.stack,
         method: request.method,
         path: request.originalUrl ?? request.url,
         userId: request.user?.id,
-        ip: parseIp(request)
+        ip: parseIp(request),
+        // Present only on upstream failures: which third party failed and what
+        // it said, since the stack above only shows our proxy frame.
+        ...(exception instanceof UpstreamServiceException
+          ? { service: exception.service, cause: exception.cause }
+          : {})
       });
       process.stdout.write(payload + "\n");
     }

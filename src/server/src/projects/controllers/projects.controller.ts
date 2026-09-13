@@ -53,6 +53,7 @@ import { fetchCachedJson } from "../../common/functions";
 import { ProjectVisibility } from "../../../../shared/constants";
 
 import { JwtAuthGuard, OptionalJwtAuthGuard } from "../../auth/guards/jwt-auth.guard";
+import { UpstreamServiceException } from "../../error-reporting/upstream-service.exception";
 import { RegionConfig } from "../../region-configs/entities/region-config.entity";
 import { User } from "../../users/entities/user.entity";
 import { CreateProjectDto } from "../entities/create-project.dto";
@@ -481,13 +482,20 @@ export class ProjectsController implements CrudController<Project> {
     if (!isUUID(projectId)) {
       throw new NotFoundException(`Project ${projectId} is not a valid UUID`);
     }
-    const uploadResponse = await axios.get<[string, Record<string, string>]>(
-      "https://api.planscore.org/upload/",
-      {
-        headers: { Authorization: `Bearer ${process.env.PLAN_SCORE_API_TOKEN || ""}` }
-      }
-    );
-    return uploadResponse.data;
+    try {
+      const uploadResponse = await axios.get<[string, Record<string, string>]>(
+        "https://api.planscore.org/upload/",
+        {
+          headers: { Authorization: `Bearer ${process.env.PLAN_SCORE_API_TOKEN || ""}` }
+        }
+      );
+      return uploadResponse.data;
+    } catch (e) {
+      // PlanScore returning 5xx or timing out is an outage on their end, not a
+      // bug here. Surface it as a 502 so the client can show "try again later"
+      // instead of a generic 500 leaking an AxiosError.
+      throw new UpstreamServiceException("PlanScore", e);
+    }
   }
 
   // Thin proxy for PlanScore step 3 (POST to the callback location returned by

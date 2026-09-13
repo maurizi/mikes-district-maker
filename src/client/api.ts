@@ -302,17 +302,48 @@ export async function fetchRegionConfigs(): Promise<readonly IRegionConfig[]> {
   });
 }
 
-export async function patchProject(
+// Aurora DSQL uses optimistic concurrency control rather than row locks: two
+// transactions touching the same row both proceed and the loser is rejected at
+// commit time with "change conflicts with another transaction (OC000)". We have
+// several independent save paths that can overlap on a single project --
+// districts definition, the districtProperties write that trails a thumbnail
+// render, locks, pinned metrics, name, visibility -- so PATCHes are serialized
+// per project id into a promise chain. Every client save goes through this
+// function, so the chain is the only ordering we need.
+const projectPatchQueues = new Map<ProjectId, Promise<void>>();
+
+export function patchProject(
   id: ProjectId,
   projectData: Partial<UpdateProjectData>
 ): Promise<IProject> {
-  const encoded = await encodeProjectFields(projectData);
-  return new Promise((resolve, reject) => {
-    apiAxios
+  const run = async (): Promise<IProject> => {
+    // Encode inside the queued unit so the compressed payload is built when
+    // this save's turn comes rather than when it was enqueued.
+    const encoded = await encodeProjectFields(projectData);
+    const response = await apiAxios
       .patch(`/api/projects/${id}`, encoded)
-      .then(response => formatProject(response.data).then(resolve, reject))
-      .catch(error => reject(error.response?.data || error));
+      .catch(error => Promise.reject(error.response?.data || error));
+    return formatProject(response.data);
+  };
+
+  // Run on both branches so a failed save doesn't cancel the ones queued behind
+  // it. The tail we store is deliberately non-rejecting; `result` keeps the
+  // rejection for this call's caller.
+  const tail = projectPatchQueues.get(id) || Promise.resolve();
+  const result = tail.then(run, run);
+  const settled = result.then(
+    () => undefined,
+    () => undefined
+  );
+  projectPatchQueues.set(id, settled);
+  // Drop the entry once nothing is queued behind it, so the map doesn't grow
+  // for the life of the session.
+  void settled.then(() => {
+    if (projectPatchQueues.get(id) === settled) {
+      projectPatchQueues.delete(id);
+    }
   });
+  return result;
 }
 
 // Ask the server for a short-lived presigned S3 PUT URL and upload the PNG

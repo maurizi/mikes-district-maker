@@ -55,7 +55,9 @@ export class CreateProjectDto {
   @IsOptional()
   readonly numberOfMembers?: readonly number[];
 
-  @IsOptional()
+  // Not @IsOptional: that also skips null, which would bypass the column
+  // default and hit the NOT NULL constraint as a 500.
+  @ValidateIf(o => o.populationDeviation !== undefined)
   @IsNumber()
   @Max(100, { message: "Population deviation must be between 0% and 100%" })
   @Min(0, { message: "Population deviation must be between 0% and 100%" })

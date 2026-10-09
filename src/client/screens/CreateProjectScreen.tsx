@@ -51,6 +51,7 @@ interface StateProps {
 const validate = (form: ProjectForm) =>
   form.name.trim() !== "" &&
   form.numberOfDistricts !== null &&
+  form.populationDeviation !== null &&
   form.numberOfMembers !== null &&
   form.regionConfig !== null
     ? ({ ...form, valid: true } as ValidForm)
